@@ -2369,7 +2369,7 @@ Phần chưa hoàn thành:
 - [x] Đã gắn version build tự động vào Docker image/tag pipeline theo format `0.x.y-migration-<git-sha>`.
 - [x] Đã cập nhật OpenAPI `info.version` theo migration build semantics.
 - [x] Đã có release checklist riêng cho `1.0.0-rc.x` gồm feature freeze, shadow compare pass, rollback drill, pilot sign-off.
-- [ ] Chưa có CI check để chặn gọi `0.x` là production release trong docs/release notes.
+- [x] Đã có CI check để chặn gọi `0.x` là production release trong docs/release notes.
 - [x] Đã có release notes template phân biệt `migration build`, `release candidate`, và `product release` tại `platform/docs/release-notes-template.md`.
 
 Phase tiếp theo chi tiết:
@@ -2439,9 +2439,10 @@ Phase tiếp theo chi tiết:
   - [ ] SOC operations sign-off.
   - [ ] Engineering lead sign-off.
   - [ ] Security/operations sign-off.
-- [ ] Phase V.3 — CI guardrails:
-  - [ ] Thêm script lint docs/release notes để phát hiện wording sai kiểu `0.x production release`.
-  - [ ] Thêm validation release class trong build pipeline.
+- [x] Phase V.3 — CI guardrails:
+  - [x] Thêm script lint docs/release notes để phát hiện wording sai kiểu `0.x production release`.
+  - [x] Thêm validation release class trong build pipeline.
+  - [x] Thêm local command `make validate-release` để chạy guardrail trước khi build/push.
 
 #### 17.26.3 Backlog chi tiết đã hoàn thành — giữ lại để audit tiến độ
 

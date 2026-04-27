@@ -38,6 +38,19 @@ jobs:
           echo "git_sha=${GIT_SHA}"         >> "$GITHUB_OUTPUT"
           echo "build_time=${BUILD_TIME}"   >> "$GITHUB_OUTPUT"
 
+      - name: Validate release semantics
+        run: |
+          case "${{ steps.meta.outputs.app_version }}" in
+            0.*-migration) EXPECTED_RELEASE_CLASS="migration-build" ;;
+            1.0.0-rc.*|v1.0.0-rc.*) EXPECTED_RELEASE_CLASS="release-candidate" ;;
+            v*) EXPECTED_RELEASE_CLASS="product-release" ;;
+            *) EXPECTED_RELEASE_CLASS="development" ;;
+          esac
+          python scripts/validate-release.py \
+            --root .. \
+            --app-version "${{ steps.meta.outputs.app_version }}" \
+            --expected-release-class "${EXPECTED_RELEASE_CLASS}"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

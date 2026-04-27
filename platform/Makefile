@@ -13,7 +13,7 @@ FRONTEND_IMG   := $(REGISTRY)/$(IMAGE_NS)/frontend
 COMPOSE        := docker compose -f deploy/docker-compose.yml --env-file deploy/.env
 
 .PHONY: help env up down restart logs ps build build-backend build-frontend \
-	tag push pull clean status backend-shell frontend-shell db-shell mq-shell
+	tag push pull clean status validate-release backend-shell frontend-shell db-shell mq-shell
 
 help:
 	@echo "TheHive Platform commands"
@@ -30,6 +30,7 @@ help:
 	@echo "  make tag                Tag :latest in addition to :$(APP_VERSION)"
 	@echo "  make push               Push :$(APP_VERSION) and :$(APP_VERSION)-$(GIT_SHA) to $(REGISTRY)"
 	@echo "  make pull               docker compose pull"
+	@echo "  make validate-release   Validate APP_VERSION release class and docs wording"
 	@echo "  make clean              docker compose down -v + prune dangling images"
 	@echo "  make backend-shell      Exec sh in backend container"
 	@echo "  make frontend-shell     Exec sh in frontend container"
@@ -96,6 +97,15 @@ push:
 	docker push $(BACKEND_IMG):$(APP_VERSION)-$(GIT_SHA)
 	docker push $(FRONTEND_IMG):$(APP_VERSION)
 	docker push $(FRONTEND_IMG):$(APP_VERSION)-$(GIT_SHA)
+
+validate-release:
+	@case "$(APP_VERSION)" in \
+		0.*-migration) expected="migration-build" ;; \
+		1.0.0-rc.*|v1.0.0-rc.*) expected="release-candidate" ;; \
+		v*) expected="product-release" ;; \
+		*) expected="development" ;; \
+	esac; \
+	python scripts/validate-release.py --root .. --app-version "$(APP_VERSION)" --expected-release-class "$$expected"
 
 pull:
 	$(COMPOSE) pull
