@@ -1,0 +1,14 @@
+# Phase 1 ignores at platform root
+deploy/.env
+
+# Build artifacts
+backend/bin/
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+*.log

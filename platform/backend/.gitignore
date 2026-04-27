@@ -1,0 +1,12 @@
+bin/
+out/
+.idea/
+.vscode/
+*.test
+*.out
+coverage.out
+*.log
+.env
+.env.*
+!.env.example
+node_modules/

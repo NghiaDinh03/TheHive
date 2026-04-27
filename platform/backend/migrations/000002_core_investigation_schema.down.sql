@@ -1,0 +1,11 @@
+DROP TABLE IF EXISTS data_migrations;
+DROP TABLE IF EXISTS custom_fields;
+DROP TABLE IF EXISTS attachments;
+DROP TABLE IF EXISTS case_logs;
+DROP TABLE IF EXISTS task_items;
+DROP TABLE IF EXISTS observables;
+DROP TABLE IF EXISTS alerts;
+DROP TABLE IF EXISTS cases;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS profiles;
+DROP TABLE IF EXISTS organisations;

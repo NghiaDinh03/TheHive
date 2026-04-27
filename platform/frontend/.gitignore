@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+dist
+.idea
+.vscode
+*.log
+.env
+.env.*
+!.env.example
+.eslintcache
+.DS_Store
+coverage

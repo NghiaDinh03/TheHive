@@ -1,0 +1,991 @@
+openapi: 3.0.3
+info:
+  title: TheHive Platform API
+  description: |
+    TheHive re-platform API. Build versions use migration/release semantics:
+    0.x.y-migration for migration builds, 1.0.0-rc.x for release candidates,
+    and v1.x.y for product releases after migration parity is complete.
+  version: 0.4.0-migration
+  contact:
+    name: TheHive Platform Team
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: /
+    description: Same-origin (proxied)
+
+tags:
+  - name: health
+    description: Liveness, readiness, metrics.
+  - name: meta
+    description: Version and status info.
+  - name: auth
+    description: Mock authentication (Phase 1).
+  - name: investigation
+    description: Read-only cases, alerts, and observables for TheHive 4 migration parity.
+
+paths:
+  /healthz:
+    get:
+      tags: [health]
+      summary: Liveness probe
+      responses:
+        '200':
+          description: Process is alive
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StatusOK' }
+  /readyz:
+    get:
+      tags: [health]
+      summary: Readiness probe (checks Postgres + RabbitMQ)
+      responses:
+        '200': { description: Ready, content: { application/json: { schema: { $ref: '#/components/schemas/Readiness' } } } }
+        '503': { description: Not ready, content: { application/json: { schema: { $ref: '#/components/schemas/Readiness' } } } }
+  /metrics:
+    get:
+      tags: [health]
+      summary: Prometheus metrics in text exposition format
+      responses:
+        '200':
+          description: Metrics
+          content:
+            text/plain: {}
+
+  /api/v1/status:
+    get:
+      tags: [meta]
+      summary: Application + DB schema version
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppStatus' }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      summary: Mock login (Phase 1) — accepts admin@thehive.local / secret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      summary: Request invite-only local account registration pending admin approval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '202': { description: Registration pending admin approval, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { description: Account already exists, content: { application/json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+
+  /api/v1/auth/password-reset/request:
+    post:
+      tags: [auth]
+      summary: Request a self-service password reset token through the email adapter placeholder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetRequest' }
+      responses:
+        '202': { description: Reset requested, content: { application/json: { schema: { $ref: '#/components/schemas/PasswordResetRequestResponse' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/v1/auth/password-reset/confirm:
+    post:
+      tags: [auth]
+      summary: Reset password using a TTL-bound one-time token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordResetConfirmRequest' }
+      responses:
+        '200': { description: Password reset, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/v1/auth/password:
+    post:
+      tags: [auth]
+      summary: Change current user's password and revoke other sessions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '200': { description: Password changed, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/auth/sessions:
+    get:
+      tags: [auth]
+      summary: List current user's sessions
+      responses:
+        '200': { description: Sessions, content: { application/json: { schema: { $ref: '#/components/schemas/SessionCollection' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/auth/sessions/revoke-all:
+    post:
+      tags: [auth]
+      summary: Revoke all sessions for the current user
+      responses:
+        '200': { description: Sessions revoked, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      summary: Logout (Phase 1 mock)
+      responses:
+        '200': { description: Logged out, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/users:
+    get:
+      tags: [auth]
+      summary: Admin list users
+      responses:
+        '200': { description: Users, content: { application/json: { schema: { $ref: '#/components/schemas/AdminUserCollection' } } } }
+    post:
+      tags: [auth]
+      summary: Admin create user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminUserRequest' }
+      responses:
+        '201': { description: User created, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/users/{login}:
+    patch:
+      tags: [auth]
+      summary: Admin update user
+      parameters: [{ name: login, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminUserUpdateRequest' }
+      responses:
+        '200': { description: User updated, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/users/{login}/lock:
+    post:
+      tags: [auth]
+      summary: Admin lock user and revoke sessions
+      parameters: [{ name: login, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: User locked, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/users/{login}/unlock:
+    post:
+      tags: [auth]
+      summary: Admin unlock user
+      parameters: [{ name: login, in: path, required: true, schema: { type: string } }]
+      responses:
+        '200': { description: User unlocked, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/users/{login}/approve:
+    post:
+      tags: [auth]
+      summary: Admin approve a pending registration and generate an invite token
+      parameters: [{ name: login, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminApproveUserRequest' }
+      responses:
+        '200': { description: User approved and invite generated, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPasswordResetTokenResponse' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/admin/users/{login}/reset-token:
+    post:
+      tags: [auth]
+      summary: Admin generate a password reset token for out-of-band delivery
+      parameters: [{ name: login, in: path, required: true, schema: { type: string } }]
+      responses:
+        '201': { description: Token generated, content: { application/json: { schema: { $ref: '#/components/schemas/AdminPasswordResetTokenResponse' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/admin/users/{login}/reset-password:
+    post:
+      tags: [auth]
+      summary: Admin reset user password and revoke sessions
+      parameters: [{ name: login, in: path, required: true, schema: { type: string } }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminResetPasswordRequest' }
+      responses:
+        '200': { description: Password reset, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/organisations:
+    get:
+      tags: [auth]
+      summary: Admin list organisations
+      responses:
+        '200': { description: Organisations, content: { application/json: { schema: { $ref: '#/components/schemas/AdminOrganisationCollection' } } } }
+    post:
+      tags: [auth]
+      summary: Admin create or update organisation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminOrganisationRequest' }
+      responses:
+        '200': { description: Organisation upserted, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/admin/profiles:
+    get:
+      tags: [auth]
+      summary: Admin list profiles
+      responses:
+        '200': { description: Profiles, content: { application/json: { schema: { $ref: '#/components/schemas/AdminProfileCollection' } } } }
+    post:
+      tags: [auth]
+      summary: Admin create or update profile permissions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdminProfileRequest' }
+      responses:
+        '200': { description: Profile upserted, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/audit:
+    get:
+      tags: [auth]
+      summary: Append-only audit stream
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 100, maximum: 500 } }
+        - { name: actor, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Audit log stream, content: { application/json: { schema: { $ref: '#/components/schemas/AuditCollection' } } } }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      summary: Current user info (Phase 1 mock)
+      responses:
+        '200':
+          description: User info
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+
+  /api/v1/cases:
+    get:
+      tags: [investigation]
+      summary: Read-only case list
+      parameters:
+        - { $ref: '#/components/parameters/RangeParam' }
+        - { $ref: '#/components/parameters/SortParam' }
+        - { $ref: '#/components/parameters/StatusFilter' }
+        - { $ref: '#/components/parameters/SeverityFilter' }
+        - { $ref: '#/components/parameters/TLPFilter' }
+        - { $ref: '#/components/parameters/PAPFilter' }
+        - { $ref: '#/components/parameters/TagsFilter' }
+        - { $ref: '#/components/parameters/AssigneeFilter' }
+        - { $ref: '#/components/parameters/OwnerFilter' }
+      responses:
+        '200': { description: Cases, content: { application/json: { schema: { $ref: '#/components/schemas/CaseCollection' } } } }
+
+  /api/v1/alerts:
+    get:
+      tags: [investigation]
+      summary: Read-only alert list
+      parameters:
+        - { $ref: '#/components/parameters/RangeParam' }
+        - { $ref: '#/components/parameters/SortParam' }
+        - { $ref: '#/components/parameters/StatusFilter' }
+        - { $ref: '#/components/parameters/SeverityFilter' }
+        - { $ref: '#/components/parameters/TLPFilter' }
+        - { $ref: '#/components/parameters/TagsFilter' }
+        - { $ref: '#/components/parameters/SourceFilter' }
+      responses:
+        '200': { description: Alerts, content: { application/json: { schema: { $ref: '#/components/schemas/AlertCollection' } } } }
+
+  /api/v1/alerts/{id}/import:
+    post:
+      tags: [investigation]
+      summary: Import alert into a new case
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Alert imported, content: { application/json: { schema: { $ref: '#/components/schemas/AlertImportResult' } } } }
+
+  /api/v1/alerts/{id}/merge:
+    post:
+      tags: [investigation]
+      summary: Merge alert into an existing case or imported target alert case
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertMergeRequest' }
+      responses:
+        '200': { description: Alert merged, content: { application/json: { schema: { $ref: '#/components/schemas/AlertMergeResult' } } } }
+
+  /api/v1/tasks:
+    post:
+      tags: [investigation]
+      summary: Create a case task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskCreateRequest' }
+      responses:
+        '201': { description: Task created, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+
+  /api/v1/tasks/{id}:
+    patch:
+      tags: [investigation]
+      summary: Update a task
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskPatchRequest' }
+      responses:
+        '200': { description: Task updated, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+
+  /api/v1/tasks/{id}/assign:
+    post:
+      tags: [investigation]
+      summary: Assign a task
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TaskAssignRequest' }
+      responses:
+        '200': { description: Task assigned, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+
+  /api/v1/tasks/{id}/close:
+    post:
+      tags: [investigation]
+      summary: Close a task
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Task closed, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
+
+  /api/v1/cases/{id}/logs:
+    post:
+      tags: [investigation]
+      summary: Append a case log entry
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaseLogAppendRequest' }
+      responses:
+        '201': { description: Case log appended, content: { application/json: { schema: { $ref: '#/components/schemas/CaseLog' } } } }
+
+  /api/v1/observables:
+    get:
+      tags: [investigation]
+      summary: Read-only observable list
+      parameters:
+        - { $ref: '#/components/parameters/RangeParam' }
+        - { $ref: '#/components/parameters/SortParam' }
+        - { $ref: '#/components/parameters/TLPFilter' }
+        - { $ref: '#/components/parameters/TagsFilter' }
+        - { $ref: '#/components/parameters/DataTypeFilter' }
+        - { $ref: '#/components/parameters/IOCFilter' }
+        - { $ref: '#/components/parameters/SightedFilter' }
+        - { $ref: '#/components/parameters/CreatedByFilter' }
+        - { $ref: '#/components/parameters/CreatedFromFilter' }
+        - { $ref: '#/components/parameters/CreatedToFilter' }
+      responses:
+        '200': { description: Observables, content: { application/json: { schema: { $ref: '#/components/schemas/ObservableCollection' } } } }
+    post:
+      tags: [investigation]
+      summary: Create observable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ObservableCreateRequest' }
+      responses:
+        '201': { description: Observable created, content: { application/json: { schema: { $ref: '#/components/schemas/ObservableWrite' } } } }
+
+  /api/v1/observables/{id}:
+    patch:
+      tags: [investigation]
+      summary: Update observable
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ObservablePatchRequest' }
+      responses:
+        '200': { description: Observable updated, content: { application/json: { schema: { $ref: '#/components/schemas/ObservableWrite' } } } }
+    delete:
+      tags: [investigation]
+      summary: Delete observable
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Observable deleted, content: { application/json: { schema: { $ref: '#/components/schemas/StatusOK' } } } }
+
+  /api/v1/observables/{id}/analyze:
+    post:
+      tags: [investigation]
+      summary: Queue observable analyzer placeholder
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '202': { description: Analyzer placeholder accepted, content: { application/json: { schema: { $ref: '#/components/schemas/ObservableAnalyzeResult' } } } }
+
+components:
+  parameters:
+    RangeParam:
+      name: range
+      in: query
+      schema: { type: string, example: '0:49' }
+      description: Inclusive zero-based result range.
+    SortParam:
+      name: sort
+      in: query
+      schema: { type: string, example: 'updated_at:DESC' }
+      description: Field and direction separated by ':' or ','.
+    StatusFilter: { name: status, in: query, schema: { type: string } }
+    SeverityFilter: { name: severity, in: query, schema: { type: integer } }
+    TLPFilter: { name: tlp, in: query, schema: { type: integer } }
+    PAPFilter: { name: pap, in: query, schema: { type: integer } }
+    TagsFilter: { name: tags, in: query, schema: { type: string }, description: Comma-separated tags. }
+    AssigneeFilter: { name: assignee, in: query, schema: { type: string } }
+    OwnerFilter: { name: owner, in: query, schema: { type: string } }
+    SourceFilter: { name: source, in: query, schema: { type: string } }
+    DataTypeFilter: { name: dataType, in: query, schema: { type: string } }
+    IOCFilter: { name: ioc, in: query, schema: { type: boolean } }
+    SightedFilter: { name: sighted, in: query, schema: { type: boolean } }
+    CreatedByFilter: { name: createdBy, in: query, schema: { type: string } }
+    CreatedFromFilter: { name: createdFrom, in: query, schema: { type: string, format: date-time } }
+    CreatedToFilter: { name: createdTo, in: query, schema: { type: string, format: date-time } }
+  schemas:
+    StatusOK:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, example: ok }
+    Readiness:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        checks:
+          type: object
+          additionalProperties: true
+        version: { $ref: '#/components/schemas/Version' }
+    Version:
+      type: object
+      properties:
+        version: { type: string, example: 0.4.0-migration }
+        git_sha: { type: string }
+        build_time: { type: string }
+        release_class:
+          type: string
+          enum: [migration-build, release-candidate, product-release, development]
+          example: migration-build
+    AppStatus:
+      type: object
+      properties:
+        app: { type: string, example: thehive-platform-backend }
+        version: { type: string, example: 0.4.0-migration }
+        git_sha: { type: string }
+        build_time: { type: string }
+        release_class:
+          type: string
+          enum: [migration-build, release-candidate, product-release, development]
+          example: migration-build
+        timestamp: { type: string, format: date-time }
+        db_schema_version: { type: integer }
+        db_schema_dirty: { type: boolean }
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login: { type: string }
+        password: { type: string, format: password }
+    RegisterRequest:
+      type: object
+      required: [login, name, organisation]
+      properties:
+        login: { type: string, format: email }
+        name: { type: string }
+        organisation: { type: string }
+    PasswordResetRequest:
+      type: object
+      required: [login]
+      properties:
+        login: { type: string, format: email }
+    PasswordResetConfirmRequest:
+      type: object
+      required: [token, new_password]
+      properties:
+        token: { type: string }
+        new_password: { type: string, format: password, minLength: 12 }
+    PasswordResetRequestResponse:
+      type: object
+      properties:
+        status: { type: string }
+        delivery: { type: string, enum: [email-placeholder] }
+        expires_at: { type: string, format: date-time }
+        message: { type: string }
+    AdminApproveUserRequest:
+      type: object
+      required: [organisation, profile]
+      properties:
+        organisation: { type: string }
+        profile: { type: string }
+        send_invite: { type: boolean }
+    AdminPasswordResetTokenResponse:
+      type: object
+      properties:
+        status: { type: string }
+        token: { type: string }
+        expires_at: { type: string, format: date-time }
+        delivery: { type: string, enum: [email-placeholder, smtp] }
+        invite_token: { type: string }
+        invite_delivery: { type: string, enum: [email-placeholder, smtp] }
+        invite_expires_at: { type: string, format: date-time }
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password: { type: string, format: password }
+        new_password: { type: string, format: password, minLength: 12 }
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string }
+        login: { type: string }
+        expires_at: { type: string, format: date-time }
+        must_change_password: { type: boolean }
+        send_invite: { type: boolean }
+    User:
+      type: object
+      properties:
+        login: { type: string }
+        name: { type: string }
+        organisation: { type: string }
+        profile: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        must_change_password: { type: boolean }
+    SessionCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/SessionSummary' }
+        total: { type: integer }
+    SessionSummary:
+      type: object
+      properties:
+        token_id: { type: string }
+        current: { type: boolean }
+        revoked: { type: boolean }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: string, format: date-time }
+    AdminUserRequest:
+      type: object
+      required: [login, name, organisation, profile]
+      properties:
+        login: { type: string, format: email }
+        name: { type: string }
+        organisation: { type: string }
+        profile: { type: string }
+        password: { type: string, format: password, minLength: 12 }
+        must_change_password: { type: boolean }
+        send_invite: { type: boolean }
+    AdminUserUpdateRequest:
+      type: object
+      required: [name, organisation, profile]
+      properties:
+        name: { type: string }
+        organisation: { type: string }
+        profile: { type: string }
+        status: { type: string }
+        must_change_password: { type: boolean }
+    AdminResetPasswordRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, format: password, minLength: 12 }
+        must_change_password: { type: boolean }
+    AdminUserCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/AdminUserSummary' }
+        total: { type: integer }
+    AdminUserSummary:
+      type: object
+      properties:
+        login: { type: string }
+        name: { type: string }
+        organisation: { type: string }
+        profile: { type: string }
+        status: { type: string }
+        locked: { type: boolean }
+        must_change_password: { type: boolean }
+        last_login_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AuditCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/AuditSummary' }
+        total: { type: integer }
+    AuditSummary:
+      type: object
+      properties:
+        id: { type: string }
+        actor_id: { type: string }
+        action: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        before_json: { type: object, additionalProperties: true }
+        after_json: { type: object, additionalProperties: true }
+        ip_address: { type: string }
+        user_agent: { type: string }
+        request_id: { type: string }
+        created_at: { type: string, format: date-time }
+    AdminOrganisationRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    AdminOrganisationCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/AdminOrganisationSummary' }
+        total: { type: integer }
+    AdminOrganisationSummary:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AdminProfileRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+    AdminProfileCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/AdminProfileSummary' }
+        total: { type: integer }
+    AdminProfileSummary:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CollectionMode:
+      type: string
+      enum: [demo-read-only, legacy-read-only, postgres-read-only, read-only]
+    ListSort:
+      type: object
+      properties:
+        field: { type: string }
+        order: { type: string, enum: [ASC, DESC] }
+    CaseCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/CaseSummary' }
+        total: { type: integer }
+        mode: { $ref: '#/components/schemas/CollectionMode' }
+        range: { type: array, items: { type: integer }, minItems: 2, maxItems: 2 }
+        sort: { $ref: '#/components/schemas/ListSort' }
+        filters: { type: object, additionalProperties: { type: string } }
+    AlertCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/AlertSummary' }
+        total: { type: integer }
+        mode: { $ref: '#/components/schemas/CollectionMode' }
+        range: { type: array, items: { type: integer }, minItems: 2, maxItems: 2 }
+        sort: { $ref: '#/components/schemas/ListSort' }
+        filters: { type: object, additionalProperties: { type: string } }
+    ObservableCollection:
+      type: object
+      properties:
+        values:
+          type: array
+          items: { $ref: '#/components/schemas/ObservableSummary' }
+        total: { type: integer }
+        mode: { $ref: '#/components/schemas/CollectionMode' }
+        range: { type: array, items: { type: integer }, minItems: 2, maxItems: 2 }
+        sort: { $ref: '#/components/schemas/ListSort' }
+        filters: { type: object, additionalProperties: { type: string } }
+    CaseSummary:
+      type: object
+      properties:
+        id: { type: string }
+        number: { type: integer }
+        title: { type: string }
+        severity: { type: integer }
+        tlp: { type: integer }
+        pap: { type: integer }
+        status: { type: string }
+        owner: { type: string }
+        assignee: { type: string }
+        tags: { type: array, items: { type: string } }
+        task_count: { type: integer }
+        observable_count: { type: integer }
+        alert_count: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AlertSummary:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        type: { type: string }
+        source: { type: string }
+        source_ref: { type: string }
+        severity: { type: integer }
+        tlp: { type: integer }
+        status: { type: string }
+        read: { type: boolean }
+        case_number: { type: integer }
+        observable_count: { type: integer }
+        tags: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+    ObservableSummary:
+      type: object
+      properties:
+        id: { type: string }
+        data_type: { type: string }
+        data: { type: string }
+        message: { type: string }
+        tlp: { type: integer }
+        ioc: { type: boolean }
+        sighted: { type: boolean }
+        tags: { type: array, items: { type: string } }
+        case_number: { type: integer }
+        case_title: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    AlertWrite:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        type: { type: string }
+        source: { type: string }
+        source_ref: { type: string }
+        severity: { type: integer }
+        tlp: { type: integer }
+        status: { type: string }
+        read: { type: boolean }
+        case_id: { type: string }
+        tags: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CaseWrite:
+      type: object
+      properties:
+        id: { type: string }
+        number: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        severity: { type: integer }
+        tlp: { type: integer }
+        pap: { type: integer }
+        status: { type: string }
+        owner: { type: string }
+        assignee: { type: string }
+        tags: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AlertImportResult:
+      type: object
+      properties:
+        alert: { $ref: '#/components/schemas/AlertWrite' }
+        case: { $ref: '#/components/schemas/CaseWrite' }
+    AlertMergeRequest:
+      type: object
+      properties:
+        target_alert_id: { type: string }
+        case_id: { type: string }
+    AlertMergeResult:
+      type: object
+      properties:
+        source_alert: { $ref: '#/components/schemas/AlertWrite' }
+        target_case: { type: string }
+        status: { type: string, example: Merged }
+    TaskCreateRequest:
+      type: object
+      required: [case_id, title]
+      properties:
+        case_id: { type: string }
+        title: { type: string }
+        assignee: { type: string }
+        group_name: { type: string }
+        order_index: { type: integer }
+    TaskPatchRequest:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: string }
+        assignee: { type: string }
+        group_name: { type: string }
+        order_index: { type: integer }
+    TaskAssignRequest:
+      type: object
+      required: [assignee]
+      properties:
+        assignee: { type: string }
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        case_id: { type: string }
+        title: { type: string }
+        status: { type: string }
+        assignee: { type: string }
+        group_name: { type: string }
+        order_index: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CaseLogAppendRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        task_id: { type: string }
+    CaseLog:
+      type: object
+      properties:
+        id: { type: string }
+        case_id: { type: string }
+        task_id: { type: string }
+        message: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    ObservableCreateRequest:
+      type: object
+      required: [case_id, data_type, data]
+      properties:
+        case_id: { type: string }
+        data_type: { type: string }
+        data: { type: string }
+        message: { type: string }
+        tlp: { type: integer }
+        ioc: { type: boolean }
+        sighted: { type: boolean }
+        tags: { type: array, items: { type: string } }
+        created_by: { type: string }
+    ObservablePatchRequest:
+      type: object
+      properties:
+        data_type: { type: string }
+        data: { type: string }
+        message: { type: string }
+        tlp: { type: integer }
+        ioc: { type: boolean }
+        sighted: { type: boolean }
+        tags: { type: array, items: { type: string } }
+    ObservableWrite:
+      type: object
+      properties:
+        id: { type: string }
+        case_id: { type: string }
+        data_type: { type: string }
+        data: { type: string }
+        message: { type: string }
+        tlp: { type: integer }
+        ioc: { type: boolean }
+        sighted: { type: boolean }
+        tags: { type: array, items: { type: string } }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ObservableAnalyzeResult:
+      type: object
+      properties:
+        observable_id: { type: string }
+        status: { type: string }
+        message: { type: string }
+        created_at: { type: string, format: date-time }
+    Problem:
+      type: object
+      properties:
+        type: { type: string, example: about:blank }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        request_id: { type: string }
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Problem' }
