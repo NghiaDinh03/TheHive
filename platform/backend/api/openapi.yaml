@@ -327,6 +327,16 @@ paths:
       responses:
         '200': { description: Alerts, content: { application/json: { schema: { $ref: '#/components/schemas/AlertCollection' } } } }
 
+  /api/v1/alerts/{id}:
+    get:
+      tags: [investigation]
+      summary: Alert detail with observables, similar alerts, and audit history
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Alert detail, content: { application/json: { schema: { $ref: '#/components/schemas/AlertDetail' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /api/v1/alerts/{id}/import:
     post:
       tags: [investigation]
@@ -363,6 +373,14 @@ paths:
         '201': { description: Task created, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
 
   /api/v1/tasks/{id}:
+    get:
+      tags: [investigation]
+      summary: Task detail with logs, attachments, and audit history
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Task detail, content: { application/json: { schema: { $ref: '#/components/schemas/TaskDetail' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
     patch:
       tags: [investigation]
       summary: Update a task
@@ -399,6 +417,66 @@ paths:
       responses:
         '200': { description: Task closed, content: { application/json: { schema: { $ref: '#/components/schemas/Task' } } } }
 
+  /api/v1/cases/{id}/close:
+    post:
+      summary: Close a case (TheHive 4 parity Resolved status)
+      description: |
+        Marks the case `Resolved`, persists impact/resolution/summary, sets `end_date`,
+        and applies legacy task side effects: `InProgress` → `Completed`, `Waiting` → `Cancel`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaseCloseRequest' }
+      responses:
+        '200':
+          description: Updated case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseWrite' }
+  /api/v1/cases/{id}/reopen:
+    post:
+      summary: Reopen a previously resolved case
+      description: Sets the case status back to `Open`, clears resolution/impact metadata, removes `end_date`.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseWrite' }
+  /api/v1/cases/{id}/duplicate:
+    post:
+      summary: Mark this case as Duplicated of a target case
+      description: |
+        Sets the case status to `Duplicated`, links `merged_into` to the target case,
+        appends this case ID to the target's `merged_from`, and cancels the source's pending tasks.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CaseDuplicateRequest' }
+      responses:
+        '200':
+          description: Updated case
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaseWrite' }
+
   /api/v1/cases/{id}/logs:
     post:
       tags: [investigation]
@@ -412,6 +490,40 @@ paths:
             schema: { $ref: '#/components/schemas/CaseLogAppendRequest' }
       responses:
         '201': { description: Case log appended, content: { application/json: { schema: { $ref: '#/components/schemas/CaseLog' } } } }
+
+  /api/v1/cases/{id}/procedures:
+    get:
+      tags: [investigation]
+      summary: List MITRE-style procedures linked to a case (TheHive 4 Procedure parity foundation)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Case procedures
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  values: { type: array, items: { $ref: '#/components/schemas/CaseProcedure' } }
+                  total: { type: integer }
+
+  /api/v1/cases/{id}/shares:
+    get:
+      tags: [investigation]
+      summary: List organisations the case is shared with (TheHive 4 Share parity foundation)
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Case shares
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  values: { type: array, items: { $ref: '#/components/schemas/CaseShare' } }
+                  total: { type: integer }
 
   /api/v1/observables:
     get:
@@ -470,6 +582,71 @@ paths:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         '202': { description: Analyzer placeholder accepted, content: { application/json: { schema: { $ref: '#/components/schemas/ObservableAnalyzeResult' } } } }
+
+  /api/v1/attachments/upload:
+    post:
+      tags: [investigation]
+      summary: Initialize S3-compatible attachment upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentUploadInitRequest' }
+      responses:
+        '201': { description: Signed upload URL allocated, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentUploadInitResponse' } } } }
+
+  /api/v1/attachments/{id}/download:
+    get:
+      tags: [investigation]
+      summary: Get signed attachment download URL when scan policy allows
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Signed download URL, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentDownloadResponse' } } } }
+        '202': { description: Download blocked by scan policy, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentDownloadResponse' } } } }
+
+  /api/v1/attachments/{id}/download.zip:
+    get:
+      tags: [investigation]
+      summary: Download password-protected ZIP attachment compatible with TheHive 4 datastorezip behavior
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: ZIP binary, content: { application/zip: { schema: { type: string, format: binary } } } }
+        '202': { description: ZIP download blocked by scan policy, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentZipDownloadResponse' } } } }
+
+  /api/v1/attachments/{id}/finalize:
+    post:
+      tags: [investigation]
+      summary: Server-side hash/size finalize after object PUT to MinIO/S3 (TheHive 4 AttachmentSrv parity)
+      description: |
+        Backend fetches the freshly-uploaded object from object storage, computes SHA-256 + size,
+        verifies them against client-declared values, and persists the canonical server-side hash.
+        Returns 200 with `hash_matched=false` if client lied about the binary; row is still updated
+        with the canonical server-side hash so audit/forensics can compare later.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentFinalizeRequest' }
+      responses:
+        '200': { description: Finalize result, content: { application/json: { schema: { $ref: '#/components/schemas/AttachmentFinalizeResponse' } } } }
+
+  /api/v1/attachments/{id}/scan:
+    post:
+      tags: [investigation]
+      summary: Update attachment malware scan status placeholder
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AttachmentScanRequest' }
+      responses:
+        '200': { description: Scan status updated, content: { application/json: { schema: { $ref: '#/components/schemas/Attachment' } } } }
 
 components:
   parameters:
@@ -780,6 +957,10 @@ components:
         filters: { type: object, additionalProperties: { type: string } }
     CaseSummary:
       type: object
+      description: |
+        TheHive 4 parity case summary. Status follows legacy enum `Open|Resolved|Duplicated`.
+        `impact_status` matches `NoImpact|WithImpact|NotApplicable`.
+        `resolution_status` matches `Indeterminate|FalsePositive|TruePositive|Other|Duplicated`.
       properties:
         id: { type: string }
         number: { type: integer }
@@ -787,10 +968,19 @@ components:
         severity: { type: integer }
         tlp: { type: integer }
         pap: { type: integer }
-        status: { type: string }
+        status: { type: string, enum: [Open, Resolved, Duplicated] }
         owner: { type: string }
         assignee: { type: string }
         tags: { type: array, items: { type: string } }
+        flag: { type: boolean }
+        summary: { type: string }
+        impact_status: { type: string }
+        resolution_status: { type: string }
+        case_template: { type: string }
+        owning_organisation: { type: string }
+        organisation_ids: { type: array, items: { type: string } }
+        start_date: { type: string, format: date-time, nullable: true }
+        end_date: { type: string, format: date-time, nullable: true }
         task_count: { type: integer }
         observable_count: { type: integer }
         alert_count: { type: integer }
@@ -798,6 +988,7 @@ components:
         updated_at: { type: string, format: date-time }
     AlertSummary:
       type: object
+      description: TheHive 4 parity alert summary with PAP, follow, flag, organisation, case template.
       properties:
         id: { type: string }
         title: { type: string }
@@ -806,14 +997,22 @@ components:
         source_ref: { type: string }
         severity: { type: integer }
         tlp: { type: integer }
+        pap: { type: integer }
         status: { type: string }
         read: { type: boolean }
+        follow: { type: boolean }
+        flag: { type: boolean }
+        external_link: { type: string }
+        organisation_id: { type: string }
+        case_template: { type: string }
         case_number: { type: integer }
         observable_count: { type: integer }
         tags: { type: array, items: { type: string } }
+        last_sync_date: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
     ObservableSummary:
       type: object
+      description: TheHive 4 parity observable summary with ignore_similarity and attachment_id.
       properties:
         id: { type: string }
         data_type: { type: string }
@@ -822,6 +1021,8 @@ components:
         tlp: { type: integer }
         ioc: { type: boolean }
         sighted: { type: boolean }
+        ignore_similarity: { type: boolean }
+        attachment_id: { type: string }
         tags: { type: array, items: { type: string } }
         case_number: { type: integer }
         case_title: { type: string }
@@ -832,15 +1033,23 @@ components:
       properties:
         id: { type: string }
         title: { type: string }
+        description: { type: string }
         type: { type: string }
         source: { type: string }
         source_ref: { type: string }
+        external_link: { type: string }
         severity: { type: integer }
         tlp: { type: integer }
+        pap: { type: integer }
         status: { type: string }
         read: { type: boolean }
+        follow: { type: boolean }
+        flag: { type: boolean }
+        organisation_id: { type: string }
+        case_template: { type: string }
         case_id: { type: string }
         tags: { type: array, items: { type: string } }
+        last_sync_date: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     CaseWrite:
@@ -853,17 +1062,109 @@ components:
         severity: { type: integer }
         tlp: { type: integer }
         pap: { type: integer }
-        status: { type: string }
+        status: { type: string, enum: [Open, Resolved, Duplicated] }
         owner: { type: string }
         assignee: { type: string }
         tags: { type: array, items: { type: string } }
+        flag: { type: boolean }
+        summary: { type: string }
+        impact_status: { type: string }
+        resolution_status: { type: string }
+        case_template: { type: string }
+        owning_organisation: { type: string }
+        organisation_ids: { type: array, items: { type: string } }
+        start_date: { type: string, format: date-time, nullable: true }
+        end_date: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+    CaseCloseRequest:
+      type: object
+      description: Optional payload for `POST /api/v1/cases/{id}/close`.
+      properties:
+        impact_status: { type: string }
+        resolution_status: { type: string }
+        summary: { type: string }
+    CaseDuplicateRequest:
+      type: object
+      required: [target_case_id]
+      properties:
+        target_case_id: { type: string, description: "ID of the case this one duplicates into" }
+    AlertObservableCopy:
+      type: object
+      properties:
+        source_observable_id: { type: string }
+        observable_id: { type: string }
+        action: { type: string, enum: [copied, deduplicated] }
+        data_type: { type: string }
+        data: { type: string }
+    AlertMergeReport:
+      type: object
+      properties:
+        policy: { type: string, example: dedup-by-case-data-type-data }
+        copied_count: { type: integer }
+        deduplicated_count: { type: integer }
+        conflicting_observable_ids:
+          type: array
+          items: { type: string }
+        similar_alerts:
+          type: array
+          items: { $ref: '#/components/schemas/SimilarAlert' }
+        notes:
+          type: array
+          items: { type: string }
+    SimilarAlert:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        source: { type: string }
+        source_ref: { type: string }
+        score: { type: number, format: float }
+        reason: { type: string, enum: [same-source-ref-type, same-source-ref, same-source-type, overlapping-tags, none] }
+    AlertDetail:
+      allOf:
+        - { $ref: '#/components/schemas/AlertSummary' }
+        - type: object
+          properties:
+            case_id: { type: string }
+            case_title: { type: string }
+            observables:
+              type: array
+              items: { $ref: '#/components/schemas/ObservableWrite' }
+            similar_alerts:
+              type: array
+              items: { $ref: '#/components/schemas/AlertSummary' }
+            history:
+              type: array
+              items: { $ref: '#/components/schemas/AuditHistory' }
+    TaskDetail:
+      type: object
+      properties:
+        task: { $ref: '#/components/schemas/Task' }
+        logs:
+          type: array
+          items: { $ref: '#/components/schemas/CaseLog' }
+        attachments:
+          type: array
+          items: { $ref: '#/components/schemas/Attachment' }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/AuditHistory' }
+    AuditHistory:
+      type: object
+      properties:
+        action: { type: string }
+        actor_id: { type: string }
+        created_at: { type: string, format: date-time }
     AlertImportResult:
       type: object
       properties:
         alert: { $ref: '#/components/schemas/AlertWrite' }
         case: { $ref: '#/components/schemas/CaseWrite' }
+        observables:
+          type: array
+          items: { $ref: '#/components/schemas/AlertObservableCopy' }
+        report: { $ref: '#/components/schemas/AlertMergeReport' }
     AlertMergeRequest:
       type: object
       properties:
@@ -875,6 +1176,10 @@ components:
         source_alert: { $ref: '#/components/schemas/AlertWrite' }
         target_case: { type: string }
         status: { type: string, example: Merged }
+        observables:
+          type: array
+          items: { $ref: '#/components/schemas/AlertObservableCopy' }
+        report: { $ref: '#/components/schemas/AlertMergeReport' }
     TaskCreateRequest:
       type: object
       required: [case_id, title]
@@ -902,6 +1207,8 @@ components:
       properties:
         id: { type: string }
         case_id: { type: string }
+        case_number: { type: integer }
+        case_title: { type: string }
         title: { type: string }
         status: { type: string }
         assignee: { type: string }
@@ -926,9 +1233,10 @@ components:
         created_at: { type: string, format: date-time }
     ObservableCreateRequest:
       type: object
-      required: [case_id, data_type, data]
+      required: [data_type, data]
       properties:
-        case_id: { type: string }
+        case_id: { type: string, description: Case target for case observable }
+        alert_id: { type: string, description: Alert target for alert artifact/observable before import }
         data_type: { type: string }
         data: { type: string }
         message: { type: string }
@@ -952,6 +1260,7 @@ components:
       properties:
         id: { type: string }
         case_id: { type: string }
+        alert_id: { type: string }
         data_type: { type: string }
         data: { type: string }
         message: { type: string }
@@ -968,6 +1277,109 @@ components:
         observable_id: { type: string }
         status: { type: string }
         message: { type: string }
+        created_at: { type: string, format: date-time }
+    AttachmentUploadInitRequest:
+      type: object
+      required: [file_name]
+      properties:
+        case_id: { type: string }
+        observable_id: { type: string }
+        log_id: { type: string }
+        file_name: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        sha256: { type: string }
+    Attachment:
+      type: object
+      properties:
+        id: { type: string }
+        case_id: { type: string }
+        observable_id: { type: string }
+        log_id: { type: string }
+        file_name: { type: string }
+        original_name: { type: string }
+        content_type: { type: string }
+        size_bytes: { type: integer, format: int64 }
+        storage_backend: { type: string, example: s3 }
+        bucket: { type: string }
+        object_key: { type: string }
+        sha256: { type: string }
+        scan_status: { type: string, enum: [pending, clean, malicious, error] }
+        scan_engine: { type: string }
+        retention_policy: { type: string }
+        uploaded_by: { type: string }
+        created_at: { type: string, format: date-time }
+        scanned_at: { type: string, format: date-time }
+        downloaded_at: { type: string, format: date-time }
+    AttachmentUploadInitResponse:
+      type: object
+      properties:
+        attachment: { $ref: '#/components/schemas/Attachment' }
+        upload_url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+    AttachmentDownloadResponse:
+      type: object
+      properties:
+        attachment: { $ref: '#/components/schemas/Attachment' }
+        download_url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+        blocked: { type: boolean }
+        reason: { type: string }
+    AttachmentZipDownloadResponse:
+      type: object
+      properties:
+        attachment: { $ref: '#/components/schemas/Attachment' }
+        file_name: { type: string, example: evidence.txt.zip }
+        content_type: { type: string, example: application/zip }
+        size_bytes: { type: integer, format: int64 }
+        blocked: { type: boolean }
+        reason: { type: string }
+    AttachmentScanRequest:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, clean, malicious, error] }
+        engine: { type: string }
+    AttachmentFinalizeRequest:
+      type: object
+      description: Optional declared values to verify against server-side computed hash/size.
+      properties:
+        declared_size_bytes: { type: integer, format: int64 }
+        declared_sha256: { type: string }
+    AttachmentFinalizeResponse:
+      type: object
+      properties:
+        attachment: { $ref: '#/components/schemas/Attachment' }
+        computed_sha256: { type: string, description: Server-side SHA-256 over MinIO/S3 object bytes. }
+        computed_size_bytes: { type: integer, format: int64 }
+        hash_matched: { type: boolean }
+        size_matched: { type: boolean }
+        hash_source: { type: string, example: server-side }
+        verification_note: { type: string }
+    CaseProcedure:
+      type: object
+      description: TheHive 4 Procedure parity foundation. Pattern linkage maps to MITRE ATT&CK.
+      properties:
+        id: { type: string }
+        case_id: { type: string }
+        description: { type: string }
+        pattern_id: { type: string, description: External pattern identifier (e.g. MITRE ATT&CK technique). }
+        pattern_name: { type: string }
+        tactic: { type: string }
+        occurred_at: { type: string, format: date-time, nullable: true }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    CaseShare:
+      type: object
+      description: TheHive 4 Share parity foundation. Maps a case to a target organisation/profile and propagation rules.
+      properties:
+        id: { type: string }
+        case_id: { type: string }
+        organisation: { type: string }
+        profile: { type: string, example: read-only }
+        task_rule: { type: string, enum: [manual, auto, none], example: manual }
+        observable_rule: { type: string, enum: [manual, auto, none], example: manual }
+        created_by: { type: string }
         created_at: { type: string, format: date-time }
     Problem:
       type: object

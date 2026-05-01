@@ -22,6 +22,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type updateMeRequest struct {
+	Name string `json:"name" validate:"required,min=1"`
+}
+
 type AuthHandler struct {
 	db        *sqlx.DB
 	jwtSecret string
@@ -343,6 +347,57 @@ func (h *AuthHandler) RevokeAllSessions(c echo.Context) error {
 		return apierr.New(http.StatusInternalServerError, "session revoke failed")
 	}
 	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
+// UpdateMe allows the authenticated user to update their own display name.
+// Mirrors legacy personal-settings profile tab PATCH.
+func (h *AuthHandler) UpdateMe(c echo.Context) error {
+	claims, _ := c.Get("auth_claims").(*authjwt.Claims)
+	if claims == nil || claims.Login == "" {
+		return apierr.New(http.StatusUnauthorized, "missing authentication")
+	}
+	var req updateMeRequest
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+	if _, err := h.db.ExecContext(c.Request().Context(), `
+		UPDATE users SET name = $1, updated_at = now() WHERE lower(login) = lower($2)`,
+		strings.TrimSpace(req.Name), claims.Login); err != nil {
+		return apierr.New(http.StatusInternalServerError, "profile update failed")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.me.update", "user", claims.Login, nil, echo.Map{"name": req.Name}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
+// GenerateAPIKey creates or rotates the API key for the authenticated user.
+// Mirrors legacy personal-settings API key tab.
+func (h *AuthHandler) GenerateAPIKey(c echo.Context) error {
+	claims, _ := c.Get("auth_claims").(*authjwt.Claims)
+	if claims == nil || claims.Login == "" {
+		return apierr.New(http.StatusUnauthorized, "missing authentication")
+	}
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return apierr.New(http.StatusInternalServerError, "api key generation failed")
+	}
+	key := base64.RawURLEncoding.EncodeToString(raw)
+	keyHash := func() string { s := sha256.Sum256([]byte(key)); return hex.EncodeToString(s[:]) }()
+	if _, err := h.db.ExecContext(c.Request().Context(), `
+		INSERT INTO api_keys (login, key_hash, created_at)
+		VALUES ($1, $2, now())
+		ON CONFLICT (login) DO UPDATE SET key_hash = EXCLUDED.key_hash, created_at = now()`,
+		claims.Login, keyHash); err != nil {
+		return apierr.New(http.StatusInternalServerError, "api key storage failed")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.api_key.rotate", "user", claims.Login, nil, echo.Map{"rotated": true}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"api_key": key})
 }
 
 func (h *AuthHandler) Me(c echo.Context) error {

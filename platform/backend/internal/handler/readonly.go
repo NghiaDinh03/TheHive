@@ -13,7 +13,7 @@ type ReadOnlyHandler struct {
 
 func NewReadOnlyHandler(reader investigation.Reader) *ReadOnlyHandler {
 	if reader == nil {
-		reader = investigation.NewDemoReader()
+		reader = investigation.NewPostgresReader(nil)
 	}
 	return &ReadOnlyHandler{reader: reader}
 }

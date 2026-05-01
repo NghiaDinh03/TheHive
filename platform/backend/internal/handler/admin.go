@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/lib/pq"
 	"github.com/thehive-platform/backend/internal/apierr"
 	"github.com/thehive-platform/backend/internal/audit"
+	"github.com/thehive-platform/backend/internal/authjwt"
 	"github.com/thehive-platform/backend/internal/mail"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -88,6 +90,10 @@ type adminResetPasswordRequest struct {
 	MustChangePassword bool   `json:"must_change_password"`
 }
 
+type uiSettingsResponse struct {
+	HideEmptyCaseButton bool `json:"hideEmptyCaseButton"`
+}
+
 type adminGenerateResetTokenRequest struct {
 	TTLMinutes int `json:"ttl_minutes"`
 }
@@ -96,6 +102,44 @@ type adminApproveUserRequest struct {
 	Organisation string `json:"organisation" validate:"required,min=1"`
 	Profile      string `json:"profile" validate:"required,min=1"`
 	SendInvite   bool   `json:"send_invite"`
+}
+
+func (h *AdminHandler) GetUISettings(c echo.Context) error {
+	var raw []byte
+	err := h.db.QueryRowxContext(c.Request().Context(), `SELECT value FROM ui_settings WHERE key = 'hideEmptyCaseButton'`).Scan(&raw)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return c.JSON(http.StatusOK, uiSettingsResponse{HideEmptyCaseButton: false})
+		}
+		return apierr.New(http.StatusInternalServerError, "ui settings load failed")
+	}
+	var hide bool
+	if err := json.Unmarshal(raw, &hide); err != nil {
+		return apierr.New(http.StatusInternalServerError, "ui settings decode failed")
+	}
+	return c.JSON(http.StatusOK, uiSettingsResponse{HideEmptyCaseButton: hide})
+}
+
+func (h *AdminHandler) SaveUISettings(c echo.Context) error {
+	var req uiSettingsResponse
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	raw, err := json.Marshal(req.HideEmptyCaseButton)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "ui settings encode failed")
+	}
+	_, err = h.db.ExecContext(c.Request().Context(), `
+		INSERT INTO ui_settings (key, value)
+		VALUES ('hideEmptyCaseButton', $1::jsonb)
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, string(raw))
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "ui settings save failed")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.ui_settings.save", "config", "hideEmptyCaseButton", nil, req))
+	}
+	return c.JSON(http.StatusOK, req)
 }
 
 func (h *AdminHandler) ListUsers(c echo.Context) error {
@@ -407,6 +451,127 @@ func (h *AdminHandler) UpsertProfile(c echo.Context) error {
 	return c.JSON(http.StatusOK, echo.Map{"status": "ok", "id": id})
 }
 
+func (h *AdminHandler) DeleteUser(c echo.Context) error {
+	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	if login == "" {
+		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	tx, err := h.db.BeginTxx(c.Request().Context(), nil)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "user delete failed")
+	}
+	defer func() { _ = tx.Rollback() }()
+	// Revoke sessions first
+	_, _ = tx.ExecContext(c.Request().Context(), `UPDATE auth_sessions SET revoked = true, revoked_at = now() WHERE lower(login) = lower($1) AND revoked = false`, login)
+	result, err := tx.ExecContext(c.Request().Context(), `DELETE FROM users WHERE lower(login) = lower($1)`, login)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "user delete failed")
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		return apierr.New(http.StatusNotFound, "user not found")
+	}
+	if h.audit != nil {
+		if err := audit.RecordTx(c.Request().Context(), tx, audit.FromContext(c, "admin.user.delete", "user", login, nil, echo.Map{"login": login})); err != nil {
+			return apierr.New(http.StatusInternalServerError, "user delete audit failed")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return apierr.New(http.StatusInternalServerError, "user delete failed")
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
+func (h *AdminHandler) UpdateOrganisation(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return apierr.New(http.StatusBadRequest, "missing id")
+	}
+	var req adminOrganisationRequest
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+	result, err := h.db.ExecContext(c.Request().Context(), `
+		UPDATE organisations SET name = $1, description = $2, updated_at = now() WHERE id = $3::uuid`,
+		req.Name, req.Description, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "organisation update failed")
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		return apierr.New(http.StatusNotFound, "organisation not found")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.organisation.update", "organisation", id, nil, echo.Map{"name": req.Name}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
+func (h *AdminHandler) DeleteOrganisation(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return apierr.New(http.StatusBadRequest, "missing id")
+	}
+	result, err := h.db.ExecContext(c.Request().Context(), `DELETE FROM organisations WHERE id = $1::uuid`, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "organisation delete failed")
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		return apierr.New(http.StatusNotFound, "organisation not found")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.organisation.delete", "organisation", id, nil, echo.Map{"id": id}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
+func (h *AdminHandler) UpdateProfile(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return apierr.New(http.StatusBadRequest, "missing id")
+	}
+	var req adminProfileRequest
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+	permissions := normalisePermissions(req.Permissions)
+	result, err := h.db.ExecContext(c.Request().Context(), `
+		UPDATE profiles SET name = $1, permissions = $2, updated_at = now() WHERE id = $3::uuid`,
+		req.Name, pq.Array(permissions), id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "profile update failed")
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		return apierr.New(http.StatusNotFound, "profile not found")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.profile.update", "profile", id, nil, echo.Map{"name": req.Name, "permissions": permissions}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
+func (h *AdminHandler) DeleteProfile(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return apierr.New(http.StatusBadRequest, "missing id")
+	}
+	result, err := h.db.ExecContext(c.Request().Context(), `DELETE FROM profiles WHERE id = $1::uuid`, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "profile delete failed")
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		return apierr.New(http.StatusNotFound, "profile not found")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.profile.delete", "profile", id, nil, echo.Map{"id": id}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
+}
+
 func (h *AdminHandler) setUserLocked(c echo.Context, locked bool) error {
 	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
 	if login == "" {
@@ -467,7 +632,7 @@ func normalisePermissions(values []string) []string {
 	out := []string{}
 	for _, value := range values {
 		value = strings.TrimSpace(value)
-		if value == "" || seen[value] {
+		if value == "" || seen[value] || !authjwt.IsLegacyPermission(value) {
 			continue
 		}
 		seen[value] = true

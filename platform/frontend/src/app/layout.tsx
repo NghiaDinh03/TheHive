@@ -1,14 +1,7 @@
 import type { Metadata } from 'next';
-import { Roboto } from 'next/font/google';
 import '@/styles/globals.css';
+import '@/styles/dashboard-monitor.css';
 import { QueryProvider } from '@/lib/query-provider';
-
-const roboto = Roboto({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '700'],
-  variable: '--font-roboto',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: 'TheHive Platform',
@@ -24,8 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={roboto.variable}>
-      <body className="font-sans antialiased min-h-screen bg-thehive-body text-thehive-text">
+    <html lang="en">
+      <body className="min-h-screen bg-thehive-body text-thehive-text">
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>

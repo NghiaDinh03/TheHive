@@ -1,0 +1,10 @@
+DROP TRIGGER IF EXISTS trg_observable_data_hash ON observables;
+DROP FUNCTION IF EXISTS compute_observable_data_hash();
+DROP INDEX IF EXISTS idx_cases_merged_into;
+DROP INDEX IF EXISTS idx_alerts_deleted_at;
+ALTER TABLE alerts DROP COLUMN IF EXISTS deleted_at;
+ALTER TABLE alert_custom_fields DROP COLUMN IF EXISTS string_value;
+ALTER TABLE alert_custom_fields DROP COLUMN IF EXISTS boolean_value;
+ALTER TABLE alert_custom_fields DROP COLUMN IF EXISTS integer_value;
+ALTER TABLE alert_custom_fields DROP COLUMN IF EXISTS float_value;
+ALTER TABLE alert_custom_fields DROP COLUMN IF EXISTS date_value;

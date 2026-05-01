@@ -1,16 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
-  Database,
-  Server,
-  GitCommitHorizontal,
+  AlertTriangle,
+  Briefcase,
+  CheckSquare,
   Clock,
+  Database,
+  Eye,
+  HardDrive,
+  Search,
+  Server,
   ShieldCheck,
-} from 'lucide-react';
+} from '@/components/FaIcon';
 import { apiFetch } from '@/lib/api';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
@@ -24,19 +29,21 @@ interface AppStatus {
   db_schema_version?: number;
   db_schema_dirty?: boolean;
 }
+interface User { login: string; name: string; organisation: string; profile: string; permissions: string[]; }
+interface Readiness { status: 'ok' | 'degraded'; checks: Record<string, { status: string; error?: string }>; }
+type Collection<T> = { values: T[]; total: number };
+type CaseSummary = { id: string; number: number; title: string; severity: number; status: string; assignee: string; tags: string[]; created_at: string; updated_at: string };
+type AlertSummary = { id: string; title: string; severity: number; status: string; source: string; created_at: string };
+type ObsSummary = { id: string; data_type: string; data: string; ioc: boolean; sighted: boolean; created_at: string };
 
-interface User {
-  login: string;
-  name: string;
-  organisation: string;
-  profile: string;
-  permissions: string[];
-}
-
-interface Readiness {
-  status: 'ok' | 'degraded';
-  checks: Record<string, { status: string; error?: string }>;
-}
+const serviceIcons: Record<string, ReactNode> = {
+  postgres: <Database size={15} />,
+  database: <Database size={15} />,
+  minio: <HardDrive size={15} />,
+  opensearch: <Search size={15} />,
+  backend: <Server size={15} />,
+  api: <Server size={15} />,
+};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -44,278 +51,236 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login');
-    if (!login) {
-      router.replace('/login');
-    } else {
-      setAuthedLogin(login);
-    }
+    if (!login) router.replace('/login');
+    else setAuthedLogin(login);
   }, [router]);
 
-  const status = useQuery({
-    queryKey: ['status'],
-    queryFn: () => apiFetch<AppStatus>('/api/v1/status'),
-    enabled: !!authedLogin,
-    refetchInterval: 30_000,
-  });
-
-  const me = useQuery({
-    queryKey: ['me'],
-    queryFn: () => apiFetch<User>('/api/v1/auth/me'),
-    enabled: !!authedLogin,
-  });
-
-  const ready = useQuery({
-    queryKey: ['ready'],
-    queryFn: () => apiFetch<Readiness>('/readyz'),
-    enabled: !!authedLogin,
-    refetchInterval: 15_000,
-  });
+  const status = useQuery({ queryKey: ['status'], queryFn: () => apiFetch<AppStatus>('/api/v1/status'), enabled: !!authedLogin, refetchInterval: 30_000 });
+  const me = useQuery({ queryKey: ['me'], queryFn: () => apiFetch<User>('/api/v1/auth/me'), enabled: !!authedLogin });
+  const ready = useQuery({ queryKey: ['ready'], queryFn: () => apiFetch<Readiness>('/readyz'), enabled: !!authedLogin, refetchInterval: 15_000 });
+  const cases = useQuery({ queryKey: ['dash-cases'], queryFn: () => apiFetch<Collection<CaseSummary>>('/api/v1/cases?range=0:4&sort=updated_at:DESC'), enabled: !!authedLogin, refetchInterval: 30_000 });
+  const alerts = useQuery({ queryKey: ['dash-alerts'], queryFn: () => apiFetch<Collection<AlertSummary>>('/api/v1/alerts?range=0:4&sort=created_at:DESC'), enabled: !!authedLogin, refetchInterval: 30_000 });
+  const observables = useQuery({ queryKey: ['dash-obs'], queryFn: () => apiFetch<Collection<ObsSummary>>('/api/v1/observables?range=0:4&sort=created_at:DESC'), enabled: !!authedLogin, refetchInterval: 30_000 });
 
   if (!authedLogin) return null;
 
   const sysOK = ready.data?.status === 'ok';
+  const openCases = (cases.data?.values ?? []).filter(c => c.status === 'Open').length;
+  const newAlerts = (alerts.data?.values ?? []).filter(a => a.status === 'New' || a.status === 'Updated').length;
+  const iocCount = (observables.data?.values ?? []).filter(o => o.ioc).length;
+  const checks = Object.entries(ready.data?.checks ?? {});
+  const okChecks = checks.filter(([, check]) => check.status === 'ok').length;
+  const serviceScore = checks.length ? Math.round((okChecks / checks.length) * 100) : 0;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen thehive-app-shell">
       <Sidebar />
-
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Topbar user={me.data ? { login: me.data.login, name: me.data.name } : { login: authedLogin }} />
+        <main className="content-wrapper flex-1">
+          <section className="content-header">
+            <h1>Dashboard <small>SOC command center and platform monitoring</small></h1>
+            <ol className="breadcrumb"><li>Home</li><li className="active">Dashboard</li></ol>
+          </section>
 
-        <main className="flex-1 p-6">
-          <div className="max-w-6xl mx-auto">
-            <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
-              <div>
-                <h1 className="text-2xl font-light text-thehive-text">
-                  Dashboard
-                </h1>
-                <p className="text-sm text-thehive-muted mt-1">
-                  Phase 1 skeleton — case / alert / observable modules land in
-                  Phase 3+.
-                </p>
-              </div>
-              <span
-                className={`thehive-pill ${sysOK ? '' : 'error'} self-end`}
-                title="Readiness check"
-              >
-                <ShieldCheck size={13} />
-                {sysOK ? 'All systems healthy' : 'Degraded'}
-              </span>
-            </div>
-
-            {/* Stat cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <StatCard
-                icon={<Activity size={18} />}
-                label="Backend"
-                value={
-                  ready.data?.checks?.postgres ? (status.data?.app ?? '—') : '—'
-                }
-                hint={status.data?.version ? `v${status.data.version}` : ''}
-                ok={!!status.data}
-              />
-              <StatCard
-                icon={<Database size={18} />}
-                label="Database"
-                value={
-                  ready.data?.checks?.postgres?.status === 'ok'
-                    ? 'PostgreSQL'
-                    : 'Down'
-                }
-                hint={
-                  status.data?.db_schema_version
-                    ? `Schema v${status.data.db_schema_version}`
-                    : ''
-                }
-                ok={ready.data?.checks?.postgres?.status === 'ok'}
-              />
-              <StatCard
-                icon={<Server size={18} />}
-                label="Message broker"
-                value={
-                  ready.data?.checks?.rabbitmq?.status === 'ok'
-                    ? 'RabbitMQ'
-                    : 'Down'
-                }
-                hint="3.13"
-                ok={ready.data?.checks?.rabbitmq?.status === 'ok'}
-              />
-              <StatCard
-                icon={<Clock size={18} />}
-                label="Last status poll"
-                value={
-                  status.data?.timestamp
-                    ? new Date(status.data.timestamp).toLocaleTimeString()
-                    : '—'
-                }
-                hint="auto-refresh 30s"
-                ok={!!status.data}
-              />
-            </div>
-
-            <div className="grid lg:grid-cols-2 gap-4">
-              {/* Backend status card */}
-              <div className="thehive-card">
-                <div className="thehive-card-header flex items-center gap-2">
-                  <GitCommitHorizontal size={16} className="text-thehive-primary" />
-                  <span>Backend status</span>
-                </div>
-                <div className="thehive-card-body">
-                  {status.isLoading && (
-                    <div className="thehive-empty">Loading…</div>
-                  )}
-                  {status.error && (
-                    <div className="thehive-empty text-red-600">
-                      {(status.error as Error).message}
-                    </div>
-                  )}
-                  {status.data && (
-                    <dl className="thehive-dl grid grid-cols-2 gap-x-4">
-                      <div>
-                        <dt>App</dt>
-                        <dd>{status.data.app}</dd>
-                      </div>
-                      <div>
-                        <dt>Version</dt>
-                        <dd>{status.data.version}</dd>
-                      </div>
-                      <div>
-                        <dt>Git SHA</dt>
-                        <dd className="mono">{status.data.git_sha}</dd>
-                      </div>
-                      <div>
-                        <dt>Build time</dt>
-                        <dd className="mono">{status.data.build_time}</dd>
-                      </div>
-                      <div>
-                        <dt>DB schema</dt>
-                        <dd>
-                          v{status.data.db_schema_version ?? 'n/a'}
-                          {status.data.db_schema_dirty ? ' (dirty)' : ''}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Server time</dt>
-                        <dd className="mono">{status.data.timestamp}</dd>
-                      </div>
-                    </dl>
-                  )}
+          <section className="content dashboard-monitor-page">
+            {/* System health hero */}
+            <div className="monitor-hero box box-primary">
+              <div className="monitor-hero-main">
+                <div className={`monitor-orb ${sysOK ? 'ok' : 'warn'}`}><Activity size={14} /></div>
+                <div>
+                  <div className="monitor-eyebrow">Runtime status</div>
+                  <h2>{sysOK ? 'All monitored services are operational' : 'Service degradation detected'}</h2>
+                  <p>{okChecks}/{checks.length || 0} readiness checks passing · refreshed every 15 seconds</p>
                 </div>
               </div>
-
-              {/* Current user card */}
-              <div className="thehive-card">
-                <div className="thehive-card-header flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-thehive-primary" />
-                  <span>Current user (mock)</span>
-                </div>
-                <div className="thehive-card-body">
-                  {me.isLoading && (
-                    <div className="thehive-empty">Loading…</div>
-                  )}
-                  {me.data && (
-                    <dl className="thehive-dl grid grid-cols-2 gap-x-4">
-                      <div>
-                        <dt>Login</dt>
-                        <dd>{me.data.login}</dd>
-                      </div>
-                      <div>
-                        <dt>Name</dt>
-                        <dd>{me.data.name}</dd>
-                      </div>
-                      <div>
-                        <dt>Organisation</dt>
-                        <dd>{me.data.organisation}</dd>
-                      </div>
-                      <div>
-                        <dt>Profile</dt>
-                        <dd>{me.data.profile}</dd>
-                      </div>
-                      <div className="col-span-2">
-                        <dt>Permissions</dt>
-                        <dd>
-                          {me.data.permissions.map((p) => (
-                            <span
-                              key={p}
-                              className="inline-block bg-gray-100 text-thehive-text text-xs px-2 py-0.5 rounded mr-1.5 mb-1.5"
-                            >
-                              {p}
-                            </span>
-                          ))}
-                        </dd>
-                      </div>
-                    </dl>
-                  )}
-                </div>
+              <div className="monitor-score">
+                <strong>{serviceScore}%</strong>
+                <span>health score</span>
               </div>
             </div>
 
-            {/* Phase roadmap */}
-            <div className="thehive-card mt-6">
-              <div className="thehive-card-header">Phase roadmap</div>
-              <div className="thehive-card-body">
-                <ol className="text-sm space-y-2">
-                  {[
-                    ['v0.1.0 — Phase 1', 'Skeleton, Docker, mock auth, schema baseline.', true],
-                    ['v0.2.0 — Phase 2', 'Real auth + user / org / profile / RBAC.', false],
-                    ['v0.3.0 — Phase 3', 'Case + Alert core CRUD.', false],
-                    ['v0.4.0 — Phase 4', 'Task / Log / Observable + S3 attachments.', false],
-                    ['v0.5.0 — Phase 5', 'Cortex adapter via RabbitMQ worker.', false],
-                    ['v0.6.0 — Phase 6', 'MISP adapter (event import + IOC export).', false],
-                    ['v0.7.0 — Phase 7', 'Dashboard, search (OpenSearch), audit pipeline.', false],
-                    ['v1.0.0 — Production pilot', '', false],
-                  ].map(([title, desc, done]) => (
-                    <li key={title as string} className="flex items-start gap-3">
-                      <span
-                        className={`mt-1 inline-block w-2 h-2 rounded-full ${done ? 'bg-thehive-primary' : 'bg-gray-300'}`}
-                      />
-                      <span className="font-medium w-44 shrink-0">{title}</span>
-                      <span className="text-thehive-muted">{desc}</span>
+            {/* Stats row — AdminLTE small-box */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-[15px] mb-[15px]">
+              <SmallBox icon={<Briefcase size={54} />} label="Cases" value={String(cases.data?.total ?? 0)} footer={`${openCases} open cases`} tone="aqua" href="/investigation?tab=cases" />
+              <SmallBox icon={<AlertTriangle size={54} />} label="Alerts" value={String(alerts.data?.total ?? 0)} footer={`${newAlerts} new or updated`} tone="yellow" href="/investigation?tab=alerts" />
+              <SmallBox icon={<Eye size={54} />} label="Observables" value={String(observables.data?.total ?? 0)} footer={`${iocCount} marked as IOC`} tone="blue" href="/investigation?tab=observables" />
+              <SmallBox icon={<CheckSquare size={54} />} label="Tasks" value="—" footer="Open task workbench" tone="green" href="/tasks" />
+            </div>
+
+            {/* Service matrix + build signal */}
+            <div className="grid lg:grid-cols-3 gap-[15px] mb-[15px]">
+              <AdminBox title="Service Matrix" icon={<Database size={14} />} className="lg:col-span-2">
+                <div className="service-matrix">
+                  {checks.length === 0 && <div className="empty-message">Loading readiness checks...</div>}
+                  {checks.map(([name, check]) => <ServiceTile key={name} name={name} status={check.status} error={check.error} />)}
+                </div>
+              </AdminBox>
+              <AdminBox title="Build Signal" icon={<Server size={14} />}>
+                {status.isLoading && <div className="empty-message">Loading status...</div>}
+                {status.data && <dl className="dl-horizontal dashboard-dl monitor-dl">
+                  <dt>App</dt><dd>{status.data.app}</dd>
+                  <dt>Version</dt><dd>{status.data.version}</dd>
+                  <dt>Git SHA</dt><dd className="mono">{status.data.git_sha}</dd>
+                  <dt>Build</dt><dd className="mono">{status.data.build_time}</dd>
+                  <dt>DB Schema</dt><dd>v{status.data.db_schema_version ?? 'n/a'}{status.data.db_schema_dirty ? ' (dirty)' : ''}</dd>
+                  <dt>Server time</dt><dd className="mono">{status.data.timestamp}</dd>
+                </dl>}
+              </AdminBox>
+            </div>
+
+            {/* Recent cases + alerts */}
+            <div className="grid lg:grid-cols-2 gap-[15px] mb-[15px]">
+              <AdminBox title="Recent Cases" icon={<Briefcase size={14} />} href="/investigation?tab=cases">
+                {cases.isLoading && <div className="empty-message">Loading cases...</div>}
+                {(cases.data?.values ?? []).length === 0 && !cases.isLoading && <div className="empty-message">No cases found.</div>}
+                <table className="thehive-table adminlte-table">
+                  <tbody>
+                    {(cases.data?.values ?? []).map(c => (
+                      <tr key={c.id}>
+                        <td className="w-16">
+                          <span className={c.status === 'Open' ? 'label label-danger' : 'label label-success'}>{c.status}</span>
+                        </td>
+                        <td>
+                          <a href={`/cases/${c.id}`}>#{c.number} {c.title}</a>
+                          <div className="table-subtext">Assignee: {c.assignee || 'none'}</div>
+                        </td>
+                        <td><SeverityBadge value={c.severity} /></td>
+                        <td className="table-date">{formatDate(c.updated_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AdminBox>
+
+              <AdminBox title="Recent Alerts" icon={<AlertTriangle size={14} />} href="/investigation?tab=alerts">
+                {alerts.isLoading && <div className="empty-message">Loading alerts...</div>}
+                {(alerts.data?.values ?? []).length === 0 && !alerts.isLoading && <div className="empty-message">No alerts found.</div>}
+                <table className="thehive-table adminlte-table">
+                  <tbody>
+                    {(alerts.data?.values ?? []).map(a => (
+                      <tr key={a.id}>
+                        <td className="w-16">
+                          <span className={a.status === 'New' ? 'label label-danger' : a.status === 'Updated' ? 'label label-warning' : 'label label-default'}>{a.status}</span>
+                        </td>
+                        <td>
+                          <a href={`/alerts/${a.id}`}>{a.title}</a>
+                          <div className="table-subtext">Source: {a.source || 'unknown'}</div>
+                        </td>
+                        <td><SeverityBadge value={a.severity} /></td>
+                        <td className="table-date">{formatDate(a.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </AdminBox>
+            </div>
+
+            {/* Account info + migration progress */}
+            <div className="grid lg:grid-cols-2 gap-[15px]">
+              <AdminBox title="Current Account" icon={<ShieldCheck size={14} />}>
+                {me.isLoading && <div className="empty-message">Loading account...</div>}
+                {me.data && (
+                  <dl className="dl-horizontal dashboard-dl">
+                    <dt>Login</dt><dd>{me.data.login}</dd>
+                    <dt>Name</dt><dd>{me.data.name}</dd>
+                    <dt>Organisation</dt><dd>{me.data.organisation}</dd>
+                    <dt>Profile</dt><dd>{me.data.profile}</dd>
+                    <dt>Permissions</dt>
+                    <dd>{me.data.permissions.map(p => <span key={p} className="label label-default mr-1 mb-1 inline-block">{p}</span>)}</dd>
+                  </dl>
+                )}
+              </AdminBox>
+              <AdminBox title="Migration Progress" icon={<Clock size={14} />}>
+                <ol className="migration-timeline">
+                  {([
+                    ['v0.1–0.2', 'Foundation, Docker, auth, RBAC, admin.', true],
+                    ['v0.3', 'Case and alert write workflow.', true],
+                    ['v0.4', 'Task, log and observable workbench.', true],
+                    ['v0.5', 'MinIO/S3 attachment foundation.', true],
+                    ['v0.6', 'Case detail parity foundation.', true],
+                    ['v0.7+', 'Cortex, MISP, OpenSearch, runtime evidence.', false],
+                  ] as [string, string, boolean][]).map(([title, desc, done]) => (
+                    <li key={title} className={done ? 'done' : ''}>
+                      <span>{title}</span>
+                      <p>{desc}</p>
                     </li>
                   ))}
                 </ol>
-              </div>
+              </AdminBox>
             </div>
-          </div>
+          </section>
         </main>
       </div>
     </div>
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  hint,
-  ok,
-}: {
-  icon: React.ReactNode;
+function SmallBox({ icon, label, value, footer, tone, href }: {
+  icon: ReactNode;
   label: string;
   value: string;
-  hint?: string;
-  ok: boolean;
+  footer: string;
+  tone: 'red' | 'yellow' | 'aqua' | 'green' | 'blue';
+  href: string;
 }) {
   return (
-    <div className="thehive-card">
-      <div className="thehive-card-body flex items-center gap-3">
-        <div
-          className={`w-10 h-10 rounded flex items-center justify-center ${
-            ok ? 'bg-thehive-primary/10 text-thehive-primary' : 'bg-red-50 text-red-600'
-          }`}
-        >
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs text-thehive-muted uppercase tracking-wide">
-            {label}
-          </div>
-          <div className="text-sm font-medium truncate">{value}</div>
-          {hint && (
-            <div className="text-xs text-thehive-muted truncate">{hint}</div>
-          )}
-        </div>
+    <div className={`small-box bg-${tone}`}>
+      <div className="inner">
+        <h3>{value}</h3>
+        <p>{label}</p>
       </div>
+      <div className="icon">{icon}</div>
+      <a className="small-box-footer" href={href}>{footer}</a>
     </div>
   );
+}
+
+function AdminBox({ title, icon, href, className = '', children }: {
+  title: string;
+  icon: ReactNode;
+  href?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`box box-primary ${className}`}>
+      <div className="box-header with-border">
+        <h3 className="box-title flex items-center gap-2">{icon}{title}</h3>
+        {href && (
+          <div className="box-tools pull-right">
+            <a href={href} className="btn btn-box-tool btn-sm">View all</a>
+          </div>
+        )}
+      </div>
+      <div className="box-body no-padding">{children}</div>
+    </div>
+  );
+}
+
+function ServiceTile({ name, status, error }: { name: string; status: string; error?: string }) {
+  const key = name.toLowerCase();
+  const icon = serviceIcons[key] ?? <Activity size={15} />;
+  const ok = status === 'ok';
+  return (
+    <div className={`service-tile ${ok ? 'ok' : 'warn'}`}>
+      <div className="service-icon">{icon}</div>
+      <div>
+        <strong>{name}</strong>
+        <span>{error || (ok ? 'operational' : status)}</span>
+      </div>
+      <span className={ok ? 'label label-success' : 'label label-warning'}>{status}</span>
+    </div>
+  );
+}
+
+function SeverityBadge({ value }: { value: number }) {
+  const labels: Record<number, string> = { 1: 'Low', 2: 'Medium', 3: 'High', 4: 'Critical' };
+  const classes: Record<number, string> = { 1: 'label-info', 2: 'label-warning', 3: 'label-warning', 4: 'label-danger' };
+  return <span className={`label ${classes[value] ?? 'label-default'}`}>{labels[value] ?? `S${value}`}</span>;
+}
+
+function formatDate(value: string) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }

@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS alert_custom_fields;
+DROP TABLE IF EXISTS observable_types;
+ALTER TABLE case_logs DROP COLUMN IF EXISTS organisation_id;
+ALTER TABLE case_logs DROP COLUMN IF EXISTS attachment_id;
+ALTER TABLE case_logs DROP COLUMN IF EXISTS task_id;
+ALTER TABLE case_logs DROP COLUMN IF EXISTS date;
+ALTER TABLE case_shares DROP COLUMN IF EXISTS action_required;
+ALTER TABLE case_shares DROP COLUMN IF EXISTS owner;
+ALTER TABLE observables DROP COLUMN IF EXISTS organisation_ids;
+ALTER TABLE observables DROP COLUMN IF EXISTS full_data;
+ALTER TABLE observables DROP COLUMN IF EXISTS attachment_id;
+ALTER TABLE observables DROP COLUMN IF EXISTS ignore_similarity;

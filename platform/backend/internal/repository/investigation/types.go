@@ -70,21 +70,30 @@ type ObservableCollection struct {
 }
 
 type CaseSummary struct {
-	ID              string         `db:"id" json:"id"`
-	Number          int            `db:"number" json:"number"`
-	Title           string         `db:"title" json:"title"`
-	Severity        int            `db:"severity" json:"severity"`
-	TLP             int            `db:"tlp" json:"tlp"`
-	PAP             int            `db:"pap" json:"pap"`
-	Status          string         `db:"status" json:"status"`
-	Owner           string         `db:"owner" json:"owner"`
-	Assignee        string         `db:"assignee" json:"assignee"`
-	Tags            pq.StringArray `db:"tags" json:"tags"`
-	TaskCount       int            `db:"task_count" json:"task_count"`
-	ObservableCount int            `db:"observable_count" json:"observable_count"`
-	AlertCount      int            `db:"alert_count" json:"alert_count"`
-	CreatedAt       time.Time      `db:"created_at" json:"created_at"`
-	UpdatedAt       time.Time      `db:"updated_at" json:"updated_at"`
+	ID                 string         `db:"id" json:"id"`
+	Number             int            `db:"number" json:"number"`
+	Title              string         `db:"title" json:"title"`
+	Severity           int            `db:"severity" json:"severity"`
+	TLP                int            `db:"tlp" json:"tlp"`
+	PAP                int            `db:"pap" json:"pap"`
+	Status             string         `db:"status" json:"status"`
+	Owner              string         `db:"owner" json:"owner"`
+	Assignee           string         `db:"assignee" json:"assignee"`
+	Tags               pq.StringArray `db:"tags" json:"tags"`
+	Flag               bool           `db:"flag" json:"flag"`
+	Summary            string         `db:"summary" json:"summary"`
+	ImpactStatus       string         `db:"impact_status" json:"impact_status"`
+	ResolutionStatus   string         `db:"resolution_status" json:"resolution_status"`
+	CaseTemplate       string         `db:"case_template" json:"case_template"`
+	OwningOrganisation string         `db:"owning_organisation" json:"owning_organisation"`
+	OrganisationIDs    pq.StringArray `db:"organisation_ids" json:"organisation_ids"`
+	StartDate          *time.Time     `db:"start_date" json:"start_date,omitempty"`
+	EndDate            *time.Time     `db:"end_date" json:"end_date,omitempty"`
+	TaskCount          int            `db:"task_count" json:"task_count"`
+	ObservableCount    int            `db:"observable_count" json:"observable_count"`
+	AlertCount         int            `db:"alert_count" json:"alert_count"`
+	CreatedAt          time.Time      `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time      `db:"updated_at" json:"updated_at"`
 }
 
 type AlertSummary struct {
@@ -95,27 +104,36 @@ type AlertSummary struct {
 	SourceRef       string         `db:"source_ref" json:"source_ref"`
 	Severity        int            `db:"severity" json:"severity"`
 	TLP             int            `db:"tlp" json:"tlp"`
+	PAP             int            `db:"pap" json:"pap"`
 	Status          string         `db:"status" json:"status"`
 	Read            bool           `db:"read" json:"read"`
+	Follow          bool           `db:"follow" json:"follow"`
+	Flag            bool           `db:"flag" json:"flag"`
+	ExternalLink    string         `db:"external_link" json:"external_link"`
+	OrganisationID  string         `db:"organisation_id" json:"organisation_id"`
+	CaseTemplate    string         `db:"case_template" json:"case_template"`
 	CaseNumber      *int           `db:"case_number" json:"case_number,omitempty"`
 	ObservableCount int            `db:"observable_count" json:"observable_count"`
 	Tags            pq.StringArray `db:"tags" json:"tags"`
+	LastSyncDate    *time.Time     `db:"last_sync_date" json:"last_sync_date,omitempty"`
 	CreatedAt       time.Time      `db:"created_at" json:"created_at"`
 }
 
 type ObservableSummary struct {
-	ID         string         `db:"id" json:"id"`
-	DataType   string         `db:"data_type" json:"data_type"`
-	Data       string         `db:"data" json:"data"`
-	Message    string         `db:"message" json:"message"`
-	TLP        int            `db:"tlp" json:"tlp"`
-	IOC        bool           `db:"ioc" json:"ioc"`
-	Sighted    bool           `db:"sighted" json:"sighted"`
-	Tags       pq.StringArray `db:"tags" json:"tags"`
-	CaseNumber int            `db:"case_number" json:"case_number"`
-	CaseTitle  string         `db:"case_title" json:"case_title"`
-	CreatedBy  string         `db:"created_by" json:"created_by"`
-	CreatedAt  time.Time      `db:"created_at" json:"created_at"`
+	ID               string         `db:"id" json:"id"`
+	DataType         string         `db:"data_type" json:"data_type"`
+	Data             string         `db:"data" json:"data"`
+	Message          string         `db:"message" json:"message"`
+	TLP              int            `db:"tlp" json:"tlp"`
+	IOC              bool           `db:"ioc" json:"ioc"`
+	Sighted          bool           `db:"sighted" json:"sighted"`
+	IgnoreSimilarity bool           `db:"ignore_similarity" json:"ignore_similarity"`
+	AttachmentID     string         `db:"attachment_id" json:"attachment_id,omitempty"`
+	Tags             pq.StringArray `db:"tags" json:"tags"`
+	CaseNumber       int            `db:"case_number" json:"case_number"`
+	CaseTitle        string         `db:"case_title" json:"case_title"`
+	CreatedBy        string         `db:"created_by" json:"created_by"`
+	CreatedAt        time.Time      `db:"created_at" json:"created_at"`
 }
 
 func NewListQuery(values url.Values, defaultSort SortSpec) ListQuery {

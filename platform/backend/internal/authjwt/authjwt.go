@@ -60,12 +60,50 @@ func Parse(secret, tokenValue string) (*Claims, error) {
 	return claims, nil
 }
 
+var LegacyPermissions = []string{
+	"accessTheHiveFS",
+	"manageAction",
+	"manageAlert",
+	"manageAnalyse",
+	"manageAnalyzerTemplate",
+	"manageCase",
+	"manageCaseTemplate",
+	"manageConfig",
+	"manageCustomField",
+	"manageObservable",
+	"manageObservableTemplate",
+	"manageOrganisation",
+	"managePage",
+	"managePattern",
+	"managePlatform",
+	"manageProcedure",
+	"manageProfile",
+	"manageShare",
+	"manageTag",
+	"manageTask",
+	"manageTaxonomy",
+	"manageUser",
+}
+
+var legacyPermissionSet = func() map[string]struct{} {
+	out := make(map[string]struct{}, len(LegacyPermissions))
+	for _, permission := range LegacyPermissions {
+		out[permission] = struct{}{}
+	}
+	return out
+}()
+
+func IsLegacyPermission(permission string) bool {
+	_, ok := legacyPermissionSet[permission]
+	return ok
+}
+
 func HasPermission(claims *Claims, required string) bool {
 	if claims == nil || required == "" {
 		return false
 	}
 	for _, permission := range claims.Permissions {
-		if permission == required || permission == "manageConfig" {
+		if permission == required || permission == "managePlatform" {
 			return true
 		}
 	}

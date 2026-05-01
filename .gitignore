@@ -46,3 +46,17 @@ tmp
 metals.sbt
 
 .jvmopts
+
+# Environment / secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials/
+
+# AI agent workspace
+.roo/

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { KeyRound, Lock, LogOut } from 'lucide-react';
+import { KeyRound, Lock, LogOut } from '@/components/FaIcon';
 import { apiFetch, ApiError } from '@/lib/api';
 
 const passwordSchema = z.object({

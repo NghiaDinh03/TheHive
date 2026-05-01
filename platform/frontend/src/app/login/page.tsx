@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Building2, LogIn, Lock, User, UserPlus } from 'lucide-react';
+import { Building2, LogIn, Lock, User, UserPlus } from '@/components/FaIcon';
 import { apiFetch, ApiError } from '@/lib/api';
 
 const loginSchema = z.object({
@@ -102,19 +102,25 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-lg font-medium text-thehive-text mb-1">{mode === 'login' ? 'Sign in' : 'Register account'}</h1>
-          <p className="text-xs text-thehive-muted mb-5">
+          <p className="text-xs text-thehive-muted mb-3">
             {mode === 'login'
               ? 'Use a PostgreSQL-backed TheHive account.'
               : 'Create a local PostgreSQL-backed TheHive account with organisation/profile mapping.'}
           </p>
+          {mode === 'login' && (
+            <div className="thehive-login-hint" aria-label="Default administrator credentials">
+              <strong>Default admin:</strong> nghia.dinh@ncsgroup.vn / 12345@
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
             {mode === 'register' && (
               <div>
                 <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="name">Name</label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                  <input id="name" type="text" autoComplete="name" disabled={submitting} className="thehive-input pl-9" placeholder="SOC Analyst" {...register('name')} />
+                  <User className="thehive-input-icon" size={16} aria-hidden="true" />
+                  <input id="name" type="text" autoComplete="name" disabled={submitting} className="thehive-input thehive-input-with-icon" placeholder="SOC Analyst" {...register('name')} />
                 </div>
                 {errors.name && <p className="text-red-600 text-xs mt-1.5">{errors.name.message}</p>}
               </div>
@@ -123,8 +129,8 @@ export default function LoginPage() {
             <div>
               <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="login">Login</label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                <input id="login" type="text" autoComplete="username" disabled={submitting} className="thehive-input pl-9" placeholder="admin@thehive.local" {...register('login')} />
+                <User className="thehive-input-icon" size={16} aria-hidden="true" />
+                <input id="login" type="text" autoComplete="username" disabled={submitting} className="thehive-input thehive-input-with-icon" placeholder="nghia.dinh@ncsgroup.vn" {...register('login')} />
               </div>
               {errors.login && <p className="text-red-600 text-xs mt-1.5">{errors.login.message}</p>}
             </div>
@@ -133,8 +139,8 @@ export default function LoginPage() {
               <div>
                 <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="organisation">Organisation</label>
                 <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                  <input id="organisation" type="text" disabled={submitting} className="thehive-input pl-9" placeholder="admin" {...register('organisation')} />
+                  <Building2 className="thehive-input-icon" size={16} aria-hidden="true" />
+                  <input id="organisation" type="text" disabled={submitting} className="thehive-input thehive-input-with-icon" placeholder="admin" {...register('organisation')} />
                 </div>
                 {errors.organisation && <p className="text-red-600 text-xs mt-1.5">{errors.organisation.message}</p>}
               </div>
@@ -143,8 +149,8 @@ export default function LoginPage() {
             <div>
               <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="password">Password</label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                <input id="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} disabled={submitting} className="thehive-input pl-9" placeholder="••••••••" {...register('password')} />
+                <Lock className="thehive-input-icon" size={16} aria-hidden="true" />
+                <input id="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} disabled={submitting} className="thehive-input thehive-input-with-icon" placeholder="••••••••" {...register('password')} />
               </div>
               {errors.password && <p className="text-red-600 text-xs mt-1.5">{errors.password.message}</p>}
             </div>

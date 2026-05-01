@@ -25,6 +25,25 @@ export interface RequestOptions extends RequestInit {
   json?: unknown;
 }
 
+export type ListResponse<T> = T[] | { values?: T[]; items?: T[]; data?: T[]; total?: number };
+
+export function normalizeList<T>(payload: ListResponse<T> | null | undefined): T[] {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  return payload.values ?? payload.items ?? payload.data ?? [];
+}
+
+export function getStoredAuth() {
+  if (typeof window === 'undefined') return { token: '', login: '' };
+  const token =
+    sessionStorage.getItem('thehive.token') ||
+    localStorage.getItem('thehive.token') ||
+    localStorage.getItem('token') ||
+    '';
+  const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login') || '';
+  return { token, login };
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   opts: RequestOptions = {},
@@ -41,7 +60,7 @@ export async function apiFetch<T = unknown>(
   const reqId = crypto.randomUUID();
   headers.set('X-Request-ID', reqId);
   if (!headers.has('Authorization') && typeof window !== 'undefined') {
-    const token = sessionStorage.getItem('thehive.token');
+    const { token } = getStoredAuth();
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 

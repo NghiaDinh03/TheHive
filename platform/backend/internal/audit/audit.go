@@ -63,7 +63,7 @@ func RecordTx(ctx context.Context, tx *sqlx.Tx, entry Entry) error {
 
 const insertSQL = `
 	INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, before_json, after_json, ip_address, user_agent, request_id)
-	VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)`
+	VALUES ((SELECT id FROM users WHERE login = $1 LIMIT 1), $2, $3, $4, $5::jsonb, $6::jsonb, NULLIF($7, '')::inet, $8, $9)`
 
 func mustJSON(value any) []byte {
 	if value == nil {

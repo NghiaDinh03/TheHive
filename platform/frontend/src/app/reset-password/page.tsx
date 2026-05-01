@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { KeyRound, Lock, Mail } from 'lucide-react';
+import { KeyRound, Lock, Mail } from '@/components/FaIcon';
 import { apiFetch, ApiError } from '@/lib/api';
 
 const requestSchema = z.object({ login: z.string().email('A valid email login is required') });

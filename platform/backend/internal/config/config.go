@@ -41,6 +41,52 @@ type Config struct {
 	MailFrom      string `env:"MAIL_FROM" envDefault:"thehive@localhost"`
 	PublicBaseURL string `env:"PUBLIC_BASE_URL" envDefault:"http://localhost:3000"`
 
+	S3Endpoint        string        `env:"S3_ENDPOINT" envDefault:"http://minio:9000"`
+	S3PublicEndpoint  string        `env:"S3_PUBLIC_ENDPOINT" envDefault:"http://localhost:9000"`
+	S3Region          string        `env:"S3_REGION" envDefault:"us-east-1"`
+	S3AccessKeyID     string        `env:"S3_ACCESS_KEY_ID" envDefault:"thehive"`
+	S3SecretAccessKey string        `env:"S3_SECRET_ACCESS_KEY" envDefault:"thehive-secret"`
+	S3Bucket          string        `env:"S3_BUCKET" envDefault:"thehive-attachments"`
+	S3UsePathStyle    bool          `env:"S3_USE_PATH_STYLE" envDefault:"true"`
+	S3UploadTTL       time.Duration `env:"S3_UPLOAD_TTL" envDefault:"15m"`
+	S3DownloadTTL     time.Duration `env:"S3_DOWNLOAD_TTL" envDefault:"5m"`
+
+	AttachmentScannerEngine   string `env:"ATTACHMENT_SCANNER_ENGINE" envDefault:"placeholder"`
+	AttachmentDownloadPolicy  string `env:"ATTACHMENT_DOWNLOAD_POLICY" envDefault:"clean-only"`
+	AttachmentQueueOnUpload   bool   `env:"ATTACHMENT_QUEUE_ON_UPLOAD" envDefault:"true"`
+	AttachmentManualScanAllow bool   `env:"ATTACHMENT_MANUAL_SCAN_ALLOW" envDefault:"true"`
+	AttachmentZipPassword     string `env:"ATTACHMENT_ZIP_PASSWORD" envDefault:"malware"`
+
+	// --- MISP integration ---
+	MISPEnabled   bool          `env:"MISP_ENABLED" envDefault:"false"`
+	MISPURL       string        `env:"MISP_URL"`
+	MISPAPIKey    string        `env:"MISP_API_KEY"`
+	MISPTimeout   time.Duration `env:"MISP_TIMEOUT" envDefault:"30s"`
+	MISPVerifyTLS bool          `env:"MISP_VERIFY_TLS" envDefault:"true"`
+
+	// --- Cortex integration ---
+	CortexEnabled      bool          `env:"CORTEX_ENABLED" envDefault:"false"`
+	CortexURL          string        `env:"CORTEX_URL"`
+	CortexAPIKey       string        `env:"CORTEX_API_KEY"`
+	CortexTimeout      time.Duration `env:"CORTEX_TIMEOUT" envDefault:"30s"`
+	CortexPollInterval time.Duration `env:"CORTEX_POLL_INTERVAL" envDefault:"30s"`
+	CortexBatchSize    int           `env:"CORTEX_BATCH_SIZE" envDefault:"5"`
+	CortexMaxJobWait   time.Duration `env:"CORTEX_MAX_JOB_WAIT" envDefault:"5m"`
+
+	// --- Notification worker ---
+	NotificationWorkerEnabled      bool          `env:"NOTIFICATION_WORKER_ENABLED" envDefault:"true"`
+	NotificationWorkerPollInterval time.Duration `env:"NOTIFICATION_WORKER_POLL_INTERVAL" envDefault:"10s"`
+	NotificationWorkerBatchSize    int           `env:"NOTIFICATION_WORKER_BATCH_SIZE" envDefault:"20"`
+
+	// --- MISP scheduled sync ---
+	MISPSyncEnabled  bool          `env:"MISP_SYNC_ENABLED" envDefault:"false"`
+	MISPSyncInterval time.Duration `env:"MISP_SYNC_INTERVAL" envDefault:"15m"`
+
+	// --- OpenSearch ---
+	OpenSearchEnabled bool   `env:"OPENSEARCH_ENABLED" envDefault:"false"`
+	OpenSearchURL     string `env:"OPENSEARCH_URL" envDefault:"http://opensearch:9200"`
+	OpenSearchIndex   string `env:"OPENSEARCH_INDEX_PREFIX" envDefault:"thehive"`
+
 	ShutdownGrace time.Duration `env:"SHUTDOWN_GRACE_PERIOD" envDefault:"15s"`
 }
 

@@ -1,0 +1,189 @@
+/* Dashboard parity layer: keep TheHive 4/AdminLTE skin instead of bespoke cards. */
+.dashboard-monitor-page .monitor-hero {
+  align-items: stretch;
+  background: transparent;
+  border-top: 0;
+  box-shadow: none;
+  color: inherit;
+  display: grid;
+  gap: 15px;
+  grid-template-columns: 2fr 1fr;
+  margin-bottom: 15px;
+  padding: 0;
+}
+
+.dashboard-monitor-page .monitor-hero::after { content: none; }
+
+.monitor-hero-main,
+.monitor-score {
+  background: #fff;
+  border-radius: 3px;
+  border-top: 3px solid var(--thehive-primary);
+  box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  min-height: 76px;
+  padding: 12px 15px;
+}
+
+.monitor-hero-main {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.monitor-orb {
+  align-items: center;
+  border-radius: 3px;
+  color: #fff;
+  display: flex;
+  flex: 0 0 40px;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+.monitor-orb.ok { background: var(--thehive-primary); }
+.monitor-orb.warn { background: var(--thehive-accent); }
+.monitor-eyebrow { color: #777; font-size: 11px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; }
+.monitor-hero h2 { color: #333; font-size: 18px; font-weight: 400; margin: 2px 0 3px; }
+.monitor-hero p { color: #777; font-size: 12px; margin: 0; }
+.monitor-score { text-align: right; }
+.monitor-score strong { color: var(--thehive-primary); display: block; font-size: 30px; font-weight: 300; line-height: 1; }
+.monitor-score span { color: #777; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+
+/* AdminLTE small-box - exact parity with TheHive 4 */
+.dashboard-monitor-page .small-box {
+  border-radius: 2px;
+  box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  display: block;
+  margin-bottom: 20px;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.dashboard-monitor-page .small-box > .inner {
+  padding: 10px;
+}
+
+.dashboard-monitor-page .small-box h3 {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 0 0 10px 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.dashboard-monitor-page .small-box p {
+  font-size: 15px;
+  margin: 0;
+}
+
+.dashboard-monitor-page .small-box .icon {
+  color: rgba(255,255,255,0.42);
+  font-size: 54px;
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  transition: all 0.3s linear;
+  z-index: 0;
+}
+
+.dashboard-monitor-page .small-box:hover .icon {
+  transform: none;
+}
+
+.dashboard-monitor-page .small-box:hover .icon svg,
+.dashboard-monitor-page .small-box:hover .icon .svg-inline--fa {
+  height: 58px !important;
+  width: 58px !important;
+}
+
+.dashboard-monitor-page .small-box .icon svg,
+.dashboard-monitor-page .small-box .icon .svg-inline--fa {
+  height: 54px !important;
+  width: 54px !important;
+}
+
+.dashboard-monitor-page .small-box-footer {
+  background: rgba(0,0,0,0.1);
+  color: rgba(255,255,255,0.8);
+  display: block;
+  padding: 3px 0;
+  position: relative;
+  text-align: center;
+  text-decoration: none;
+  z-index: 10;
+}
+
+.dashboard-monitor-page .small-box-footer:hover {
+  background: rgba(0,0,0,0.2);
+  color: #fff;
+  text-decoration: none;
+}
+
+.dashboard-monitor-page .small-box-footer::after {
+  content: ' »';
+}
+
+@media (max-width: 767px) {
+  .dashboard-monitor-page .small-box { text-align: center; }
+  .dashboard-monitor-page .small-box .icon { display: none; }
+  .dashboard-monitor-page .small-box p { font-size: 12px; }
+}
+
+/* Service matrix */
+.service-matrix {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  padding: 10px;
+}
+
+.service-tile {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #f4f4f4;
+  border-left: 3px solid #f39c12;
+  border-radius: 2px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  min-height: 46px;
+  padding: 7px 9px;
+}
+
+.service-tile.ok { border-left-color: var(--thehive-primary); }
+
+.service-icon {
+  align-items: center;
+  background: #eef6fb;
+  border-radius: 3px;
+  color: var(--thehive-primary);
+  display: flex;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.service-tile strong {
+  color: #333;
+  display: block;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.service-tile span:not(.label) {
+  color: #777;
+  display: block;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monitor-dl { padding: 10px 12px; }
+
+@media (max-width: 767px) {
+  .dashboard-monitor-page .monitor-hero { grid-template-columns: 1fr; }
+  .monitor-score { text-align: left; }
+}

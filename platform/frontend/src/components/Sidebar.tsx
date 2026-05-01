@@ -3,19 +3,23 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import type { LucideIcon } from '@/components/FaIcon';
 import {
-  LayoutDashboard,
-  AlertTriangle,
-  Briefcase,
-  Eye,
-  CheckSquare,
-  Users,
-  Building2,
-  Settings,
   Activity,
-} from 'lucide-react';
+  Bell,
+  Briefcase,
+  CheckSquare,
+  FileText,
+  LayoutDashboard,
+  Link2,
+  Radio,
+  Search,
+  Shield,
+  Circle,
+} from '@/components/FaIcon';
 import clsx from 'clsx';
+import type { Permission } from '@/lib/permissions';
 
 interface NavItem {
   label: string;
@@ -23,68 +27,147 @@ interface NavItem {
   icon: LucideIcon;
   enabled: boolean;
   phase?: string;
+  /** Permission required to see this nav item. If undefined, visible to all authenticated users. */
+  requiredPermission?: Permission;
 }
 
-const NAV: { section: string; items: NavItem[] }[] = [
+interface NavSection {
+  section: string;
+  items: NavItem[];
+  /** Permission required to see this entire section. If undefined, visible to all authenticated users. */
+  requiredPermission?: Permission;
+}
+
+const NAV: NavSection[] = [
   {
     section: 'Main',
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, enabled: true },
+      { label: 'Search', href: '/search', icon: Search, enabled: true },
+      { label: 'Live Stream', href: '/live', icon: Radio, enabled: true },
     ],
   },
   {
-    section: 'Investigation',
+    section: 'Workspaces',
     items: [
-      { label: 'Investigation', href: '/investigation', icon: Briefcase, enabled: true },
-      { label: 'Alerts', href: '/investigation?tab=alerts', icon: AlertTriangle, enabled: true },
-      { label: 'Cases', href: '/investigation?tab=cases', icon: Briefcase, enabled: true },
-      { label: 'Tasks', href: '/tasks', icon: CheckSquare, enabled: false, phase: 'Phase 4' },
-      { label: 'Observables', href: '/investigation?tab=observables', icon: Eye, enabled: true },
+      { label: 'Investigation', href: '/investigation', icon: Briefcase, enabled: true, requiredPermission: 'manageCase' },
+      { label: 'Tasks', href: '/tasks', icon: CheckSquare, enabled: true, requiredPermission: 'manageTask' },
+    ],
+  },
+  {
+    section: 'Knowledge',
+    items: [
+      { label: 'Pages', href: '/pages', icon: FileText, enabled: true },
+      { label: 'Dashboards', href: '/dashboards', icon: Activity, enabled: true },
+    ],
+  },
+  {
+    section: 'Operations',
+    items: [
+      { label: 'Integrations', href: '/misp', icon: Link2, enabled: true, requiredPermission: 'managePlatform' },
+      { label: 'Notifications', href: '/notifications', icon: Bell, enabled: true, requiredPermission: 'managePlatform' },
     ],
   },
   {
     section: 'Administration',
+    requiredPermission: 'manageUser',
     items: [
-      { label: 'Admin', href: '/admin', icon: Users, enabled: true },
-      { label: 'Users', href: '/admin?tab=users', icon: Users, enabled: true },
-      { label: 'Organisations', href: '/admin?tab=organisations', icon: Building2, enabled: true },
-      { label: 'Settings', href: '/settings', icon: Settings, enabled: false, phase: 'Phase 2' },
-      { label: 'Health', href: '/health', icon: Activity, enabled: false, phase: 'Phase 2' },
+      { label: 'Admin', href: '/admin', icon: Shield, enabled: true, requiredPermission: 'manageUser' },
     ],
   },
 ];
 
+/** Check if user has a specific permission (or managePlatform which is admin-all) */
+function hasPermission(userPermissions: string[], required?: Permission): boolean {
+  if (!required) return true; // no permission required = visible to all
+  return userPermissions.includes(required) || userPermissions.includes('managePlatform');
+}
+
+/** Parse JWT payload from token string */
+function parseJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]!));
+    return payload as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [userLogin, setUserLogin] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const token =
+      sessionStorage.getItem('thehive.token') ||
+      localStorage.getItem('thehive.token') ||
+      localStorage.getItem('token') ||
+      '';
+    const fallbackLogin = sessionStorage.getItem('thehive.login') || '';
+
+    if (!token) {
+      setUserLogin(fallbackLogin);
+      return;
+    }
+
+    const payload = parseJwtPayload(token);
+    if (payload) {
+      const perms = (payload.permissions as string[]) || [];
+      setUserPermissions(perms);
+      setUserLogin((payload.login as string) || (payload.sub as string) || fallbackLogin);
+    }
+  }, []);
+
+  // Filter sections and items based on user permissions
+  const visibleNav = NAV
+    .filter(section => hasPermission(userPermissions, section.requiredPermission))
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => hasPermission(userPermissions, item.requiredPermission)),
+    }))
+    .filter(section => section.items.length > 0);
 
   return (
-    <aside className="thehive-sidebar w-60 min-h-screen flex flex-col">
-      <div className="h-14 flex items-center px-4 border-b border-black/20 bg-thehive-sidebar-header">
-        <Image src="/logo-white.svg" alt="TheHive" width={110} height={36} priority />
+    <aside className="thehive-sidebar main-sidebar w-[230px] min-h-screen flex flex-col">
+      <div className="thehive-logo h-[50px] flex items-center px-[15px]">
+        <Image src="/logo-white.svg" alt="TheHive" width={108} height={36} priority />
       </div>
 
-      <nav className="flex-1 py-2 overflow-y-auto">
-        {NAV.map((group) => (
-          <div key={group.section} className="mb-2">
+      <div className="thehive-user-panel">
+        <div className="thehive-user-avatar">
+          <Circle size={10} fill="#3c763d" strokeWidth={0} />
+        </div>
+        <div className="thehive-user-info min-w-0">
+          <div className="truncate" title={userLogin || 'unknown'}>{userLogin || 'unknown'}</div>
+          <span>Online</span>
+        </div>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto">
+        {visibleNav.map((group) => (
+          <div key={group.section} className="thehive-menu-section">
             <div className="thehive-sidebar-header">{group.section}</div>
-            <ul>
+            <ul className="sidebar-menu">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const active = pathname === item.href.split('?')[0];
                 return (
-                  <li key={item.href}>
+                  <li key={item.href} className={clsx(active && 'active')}>
                     {item.enabled ? (
-                      <Link href={item.href} className={clsx(active && 'active')}>
-                        <Icon size={16} />
+                      <Link href={item.href}>
+                        <Icon size={14} strokeWidth={2.2} />
                         <span>{item.label}</span>
                       </Link>
                     ) : (
-                      <span className="thehive-sidebar a disabled flex items-center gap-2.5 px-4 py-3 text-sm">
-                        <Icon size={16} />
+                      <span className="thehive-menu-disabled">
+                        <Icon size={14} strokeWidth={2.2} />
                         <span className="flex-1">{item.label}</span>
-                        <span className="text-[10px] uppercase tracking-wider text-thehive-sidebar-sub">
-                          {item.phase}
-                        </span>
+                        <span className="thehive-menu-phase">{item.phase}</span>
                       </span>
                     )}
                   </li>
@@ -95,8 +178,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-4 py-3 border-t border-black/20 text-[11px] text-thehive-sidebar-sub">
-        v0.2.2 · Phase 2.1.3
+      <div className="thehive-sidebar-footer">
+        <div>v0.6.x migration</div>
+        <strong>TheHive 4 parity</strong>
       </div>
     </aside>
   );

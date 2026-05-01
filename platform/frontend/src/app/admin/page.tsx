@@ -4,10 +4,11 @@ import type { FormEvent } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, KeyRound, Lock, Mail, Shield, Unlock, UserCheck, UserPlus, Users } from 'lucide-react';
+import { Building2, KeyRound, Lock, Mail, Shield, Unlock, UserCheck, UserPlus, Users } from '@/components/FaIcon';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { apiFetch, ApiError } from '@/lib/api';
+import { LEGACY_PERMISSIONS } from '@/lib/permissions';
 
 type User = { login: string; name: string; organisation: string; profile: string; permissions?: string[] };
 type Collection<T> = { values: T[]; total: number };
@@ -18,7 +19,7 @@ type TokenResponse = { token?: string; invite_token?: string; delivery?: string;
 type AuditEvent = { id: string; actor_id: string; action: string; entity_type: string; entity_id: string; request_id?: string; created_at: string };
 type Tab = 'users' | 'organisations' | 'profiles' | 'audit';
 
-const defaultPermissions = ['manageOrganisation', 'manageUser', 'manageCase', 'manageAlert', 'manageObservable', 'manageTask', 'manageProcedure', 'managePage', 'manageConfig', 'accessTheHiveFS', 'manageAction'];
+const defaultPermissions = [...LEGACY_PERMISSIONS];
 
 export default function AdminPage() {
   const router = useRouter();
@@ -41,7 +42,7 @@ export default function AdminPage() {
 
   const canManageUsers = hasPermission(me.data, 'manageUser');
   const canManageOrgs = hasPermission(me.data, 'manageOrganisation');
-  const canManageProfiles = hasPermission(me.data, 'manageConfig');
+  const canManageProfiles = hasPermission(me.data, 'manageProfile');
 
   function reportSuccess(text: string) { setError(null); setMessage(text); }
   function reportError(e: unknown) { setMessage(null); setError(e instanceof ApiError ? (e.problem.detail || e.problem.title) : 'Action failed'); }
@@ -63,32 +64,40 @@ export default function AdminPage() {
   if (!authedLogin) return null;
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen thehive-app-shell">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <Topbar user={me.data ? { login: me.data.login, name: me.data.name } : { login: authedLogin }} />
-        <main className="flex-1 p-4 md:p-6">
-          <div className="max-w-none mx-auto">
-            <div className="flex items-end justify-between mb-4 flex-wrap gap-3">
-              <div>
-                <h1 className="text-2xl font-light text-thehive-text">Administration</h1>
-                <p className="text-sm text-thehive-muted mt-1">Invite-only user approval, local SMTP capture, RBAC and audit-ready admin workspace.</p>
-              </div>
-              <div className="flex gap-2 flex-wrap"><span className="thehive-pill">PostgreSQL RBAC</span><span className="thehive-pill warn">Invite-only registration</span></div>
+        <main className="content-wrapper flex-1">
+          <section className="content-header">
+            <h1>Administration <small>users, organisations, profiles &amp; audit</small></h1>
+            <ol className="breadcrumb"><li>Home</li><li className="active">Admin</li></ol>
+          </section>
+          <section className="content">
+            {message && <div className="alert alert-success alert-dismissible"><button type="button" className="close" onClick={() => setMessage(null)}>×</button>{message}</div>}
+            {error && <div className="alert alert-danger alert-dismissible"><button type="button" className="close" onClick={() => setError(null)}>×</button>{error}</div>}
+            <div className="row mb-4">
+              <div className="col-md-4"><div className="box box-primary"><div className="box-body flex items-center gap-3"><Users size={24} className="text-primary" /><div><div className="text-2xl font-medium">{users.data?.total ?? 0}</div><div className="text-muted text-sm">Users</div></div></div></div></div>
+              <div className="col-md-4"><div className="box box-primary"><div className="box-body flex items-center gap-3"><Building2 size={24} className="text-primary" /><div><div className="text-2xl font-medium">{organisations.data?.total ?? 0}</div><div className="text-muted text-sm">Organisations</div></div></div></div></div>
+              <div className="col-md-4"><div className="box box-primary"><div className="box-body flex items-center gap-3"><Shield size={24} className="text-primary" /><div><div className="text-2xl font-medium">{profiles.data?.total ?? 0}</div><div className="text-muted text-sm">Profiles</div></div></div></div></div>
             </div>
-            {message && <div className="admin-alert success">{message}</div>}
-            {error && <div className="admin-alert error">{error}</div>}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 stats-panel"><AdminStat icon={<Users size={18} />} label="Users" value={users.data?.total ?? 0} /><AdminStat icon={<Building2 size={18} />} label="Organisations" value={organisations.data?.total ?? 0} /><AdminStat icon={<Shield size={18} />} label="Profiles" value={profiles.data?.total ?? 0} /></div>
-            <div className="thehive-card admin-workspace">
-              <div className="thehive-card-header flex items-center justify-between gap-3 flex-wrap"><div className="thehive-tabs"><button className={activeTab === 'users' ? 'active' : ''} onClick={() => setActiveTab('users')}>Users</button><button className={activeTab === 'organisations' ? 'active' : ''} onClick={() => setActiveTab('organisations')}>Organisations</button><button className={activeTab === 'profiles' ? 'active' : ''} onClick={() => setActiveTab('profiles')}>Profiles</button><button className={activeTab === 'audit' ? 'active' : ''} onClick={() => setActiveTab('audit')}>Audit</button></div></div>
-              <div className="thehive-card-body p-0">
+            <div className="box">
+              <div className="box-header with-border">
+                <div className="thehive-tabs">
+                  <button className={activeTab === 'users' ? 'active' : ''} onClick={() => setActiveTab('users')}>Users</button>
+                  <button className={activeTab === 'organisations' ? 'active' : ''} onClick={() => setActiveTab('organisations')}>Organisations</button>
+                  <button className={activeTab === 'profiles' ? 'active' : ''} onClick={() => setActiveTab('profiles')}>Profiles</button>
+                  <button className={activeTab === 'audit' ? 'active' : ''} onClick={() => setActiveTab('audit')}>Audit</button>
+                </div>
+              </div>
+              <div className="box-body p-0">
                 {activeTab === 'users' && <UsersAdmin values={users.data?.values ?? []} profiles={profiles.data?.values ?? []} organisations={organisations.data?.values ?? []} canManage={canManageUsers} loading={users.isLoading} onCreate={(payload) => createUserMutation.mutate(payload)} onToggleLock={(login, locked) => lockMutation.mutate({ login, locked })} onResetPassword={(login, password) => resetMutation.mutate({ login, password })} onResetToken={(login) => resetTokenMutation.mutate(login)} onApprove={(login, organisation, profile) => approveMutation.mutate({ login, organisation, profile })} />}
                 {activeTab === 'organisations' && <OrganisationAdmin values={organisations.data?.values ?? []} canManage={canManageOrgs} loading={organisations.isLoading} onSave={(payload) => upsertOrgMutation.mutate(payload)} />}
                 {activeTab === 'profiles' && <ProfileAdmin values={profiles.data?.values ?? []} canManage={canManageProfiles} loading={profiles.isLoading} onSave={(payload) => upsertProfileMutation.mutate(payload)} />}
                 {activeTab === 'audit' && <AuditAdmin values={audit.data?.values ?? []} loading={audit.isLoading} />}
               </div>
             </div>
-          </div>
+          </section>
         </main>
       </div>
     </div>
@@ -143,4 +152,4 @@ function AuditAdmin({ values, loading }: { values: AuditEvent[]; loading: boolea
 function AdminStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) { return <div className="thehive-card mini-stat mini-stat-blue"><div className="thehive-card-body flex items-center gap-3"><div className="mini-stat-icon">{icon}</div><div><div className="text-xs uppercase tracking-wide">{label}</div><div className="text-xl font-light">{value}</div></div></div></div>; }
 function TagList({ tags }: { tags: string[] }) { return <div className="case-tags flexwrap mt-1">{tags.length === 0 ? <strong className="text-thehive-muted mr-1">None</strong> : tags.map((tag) => <span key={tag} className="tag-item">{tag}</span>)}</div>; }
 function formatDate(value?: string) { if (!value) return 'Never'; const date = new Date(value); if (Number.isNaN(date.getTime())) return 'None'; return date.toLocaleString(); }
-function hasPermission(user: User | undefined, permission: string) { return !!user?.permissions?.some((item) => item === permission || item === 'manageConfig'); }
+function hasPermission(user: User | undefined, permission: string) { return !!user?.permissions?.some((item) => item === permission || item === 'managePlatform'); }
