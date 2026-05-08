@@ -60,6 +60,8 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	api.POST("/cases/:id/shares", caseSub.CreateShare, authRequired, RequirePermission("manageShare"))
 	api.PATCH("/cases/:id/shares/:shareid", caseSub.UpdateShare, authRequired, RequirePermission("manageShare"))
 	api.DELETE("/cases/:id/shares/:shareid", caseSub.DeleteShare, authRequired, RequirePermission("manageShare"))
+	api.GET("/cases/:id/tasks/:taskid/shares", detail.ListCaseShares, authRequired, RequirePermission("manageCase"))
+	api.DELETE("/tasks/:id/shares", caseSub.DeleteShare, authRequired, RequirePermission("manageShare"))
 
 	// --- Case templates ---
 	api.GET("/case-templates", tplHandler.List, authRequired, RequirePermission("manageCaseTemplate"))
@@ -71,14 +73,18 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	// --- Alerts ---
 	api.GET("/alerts", readonly.ListAlerts, authRequired, RequirePermission("manageAlert"))
 	api.GET("/alerts/:id", detail.GetAlert, authRequired, RequirePermission("manageAlert"))
+	api.POST("/alerts", alertWrite.CreateAlert, authRequired, RequirePermission("manageAlert"))
 	api.PATCH("/alerts/:id", alertWrite.Update, authRequired, RequirePermission("manageAlert"))
 	api.DELETE("/alerts/:id", alertWrite.Delete, authRequired, RequirePermission("manageAlert"))
 	api.POST("/alerts/:id/import", alertWrite.Import, authRequired, RequirePermission("manageAlert"))
 	api.POST("/alerts/:id/merge", alertWrite.Merge, authRequired, RequirePermission("manageAlert"))
 	api.POST("/alerts/:id/follow", alertWrite.ToggleFollow, authRequired, RequirePermission("manageAlert"))
+	api.POST("/alerts/:id/unfollow", alertWrite.ToggleFollow, authRequired, RequirePermission("manageAlert"))
 	api.POST("/alerts/:id/read", alertWrite.ToggleRead, authRequired, RequirePermission("manageAlert"))
+	api.POST("/alerts/:id/unread", alertWrite.ToggleRead, authRequired, RequirePermission("manageAlert"))
 	api.POST("/alerts/bulk/import", alertWrite.BulkImport, authRequired, RequirePermission("manageAlert"))
 	api.POST("/alerts/bulk/merge", alertWrite.BulkMerge, authRequired, RequirePermission("manageAlert"))
+	api.POST("/alerts/fix-case-link", alertWrite.FixAlertCaseLink, authRequired, RequirePermission("manageAlert"))
 
 	// --- Tasks ---
 	api.POST("/tasks", workWrite.CreateTask, authRequired, RequirePermission("manageTask"))
@@ -93,10 +99,15 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	api.POST("/tasks/:id/start", workWrite.StartTask, authRequired, RequirePermission("manageTask"))
 	api.POST("/tasks/:id/reopen", workWrite.ReopenTask, authRequired, RequirePermission("manageTask"))
 	api.POST("/tasks/:id/cancel", workWrite.CancelTask, authRequired, RequirePermission("manageTask"))
+	api.GET("/tasks/:id/action-required", workWrite.GetTaskActionRequired, authRequired, RequirePermission("manageTask"))
+	api.PUT("/tasks/:id/action-required/:orgId", workWrite.SetTaskActionRequired, authRequired, RequirePermission("manageTask"))
+	api.PUT("/tasks/:id/action-done/:orgId", workWrite.SetTaskActionDone, authRequired, RequirePermission("manageTask"))
 
-	// --- Task logs (task-scoped, mirrors legacy /api/v1/tasks/:id/logs) ---
+	// --- Task logs ---
 	api.GET("/tasks/:id/logs", detail.ListTaskLogs, authRequired, RequirePermission("manageTask"))
 	api.POST("/tasks/:id/logs", workWrite.AppendTaskLog, authRequired, RequirePermission("manageTask"))
+	api.PATCH("/logs/:id", workWrite.UpdateLog, authRequired, RequirePermission("manageTask"))
+	api.DELETE("/logs/:id", workWrite.DeleteLog, authRequired, RequirePermission("manageTask"))
 
 	// --- Observables ---
 	api.GET("/observables", readonly.ListObservables, authRequired, RequirePermission("manageObservable"))
@@ -105,16 +116,39 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	api.PATCH("/observables/:id", workWrite.PatchObservable, authRequired, RequirePermission("manageObservable"))
 	api.DELETE("/observables/:id", workWrite.DeleteObservable, authRequired, RequirePermission("manageObservable"))
 	api.POST("/observables/:id/analyze", workWrite.AnalyzeObservable, authRequired, RequirePermission("manageObservable"))
+	api.GET("/observables/:id/similar", detail.SimilarObservables, authRequired, RequirePermission("manageObservable"))
+	api.PATCH("/observables/bulk", workWrite.BulkUpdateObservables, authRequired, RequirePermission("manageObservable"))
 
 	// --- Observable types ---
-	api.GET("/observable-types", func(c echo.Context) error {
+	obsTypeHandler := handler.NewObservableTypeHandler(s.db)
+	api.GET("/observable-types", obsTypeHandler.ListObservableTypes, authRequired)
+	api.POST("/observable-types", obsTypeHandler.CreateObservableType, authRequired, RequirePermission("manageObservable"))
+	api.DELETE("/observable-types/:idOrName", obsTypeHandler.DeleteObservableType, authRequired, RequirePermission("manageObservable"))
+	api.PUT("/observable-types/rename/:from/:to", obsTypeHandler.RenameObservableType, authRequired, RequirePermission("manageObservable"))
+
+	// --- Tags ---
+	tagHandler := handler.NewTagHandler(s.db)
+	api.GET("/tags", func(c echo.Context) error {
 		rows := []struct {
-			Name         string `db:"name" json:"name"`
-			IsAttachment bool   `db:"is_attachment" json:"is_attachment"`
+			Name string `db:"name" json:"name"`
 		}{}
-		if err := s.db.SelectContext(c.Request().Context(), &rows, `SELECT name, is_attachment FROM observable_types ORDER BY name`); err != nil {
-			return c.JSON(500, map[string]string{"error": "failed to list types"})
+		if err := s.db.SelectContext(c.Request().Context(), &rows, `SELECT DISTINCT predicate AS name FROM tags ORDER BY predicate`); err != nil {
+			return c.JSON(500, map[string]string{"error": "failed to list tags"})
 		}
 		return c.JSON(200, rows)
 	}, authRequired)
+	api.GET("/tags/:id", tagHandler.GetTag, authRequired)
+	api.PATCH("/tags/:id", tagHandler.UpdateTag, authRequired, RequirePermission("manageCase"))
+	api.DELETE("/tags/:id", tagHandler.DeleteTag, authRequired, RequirePermission("manageCase"))
+
+	// --- Patterns ---
+	patternHandler := handler.NewPatternHandler(s.db)
+	api.GET("/patterns/:id", patternHandler.GetPattern, authRequired, RequirePermission("manageProcedure"))
+	api.DELETE("/patterns/:id", patternHandler.DeletePattern, authRequired, RequirePermission("manageProcedure"))
+	api.GET("/patterns/case/:caseId", patternHandler.GetCasePatterns, authRequired, RequirePermission("manageProcedure"))
+
+	// --- Describe API ---
+	describeHandler := handler.NewDescribeHandler(s.db)
+	api.GET("/describe/_all", describeHandler.DescribeAll, authRequired)
+	api.GET("/describe/:model", describeHandler.DescribeModel, authRequired)
 }

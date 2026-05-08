@@ -88,6 +88,20 @@ func (s *Server) registerAdminRoutes(api *echo.Group, authRequired echo.Middlewa
 	adminGrp.POST("/index/:name/reindex", indexHandler.Reindex, RequirePermission("managePlatform"))
 	adminGrp.POST("/index/:name/rebuild", indexHandler.RebuildIndex, RequirePermission("managePlatform"))
 
+	// Legacy parity: Admin check operations (mirrors legacy /api/v1/admin/check/*)
+	checkHandler := handler.NewAdminCheckHandler(s.db)
+	adminGrp.GET("/check/stats", checkHandler.CheckStats, RequirePermission("managePlatform"))
+	adminGrp.GET("/check/:name/trigger", checkHandler.TriggerGlobalCheck, RequirePermission("managePlatform"))
+	adminGrp.POST("/check/:name/global/trigger", checkHandler.TriggerGlobalCheck, RequirePermission("managePlatform"))
+	adminGrp.POST("/check/:name/dedup/trigger", checkHandler.TriggerDedup, RequirePermission("managePlatform"))
+	adminGrp.POST("/check/cancel", checkHandler.CancelCurrentCheck, RequirePermission("managePlatform"))
+	adminGrp.GET("/log/set/:packageName/:level", checkHandler.SetLogLevel, RequirePermission("managePlatform"))
+
+	// Legacy parity: Admin schema repair/info (mirrors legacy /api/v1/admin/schema/*)
+	schemaHandler := handler.NewAdminSchemaHandler(s.db)
+	adminGrp.POST("/schema/repair/:schemaName", schemaHandler.SchemaRepair, RequirePermission("managePlatform"))
+	adminGrp.POST("/schema/info/:schemaName", schemaHandler.SchemaInfo, RequirePermission("managePlatform"))
+
 	// Legacy parity: User avatar + reset failed attempts (mirrors legacy /api/v1/user/:id/avatar, /user/:id/reset)
 	adminGrp.GET("/users/:login/avatar", func(c echo.Context) error {
 		c.Set("db", s.db)
