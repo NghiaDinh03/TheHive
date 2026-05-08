@@ -135,3 +135,25 @@ Missing/upgrade: E1 feature flags tests require Docker rebuild (migration 000031
 Build: go build ./... exit 0, npm run build exit 0 (38/38 routes)
 Pushed: commit 9923abab to main
 Missing/upgrade: Docker rebuild needed to apply migration 000031-000032 in running containers.
+
+### Session 2026-05-09T00:05+07:00 — Phase H: Frontend Parity Gaps
+
+**Input:** agent_memory sync, Investigation page href="#" bugs, related cases panel gaps
+
+**Output nguyện vọng:** Fix tất cả dead links trong investigation list, parity RelatedCasesPanel với legacy case.links.html
+
+**Output thực tế:**
+[x] H-VERIFY-C1-C2: TestFakeCortex 4/4 PASS, TestFakeMISP 5/5 PASS (standalone, no Docker needed)
+[x] H1-ALERT-LINK: alert title (kể cả chưa linked case) → /alerts/${id} (không còn href="#" cho alert chưa linked)
+[x] H1-OBS-CASE-LINK: Thêm CaseID vào ObservableSummary (backend struct + SQL + frontend type), observable case link → /cases/${case_id}
+[x] H2-RELATED-CASES-STRUCT: MergedFrom pq.StringArray thêm vào detailRelatedCase, SQL SELECT ARRAY(SELECT unnest(c.merged_from)::text)
+[x] H2-RELATED-PANEL-UI: RelatedCasesPanel nay có: duration (Xh/Xd), "Closed at ... as <status>", merged_from list, TLP bg class fix
+Build: go build ./... exit 0, npm run build exit 0 (38 routes)
+Commit: ca9c9dbd main
+
+**Còn lại:**
+- H6: personal settings avatar upload (low priority)
+- D1: OpenSearch count parity (cần Docker stack chạy)
+- D2: Shadow compare runtime artifact
+- E1-E6: Production pilot gates (cần Docker rebuild 000031-000032 trước)
+

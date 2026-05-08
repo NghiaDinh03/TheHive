@@ -192,3 +192,15 @@ Key lesson: Handlers in legacy_parity.go were defined but never registered in an
 Key lesson: DetailHandler.SimilarObservables not GetSimilarObservables — check exact method names before wiring
 Key lesson: `&&` không work trong PowerShell — dùng `;` hoặc tách thành 2 lệnh riêng biệt
 
+### 2026-05-09T00:05+07:00 — Phase H: Frontend Parity Gaps + Backend struct fixes
+[x] H-VERIFY-C1-C2: TestFakeCortex (4/4 PASS) + TestFakeMISP (5/5 PASS) — integration tests run clean without Docker
+[x] H1-ALERT-LINK: Fixed alert title href="#" → /alerts/${item.id} cho cả row có case_number lẫn không
+[x] H1-OBS-CASE-LINK: Thêm CaseID field vào ObservableSummary struct + SQL query, fix observable row href="%" → /cases/${case_id}
+[x] H2-RELATED-CASES: Thêm merged_from field vào detailRelatedCase struct + relatedCases SQL query
+[x] H2-RELATED-PANEL: Updated RelatedCasesPanel với: duration calc, closed-at date, merged_from display, TLP bg class fix (template literal)
+Build: go build ./... exit 0, npm run build exit 0
+Commit: ca9c9dbd pushed to main
+Key lesson: ObservableSummary struct trong types.go không có case_id — phải thêm cả field lẫn SQL query cho consistent
+Key lesson: Legacy merged_from là UUID[] → cần ARRAY(SELECT unnest(c.merged_from)::text) để scan vào pq.StringArray
+Key lesson: Template literal trong JSX className phải dùng backtick (${}) không phải string literal ("bg-tlp-${rc.tlp}" là sai)
+
