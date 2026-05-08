@@ -30,6 +30,7 @@ type detailRelatedCase struct {
 	StartDate         *time.Time         `db:"start_date" json:"start_date,omitempty"`
 	EndDate           *time.Time         `db:"end_date" json:"end_date,omitempty"`
 	Tags              pq.StringArray     `db:"tags" json:"tags"`
+	MergedFrom        pq.StringArray     `db:"merged_from" json:"merged_from,omitempty"`
 	LinksCount        int                `json:"links_count"`
 	LinkedObservables []detailObservable `json:"linked_observables"`
 }
@@ -759,7 +760,8 @@ func (h *DetailHandler) relatedCases(c echo.Context, caseID string) ([]detailRel
 	rows := []detailRelatedCase{}
 	err := h.db.SelectContext(c.Request().Context(), &rows,
 		`SELECT DISTINCT c.id::text AS id, c.number, c.title, c.severity, c.tlp, c.status,
-			COALESCE(c.resolution_status, '') AS resolution_status, c.start_date, c.end_date, c.tags
+			COALESCE(c.resolution_status, '') AS resolution_status, c.start_date, c.end_date, c.tags,
+			ARRAY(SELECT unnest(c.merged_from)::text) AS merged_from
 		 FROM observables o1
 		 JOIN observables o2 ON o1.data = o2.data AND o1.data_type = o2.data_type AND o1.case_id != o2.case_id
 		 JOIN cases c ON c.id = o2.case_id

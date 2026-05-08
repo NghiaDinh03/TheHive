@@ -58,7 +58,8 @@ type CustomField = { id?: string; name: string; value: string };
 type RelatedCase = {
   id: string; number: number; title: string; severity: number; tlp: number;
   status: string; resolution_status?: string; start_date?: string; end_date?: string;
-  tags: string[]; links_count: number; linked_observables: { id: string; data_type: string; data: string; ioc?: boolean; sighted?: boolean }[];
+  tags: string[]; links_count: number; merged_from?: string[];
+  linked_observables: { id: string; data_type: string; data: string; ioc?: boolean; sighted?: boolean }[];
 };
 type ResponderAction = {
   id: string; responder_id: string; responder_name: string; status: string;
@@ -812,6 +813,16 @@ function RelatedCasesPanel({ relatedCases, filter, setFilter }: {
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
+
+  function caseDuration(start?: string, end?: string) {
+    if (!start) return null;
+    const s = new Date(start);
+    const e = end ? new Date(end) : new Date();
+    const hours = Math.max(0, Math.round((e.getTime() - s.getTime()) / 36e5));
+    if (hours < 24) return `${hours}h`;
+    return `${Math.round(hours / 24)}d`;
+  }
+
   return (
     <div className="related-cases-panel" style={{ marginTop: 12 }}>
       <h4 className="vpad10 text-primary">Linked cases ({relatedCases.length})</h4>
@@ -826,11 +837,23 @@ function RelatedCasesPanel({ relatedCases, filter, setFilter }: {
       {filtered.length === 0 && <div className="empty-message">No linked cases</div>}
       {filtered.map(rc => (
         <div key={rc.id} className="case-item" style={{ marginBottom: 6, padding: '6px 8px', border: '1px solid #eee', borderRadius: 4 }}>
-          <div className="case-tlp bg-tlp-${rc.tlp}" style={{ width: 4, display: 'inline-block', marginRight: 6 }} />
+          <div className={`case-tlp bg-tlp-${rc.tlp}`} style={{ width: 4, display: 'inline-block', marginRight: 6 }} />
           <a href={`/cases/${rc.id}`}>#{rc.number} - {rc.title}</a>
           <SeverityInline value={rc.severity} />
-          {rc.status !== 'Open' && <small className="text-success" style={{ marginLeft: 8 }}>({rc.resolution_status ?? rc.status})</small>}
-          <div className="text-muted text-xs">{rc.links_count} linked observable(s)</div>
+          {rc.status !== 'Open' && (
+            <small className="text-success" style={{ marginLeft: 8 }}>
+              (Closed at {rc.end_date ? new Date(rc.end_date).toLocaleDateString() : '?'} as <strong>{rc.resolution_status ?? rc.status}</strong>)
+            </small>
+          )}
+          <div className="text-muted text-xs">
+            {rc.start_date && <span><i className="fa fa-clock-o" /> {caseDuration(rc.start_date, rc.end_date)}</span>}
+            {' · '}{rc.links_count} linked observable(s)
+          </div>
+          {rc.merged_from && rc.merged_from.length > 0 && (
+            <div className="text-danger" style={{ fontSize: '0.8em' }}>
+              <small>Merged from {rc.merged_from.map((mf, i) => <span key={mf}>{i > 0 ? ' and ' : ''}<a href={`/cases/${mf}`}>Case #{mf.slice(0, 8)}</a></span>)}</small>
+            </div>
+          )}
           {rc.linked_observables?.slice(0, 3).map(lo => (
             <div key={lo.id} className="text-xs" style={{ marginLeft: 12 }}>
               <span className="label label-info" style={{ fontSize: '0.65rem' }}>{lo.data_type}</span> {lo.data}

@@ -162,6 +162,7 @@ func (r *PostgresReader) listObservables(ctx context.Context, query ListQuery) (
 	err := r.db.SelectContext(ctx, &rows, `
 		SELECT o.id::text AS id, o.data_type, o.data, o.message, o.tlp, o.ioc, o.sighted,
 			o.ignore_similarity, COALESCE(o.attachment_id::text, '') AS attachment_id, o.tags,
+			COALESCE(o.case_id::text, '') AS case_id,
 			COALESCE(c.number, 0) AS case_number,
 			COALESCE(c.title, '') AS case_title,
 			o.created_by, o.created_at
@@ -170,6 +171,7 @@ func (r *PostgresReader) listObservables(ctx context.Context, query ListQuery) (
 		`+where+`
 		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(len(args)-1)+` OFFSET $`+fmt.Sprint(len(args)), args...)
+
 	if err != nil {
 		return nil, 0, err
 	}

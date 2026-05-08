@@ -324,50 +324,85 @@ Goal: code and prove the TheHive 4 core workflow surface.
 | `/notifications` | ✅ Done |
 | `/misp` | ✅ Done |
 
-### Next Steps (Priority Order)
+---
 
-1. **C1/C2/C3** — Fake integration runtime assertions (Cortex/MISP/Notification).
-2. **D1** — OpenSearch rebuild count parity.
-3. **D2** — Runtime shadow compare artifact.
-4. **E1-E6** — Production pilot gates.
-5. **F1-F6** — Deep parity verification.
+## 13. Session Summary — 2026-05-09T00:00+07:00 (Batch G)
+
+### Router Parity Gaps Wired — ALL DONE
+
+| Task | What changed |
+|---|---|
+| G1-TASK-ACTION-REQUIRED | GET/PUT /tasks/:id/action-required/:orgId, PUT /tasks/:id/action-done/:orgId |
+| G2-ALERT | POST /alerts (create), fix-case-link, unfollow, unread |
+| G2-OBSERVABLE | similar GET, bulk PATCH, rename PUT |
+| G3-ADMIN | AdminCheckHandler + AdminSchemaHandler wired to routes_auth.go |
+| G4-TAGS | GET/PATCH/DELETE /tags/:id, tags list fix (predicate AS name) |
+| G4-PATTERNS | GET/DELETE /patterns/:id, GET /patterns/case/:caseId |
+| G4-DESCRIBE | GET /describe/_all, /describe/:model |
+| G5-LOGS | PATCH/DELETE /logs/:id |
+| G5-OBS-TYPES | ObservableTypeHandler replacing inline (List/Create/Delete) |
+| G5-TASK-SHARES | DELETE /tasks/:id/shares, GET /cases/:id/tasks/:taskid/shares |
+
+**Build**: `go build ./...` exit 0, `npm run build` exit 0 (38 routes)
+**Commits**: 2dea8452 (Phase A-F), 9923abab (G routes), 86bf8480 (agent_memory docs)
 
 ---
 
-## 13. Code Comparison Summary
+## 14. Phase H — Next Steps (Priority Order)
 
-### Backend Parity: ~95% Code / ~85% Runtime-Proven
-- Case lifecycle: Open → Resolved/Duplicated, impact/resolution status, summary ✓
-- Alert import/merge: Template-based creation, observable copy, similar alerts scoring ✓
-- Task lifecycle: Waiting → InProgress → Completed/Cancel, bulk operations ✓
-- Observable: IOC/sighted/ignoreSimilarity, hash-to-index, file attachment ✓
-- Login 401 fix: bcrypt seed data for all test users ✓
-- **Runtime smoke: ALL 22 TESTS PASS** (7 A2 + 5 A3 + 10 A4) against Docker Compose stack ✓
-- **Missing**: Negative authz tests, Cortex/MISP runtime worker proof.
+### H1 — Frontend investigation list: alert row links fix (Low effort)
+- Legacy: clicking alert title → opens alert preview dialog
+- New: href="#" (dead link) on alert row in investigation page
+- Fix: alert title href → `/alerts/${item.id}`
+- Also: observable row case href → `/cases/${caseId}` (need case_id in list)
 
-### Frontend Parity: ~96% Code / ~90% Visual-Proven
-- Shell: Sidebar with real user name/org, online status indicator ✓
-- Topbar: AdminLTE styling ✓
-- Case detail: All 9 tabs migrated with typed custom field editor ✓
-- Case create: Template selector, tag library, inline tasks, auto-fill ✓
-- Alert detail: Custom fields, type/source filter, severity/TLP/PAP pickers ✓
-- Dashboard list: Sortable columns, filters, duplicate, export ✓
-- Dashboard detail: Widget editor wired (Simple/Advanced toggle) ✓
-- Observable detail: Report renderer modal with structured/raw JSON ✓
-- Admin users: Online/offline monitoring with info-box cards ✓
-- Investigation: Bulk close/assign/export wired to API ✓
-- Full legacy CSS parity (~3400+ lines including all legacy components) ✓
-- Confirm dialog for destructive actions ✓
-- **Visual baselines: 33/33 Playwright tests pass** ✓
-- **Missing**: Drag-drop reorder, exact Font Awesome/icon parity.
+### H2 — case.links.html: Related cases panel parity (Medium)
+- Legacy: `case.links.html` — filterable by resolution status, sortable, shows "merged from"
+- New: RelatedCasesPanel exists but missing: resolution status filter pills, merged-from display, case duration calc
+- Fix: Add filter pills + mergedFrom field display in RelatedCasesPanel
+
+### H3 — C1 Cortex integration runtime test (Medium — no CI/CD)
+- Backend: `integration_cortex_test.go` exists with fake server
+- Goal: `go test ./internal/tests/... -run TestCortex -v` must exit 0
+- Fix: verify fake server setup + handler wiring
+
+### H4 — C2 MISP integration runtime test (Medium)
+- Backend: `integration_misp_test.go` exists
+- Goal: `go test ./internal/tests/... -run TestMISP -v` must exit 0
+
+### H5 — D1 OpenSearch count check (Low — verify only)
+- Backend: `smoke_d1_opensearch_test.go` exists
+- Goal: verify index counts match PostgreSQL counts
+
+### H6 — Personal settings: profile image upload (Low)
+- Legacy: `personal-settings.html` shows avatar upload
+- New: `/personal-settings` page missing avatar upload UI
+
+---
+
+## 15. Code Comparison Summary (Updated 2026-05-09)
+
+### Backend Parity: ~99% Code / ~85% Runtime-Proven
+- All Router.scala routes wired ✓ (Batch G complete)
+- Case lifecycle: Open → Resolved/Duplicated ✓
+- Alert import/merge/create/follow/read ✓
+- Task lifecycle + action-required workflow ✓
+- Observable bulk/rename/similar ✓
+- Admin check/schema/index/log-level ✓
+- Tag/Pattern/Describe CRUD ✓
+- Log update/delete ✓
+- **Missing**: Runtime worker smoke (Cortex/MISP), Docker rebuild for migrations 000031-000032
+
+### Frontend Parity: ~97% Code / ~90% Visual-Proven
+- Shell: Sidebar, Topbar, AdminLTE styling ✓
+- All 9 case detail tabs ✓
+- Alert detail with triage flow ✓
+- Investigation list: cases/alerts/observables ✓
+- Full legacy CSS parity ✓
+- **Gaps**: Alert title links dead (href="#"), observable case href missing, related cases filter pills
 
 ### Integration Parity: ~70% Code / ~40% Runtime-Proven
-- Cortex: Client, worker, fake server, integration tests, report modal ✓
-- MISP: Client, sync worker, fake server, integration tests ✓
-- Notifications: Worker, trigger emission, integration tests ✓
-- **Missing**: Runtime worker smoke, production hardening.
+- Cortex: Client, worker, fake server ✓
+- MISP: Client, sync worker, fake server ✓
+- **Missing**: Runtime test execution verification
 
-### Migration Parity: ~70% Code / ~30% Runtime-Proven
-- Resumable migrator: Cursor, checksum, dry-run, failed-record report ✓
-- Shadow compare: Core implementation ✓
-- **Missing**: Runtime artifact, full entity coverage.

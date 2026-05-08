@@ -130,6 +130,7 @@ type ObservableSummary struct {
 	IgnoreSimilarity bool           `db:"ignore_similarity" json:"ignore_similarity"`
 	AttachmentID     string         `db:"attachment_id" json:"attachment_id,omitempty"`
 	Tags             pq.StringArray `db:"tags" json:"tags"`
+	CaseID           string         `db:"case_id" json:"case_id,omitempty"`
 	CaseNumber       int            `db:"case_number" json:"case_number"`
 	CaseTitle        string         `db:"case_title" json:"case_title"`
 	CreatedBy        string         `db:"created_by" json:"created_by"`

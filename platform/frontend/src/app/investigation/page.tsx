@@ -13,7 +13,7 @@ type SortSpec = { field: string; order: 'ASC' | 'DESC' };
 type Collection<T> = { values: T[]; total: number; mode: 'demo-read-only' | 'legacy-read-only' | 'postgres-read-only' | 'read-only'; range?: [number, number]; sort?: SortSpec; filters?: Record<string, string> };
 type CaseSummary = { id: string; number: number; title: string; severity: number; tlp: number; pap: number; status: string; owner: string; assignee: string; tags: string[]; flag?: boolean; summary?: string; impact_status?: string; resolution_status?: string; case_template?: string; owning_organisation?: string; organisation_ids?: string[]; start_date?: string; end_date?: string; task_count: number; observable_count: number; alert_count: number; created_at: string; updated_at: string };
 type AlertSummary = { id: string; title: string; type: string; source: string; source_ref: string; severity: number; tlp: number; pap?: number; status: string; read: boolean; follow?: boolean; flag?: boolean; external_link?: string; organisation_id?: string; case_template?: string; case_number?: number; observable_count: number; tags: string[]; last_sync_date?: string; created_at: string };
-type ObservableSummary = { id: string; data_type: string; data: string; message: string; tlp: number; ioc: boolean; sighted: boolean; ignore_similarity?: boolean; attachment_id?: string; tags: string[]; case_number: number; case_title: string; created_by: string; created_at: string };
+type ObservableSummary = { id: string; data_type: string; data: string; message: string; tlp: number; ioc: boolean; sighted: boolean; ignore_similarity?: boolean; attachment_id?: string; tags: string[]; case_id?: string; case_number: number; case_title: string; created_by: string; created_at: string };
 type User = { login: string; name: string; permissions?: string[] };
 type Tab = 'cases' | 'alerts' | 'observables';
 
@@ -462,7 +462,7 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
               <div className="case-title">
                 {item.case_number
                   ? <a href={`/alerts/${item.id}`}>{item.flag && <Flag size={12} className="inline text-red-600 mr-1" />}{item.title}</a>
-                  : <span>{item.flag && <Flag size={12} className="inline text-red-600 mr-1" />}{item.title}</span>
+                  : <a href={`/alerts/${item.id}`}>{item.flag && <Flag size={12} className="inline text-red-600 mr-1" />}{item.title}</a>
                 }
               </div>
               <TagList tags={item.tags} />
@@ -559,7 +559,7 @@ function ObservableTable({ values, selectedIds, onToggle, onToggleAll, onSort, s
               <small className="text-muted">{item.message}</small>
               <TagList tags={item.tags} />
             </td>
-            <td><a href="#">#{item.case_number}</a><br /><small className="text-muted">{item.case_title}</small></td>
+            <td>{item.case_id ? <a href={`/cases/${item.case_id}`}>#{item.case_number}</a> : <span>#{item.case_number}</span>}<br /><small className="text-muted">{item.case_title}</small></td>
             <td>{item.created_by}</td>
             <td className="date-stack"><div>C. {formatDate(item.created_at)}</div></td>
           </tr>
