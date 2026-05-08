@@ -305,3 +305,107 @@ func (h *CaseWriteHandler) MarkDuplicated(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, updated)
 }
+
+type mergeCaseRequest struct {
+	TargetCaseID string `json:"target_case_id" validate:"required"`
+}
+
+// Merge merges this case into the target case. Tasks, observables, logs, and
+// attachments are moved to the target case. This case is marked as Duplicated.
+// Mirrors legacy CaseMergeModalCtrl.
+func (h *CaseWriteHandler) Merge(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	var req mergeCaseRequest
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+	if req.TargetCaseID == id {
+		return apierr.New(http.StatusBadRequest, "cannot merge case into itself")
+	}
+	tx, err := h.db.BeginTxx(c.Request().Context(), nil)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "case merge failed")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Verify both cases exist
+	before, err := h.repo.Get(c.Request().Context(), tx, id)
+	if err == sql.ErrNoRows {
+		return apierr.New(http.StatusNotFound, "source case not found")
+	}
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "case merge failed")
+	}
+	target, err := h.repo.Get(c.Request().Context(), tx, req.TargetCaseID)
+	if err == sql.ErrNoRows {
+		return apierr.New(http.StatusNotFound, "target case not found")
+	}
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "case merge failed")
+	}
+
+	// Move tasks to target case
+	_, err = tx.ExecContext(c.Request().Context(),
+		`UPDATE task_items SET case_id = $1::uuid WHERE case_id = $2::uuid`, req.TargetCaseID, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to move tasks")
+	}
+
+	// Move observables to target case
+	_, err = tx.ExecContext(c.Request().Context(),
+		`UPDATE observables SET case_id = $1::uuid WHERE case_id = $2::uuid`, req.TargetCaseID, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to move observables")
+	}
+
+	// Move case logs to target case
+	_, err = tx.ExecContext(c.Request().Context(),
+		`UPDATE case_logs SET case_id = $1::uuid WHERE case_id = $2::uuid`, req.TargetCaseID, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to move logs")
+	}
+
+	// Move attachments to target case
+	_, err = tx.ExecContext(c.Request().Context(),
+		`UPDATE attachments SET case_id = $1::uuid WHERE case_id = $2::uuid`, req.TargetCaseID, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to move attachments")
+	}
+
+	// Move custom fields to target case
+	_, err = tx.ExecContext(c.Request().Context(),
+		`UPDATE case_custom_fields SET case_id = $1::uuid WHERE case_id = $2::uuid`, req.TargetCaseID, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to move custom fields")
+	}
+
+	// Move procedures to target case
+	_, err = tx.ExecContext(c.Request().Context(),
+		`UPDATE case_procedures SET case_id = $1::uuid WHERE case_id = $2::uuid`, req.TargetCaseID, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to move procedures")
+	}
+
+	// Mark source case as Duplicated pointing to target
+	updated, err := h.repo.MarkDuplicated(c.Request().Context(), tx, id, req.TargetCaseID)
+	if err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+
+	if h.audit != nil {
+		if err := audit.RecordTx(c.Request().Context(), tx, audit.FromContext(c, "case.merge", "case", updated.ID, before, map[string]any{"target_case_id": req.TargetCaseID, "target_case_number": target.Number})); err != nil {
+			return apierr.New(http.StatusInternalServerError, "case merge audit failed")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return apierr.New(http.StatusInternalServerError, "case merge failed")
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"case":        updated,
+		"target_case": req.TargetCaseID,
+		"status":      "merged",
+	})
+}

@@ -261,6 +261,10 @@ func (r *Repository) CreateTask(ctx context.Context, tx *sqlx.Tx, input CreateTa
 	if strings.TrimSpace(input.GroupName) == "" {
 		input.GroupName = "default"
 	}
+	orgIDs := input.OrganisationIDs
+	if orgIDs == nil {
+		orgIDs = []string{}
+	}
 	row := Task{}
 	err := tx.GetContext(ctx, &row, `
 		INSERT INTO task_items (case_id, title, description, status, assignee, group_name, order_index, flag, start_date, due_date, organisation_ids)
@@ -268,7 +272,7 @@ func (r *Repository) CreateTask(ctx context.Context, tx *sqlx.Tx, input CreateTa
 		RETURNING `+taskSelectColumns,
 		strings.TrimSpace(input.CaseID), strings.TrimSpace(input.Title), input.Description,
 		strings.TrimSpace(input.Assignee), strings.TrimSpace(input.GroupName), input.OrderIndex,
-		input.Flag, input.StartDate, input.DueDate, pq.Array(input.OrganisationIDs))
+		input.Flag, input.StartDate, input.DueDate, pq.Array(orgIDs))
 	return row, err
 }
 
@@ -481,6 +485,10 @@ func (r *Repository) CreateObservable(ctx context.Context, tx *sqlx.Tx, input Cr
 		input.TLP = 2
 	}
 	indexedData, fullData, dataHash := hashObservableData(input.Data)
+	tags := input.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	row := Observable{}
 	if strings.TrimSpace(input.CaseID) != "" {
 		err := tx.GetContext(ctx, &row, `
@@ -496,13 +504,13 @@ func (r *Repository) CreateObservable(ctx context.Context, tx *sqlx.Tx, input Cr
 				attachment_id = COALESCE(EXCLUDED.attachment_id, observables.attachment_id),
 				tags = EXCLUDED.tags,
 				updated_at = now()
-			RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, strings.TrimSpace(input.CaseID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(input.Tags), strings.TrimSpace(input.CreatedBy))
+			RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, strings.TrimSpace(input.CaseID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(tags), strings.TrimSpace(input.CreatedBy))
 		return row.Response(), err
 	}
 	err := tx.GetContext(ctx, &row, `
 		INSERT INTO observables (alert_id, data_type, data, full_data, data_hash, message, tlp, ioc, sighted, attachment_id, tags, created_by, lineage)
 		VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, NULLIF($10, '')::uuid, $11, $12, jsonb_build_object('source', 'alert_observable', 'alert_id', $1::text))
-		RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, strings.TrimSpace(input.AlertID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(input.Tags), strings.TrimSpace(input.CreatedBy))
+		RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, strings.TrimSpace(input.AlertID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(tags), strings.TrimSpace(input.CreatedBy))
 	return row.Response(), err
 }
 

@@ -13,6 +13,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Activity, Eye, Link, Play, Share2, Star, StarOff, ToggleLeft, ToggleRight, Trash2, Unlink } from '@/components/FaIcon';
 import { AttachmentPanel } from '@/components/AttachmentPanel';
 import { ObservableFlags, TagList, Tlp } from '@/components/Badges';
+import { ObservableReportModal, type CortexReport } from '@/components/ObservableReportModal';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { apiFetch } from '@/lib/api';
@@ -24,6 +25,12 @@ type ObservableItem = {
   message: string; tlp: number; ioc: boolean; sighted: boolean; ignore_similarity?: boolean;
   attachment_id?: string; tags: string[]; case_id?: string; alert_id?: string;
   created_by: string; created_at: string; updated_at?: string;
+};
+type SimilarObservable = {
+  id: string; data_type: string; data: string; message: string;
+  tlp: number; ioc: boolean; sighted: boolean; ignore_similarity?: boolean;
+  tags: string[]; case_id: string; case_number: number; case_title: string;
+  start_date?: string; created_at: string;
 };
 type CortexJob = {
   id: string; analyzer_id: string; status: string;
@@ -49,6 +56,8 @@ export default function ObservableDetailPage() {
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
   const [editingMeta, setEditingMeta] = useState(false);
+  const [reportJob, setReportJob] = useState<CortexReport | null>(null);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login');
@@ -64,6 +73,14 @@ export default function ObservableDetailPage() {
   });
   const obs = detail.data?.observable;
   const jobs = detail.data?.jobs ?? [];
+
+  // Similar observables — mirrors legacy observable detail "Links" panel
+  const similar = useQuery({
+    queryKey: ['similar-observables', params.id],
+    queryFn: () => apiFetch<{ values: SimilarObservable[]; total: number }>(`/api/v1/observables/${params.id}/similar`),
+    enabled: !!authedLogin && !!params.id && !(obs?.ignore_similarity),
+  });
+  const similarObs = similar.data?.values ?? [];
 
   const analyzers = useQuery({
     queryKey: ['cortex-analyzers', obs?.data_type],
@@ -365,7 +382,7 @@ export default function ObservableDetailPage() {
                         </thead>
                         <tbody>
                           {jobs.map(j => (
-                            <tr key={j.id}>
+                            <tr key={j.id} className="clickable" onClick={() => { setReportJob(j); setShowReport(true); }} style={{ cursor: 'pointer' }}>
                               <td>{j.analyzer_id}</td>
                               <td>
                                 <span className={
@@ -472,10 +489,53 @@ export default function ObservableDetailPage() {
                   <TagList data={obs?.tags ?? []} />
                 </div>
               </aside>
+
+              {/* Similar Observables Links — mirrors legacy observables/details/summary.html lines 117-153 */}
+              {!obs?.ignore_similarity && (
+                <aside className="box box-default" style={{ marginTop: 12 }}>
+                  <div className="box-header with-border">
+                    <h3 className="box-title"><Link size={14} className="mr-1" /> Links</h3>
+                  </div>
+                  <div className="box-body">
+                    {similar.isLoading && <div className="text-muted text-sm">Loading…</div>}
+                    {!similar.isLoading && similarObs.length === 0 && (
+                      <div className="empty-message">This observable has not been seen in any other case</div>
+                    )}
+                    {similarObs.length > 0 && (
+                      <>
+                        <p className="text-sm"><strong>Observable seen in {similarObs.length} other case(s)</strong></p>
+                        <table className="table table-striped table-condensed">
+                          <thead>
+                            <tr>
+                              <th style={{ width: 80 }}>Flags</th>
+                              <th>Case</th>
+                              <th style={{ width: 120 }}>Date added</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {similarObs.map(a => (
+                              <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/observables/${a.id}`)}>
+                                <td>
+                                  <ObservableFlags observable={{ ioc: a.ioc, sighted: a.sighted, ignore_similarity: a.ignore_similarity }} />
+                                </td>
+                                <td>
+                                  <a href={`/cases/${a.case_id}`}>#{a.case_number} - {a.case_title}</a>
+                                </td>
+                                <td>{new Date(a.created_at).toLocaleDateString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+                  </div>
+                </aside>
+              )}
             </div>
           </section>
         </main>
       </div>
+      <ObservableReportModal open={showReport} job={reportJob} onClose={() => { setShowReport(false); setReportJob(null); }} />
     </div>
   );
 }

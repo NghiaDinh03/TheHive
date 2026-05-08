@@ -31,6 +31,11 @@ func (s *Server) registerAuthRoutes(api *echo.Group) {
 	authGrp.POST("/sessions/revoke-all", auth.RevokeAllSessions, authRequired)
 	// API key management (personal-settings API key tab)
 	authGrp.POST("/api-key", auth.GenerateAPIKey, authRequired)
+
+	// Legacy parity: TOTP 2FA (mirrors legacy POST /api/v1/auth/totp/set, /auth/totp/unset)
+	authGrp.POST("/totp/set", handler.TOTPSetSecret, authRequired)
+	authGrp.POST("/totp/unset", handler.TOTPUnsetSecret, authRequired)
+	authGrp.POST("/totp/unset/:user", handler.TOTPUnsetSecret, authRequired, RequirePermission("manageUser"))
 }
 
 // registerAdminRoutes registers admin management routes under /api/v1/admin.
@@ -76,6 +81,22 @@ func (s *Server) registerAdminRoutes(api *echo.Group, authRequired echo.Middlewa
 	// MITRE ATT&CK pattern catalogue (legacy admin/attack/*.html).
 	adminGrp.GET("/attack-patterns", catalog.ListAttackPatterns, RequirePermission("manageProcedure"))
 	adminGrp.POST("/attack-patterns/import", catalog.ImportAttackPatterns, RequirePermission("manageProcedure"))
+
+	// Legacy parity: Admin index management (mirrors legacy /api/v1/admin/index/*)
+	indexHandler := handler.NewAdminIndexHandler(s.db)
+	adminGrp.GET("/index/status", indexHandler.IndexStatus, RequirePermission("managePlatform"))
+	adminGrp.POST("/index/:name/reindex", indexHandler.Reindex, RequirePermission("managePlatform"))
+	adminGrp.POST("/index/:name/rebuild", indexHandler.RebuildIndex, RequirePermission("managePlatform"))
+
+	// Legacy parity: User avatar + reset failed attempts (mirrors legacy /api/v1/user/:id/avatar, /user/:id/reset)
+	adminGrp.GET("/users/:login/avatar", func(c echo.Context) error {
+		c.Set("db", s.db)
+		return handler.GetUserAvatar(c)
+	}, RequirePermission("manageUser"))
+	adminGrp.POST("/users/:login/reset", func(c echo.Context) error {
+		c.Set("db", s.db)
+		return handler.ResetUserFailedAttempts(c)
+	}, RequirePermission("manageUser"))
 }
 
 // registerAuditRoutes registers audit log routes under /api/v1/audit.

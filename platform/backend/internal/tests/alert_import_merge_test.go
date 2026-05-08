@@ -63,6 +63,11 @@ func TestAlertDetailReturnsObservablesAndSimilar(t *testing.T) {
 	// Audit history
 	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("alert", alertID).
 		WillReturnRows(historyRows().AddRow("alert.create", "siem-connector", now))
+	// Alert custom fields (new: mirrors alert/custom.fields.html)
+	mock.ExpectQuery("FROM alert_custom_fields acf").WithArgs(alertID).
+		WillReturnRows(sqlmock.NewRows([]string{"name", "value", "field_type"}).
+			AddRow("severity-score", "85", "number").
+			AddRow("attack-vector", "network", "string"))
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))
 	e := echo.New()
@@ -105,6 +110,10 @@ func TestAlertDetailReturnsObservablesAndSimilar(t *testing.T) {
 		// History
 		`"history":[`,
 		`"alert.create"`,
+		// Custom fields (new)
+		`"custom_fields":[`,
+		`"severity-score"`,
+		`"attack-vector"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("expected body to contain %q", want)

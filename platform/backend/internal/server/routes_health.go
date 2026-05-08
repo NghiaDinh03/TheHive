@@ -12,4 +12,8 @@ func (s *Server) registerHealthRoutes(e *echo.Echo) {
 	e.GET("/healthz", hh.Live)
 	e.GET("/readyz", hh.Ready)
 	e.GET("/metrics", echo.WrapHandler(s.metrics.Handler()))
+
+	// Legacy parity: Disk monitoring (mirrors legacy GET /api/v1/monitor/disk)
+	diskHandler := handler.NewDiskUsageHandler()
+	e.GET("/api/v1/monitor/disk", diskHandler.DiskUsage)
 }

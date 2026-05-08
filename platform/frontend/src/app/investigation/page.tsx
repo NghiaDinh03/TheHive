@@ -1,9 +1,9 @@
 'use client';
 
 import type { ChangeEvent, ReactNode } from 'react';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Briefcase, CheckCircle2, Clock3, Eye, Filter, Flag, Search, SlidersHorizontal, Tag } from '@/components/FaIcon';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
@@ -28,6 +28,7 @@ const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 
 function InvestigationWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const [authedLogin, setAuthedLogin] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('cases');
@@ -37,6 +38,9 @@ function InvestigationWorkspace() {
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortSpec>({ field: 'updated_at', order: 'DESC' });
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [bulkAssignee, setBulkAssignee] = useState('');
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login');
@@ -82,6 +86,58 @@ function InvestigationWorkspace() {
   function toggleSort(field: string) { setSort((current) => ({ field, order: current.field === field && current.order === 'ASC' ? 'DESC' : 'ASC' })); }
   function clearFilter(key: string) { setFilters((current) => { const next = { ...current }; delete next[key]; return next; }); }
   function clearAllFilters() { setFilters({}); }
+
+  // Bulk close — mirrors legacy case bulk close
+  const bulkClose = useMutation({
+    mutationFn: async () => {
+      const results = await Promise.allSettled(
+        selectedIds.map((id) => {
+          if (activeTab === 'cases') return apiFetch(`/api/v1/cases/${id}/close`, { method: 'POST', json: { resolution_status: 'Indeterminate', summary: '' } });
+          if (activeTab === 'alerts') return apiFetch(`/api/v1/alerts/${id}`, { method: 'PATCH', json: { status: 'Ignored' } });
+          return apiFetch(`/api/v1/tasks/${id}`, { method: 'PATCH', json: { status: 'Cancel' } });
+        })
+      );
+      const ok = results.filter(r => r.status === 'fulfilled').length;
+      return { ok, total: selectedIds.length };
+    },
+    onSuccess: async (r) => {
+      await queryClient.invalidateQueries();
+      setSelectedIds([]);
+      setBulkMessage(`Bulk close: ${r.ok}/${r.total} succeeded.`);
+    },
+    onError: () => setBulkMessage('Bulk close failed.'),
+  });
+
+  // Bulk export — download selected items as JSON
+  const bulkExport = useCallback(async () => {
+    const endpoint = activeTab === 'cases' ? '/api/v1/cases' : activeTab === 'alerts' ? '/api/v1/alerts' : '/api/v1/observables';
+    const items = await Promise.all(selectedIds.map(id => apiFetch<Record<string, unknown>>(`${endpoint}/${id}`)));
+    const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${activeTab}-export-${selectedIds.length}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    setBulkMessage(`Exported ${selectedIds.length} ${activeTab}.`);
+  }, [activeTab, selectedIds]);
+
+  // Bulk assign
+  const bulkAssign = useMutation({
+    mutationFn: async () => {
+      const endpoint = activeTab === 'cases' ? '/api/v1/cases' : '/api/v1/tasks';
+      const results = await Promise.allSettled(
+        selectedIds.map(id => apiFetch(`${endpoint}/${id}`, { method: 'PATCH', json: { assignee: bulkAssignee.trim() || null } }))
+      );
+      const ok = results.filter(r => r.status === 'fulfilled').length;
+      return { ok, total: selectedIds.length };
+    },
+    onSuccess: async (r) => {
+      await queryClient.invalidateQueries();
+      setSelectedIds([]);
+      setShowBulkAssign(false);
+      setBulkAssignee('');
+      setBulkMessage(`Bulk assign: ${r.ok}/${r.total} succeeded.`);
+    },
+    onError: () => setBulkMessage('Bulk assign failed.'),
+  });
 
   if (!authedLogin) return null;
 
@@ -138,13 +194,32 @@ function InvestigationWorkspace() {
                     <span className="label label-default">{mode}</span>
                     <span>{activeValues} shown / {activeTotal} total</span>
                     <span>{selectedRows} selected</span>
-                    <button className="btn btn-sm btn-default write-action" disabled={!canBulk || selectedRows === 0}>Merge</button>
-                    <button className="btn btn-sm btn-default write-action" disabled={!canBulk || selectedRows === 0}>Close</button>
-                    <button className="btn btn-sm btn-default write-action" disabled={!canBulk || selectedRows === 0}>Assign</button>
-                    <button className="btn btn-sm btn-default write-action" disabled={!canBulk || selectedRows === 0}>Export</button>
+                    <button className="btn btn-sm btn-default write-action" disabled={!canBulk || selectedRows === 0 || bulkClose.isPending} onClick={() => { if (confirm(`Close ${selectedRows} selected ${activeTab}?`)) bulkClose.mutate(); }}>
+                      {bulkClose.isPending ? 'Closing…' : 'Close'}
+                    </button>
+                    <button className="btn btn-sm btn-default write-action" disabled={!canBulk || selectedRows === 0} onClick={() => setShowBulkAssign(!showBulkAssign)}>Assign</button>
+                    <button className="btn btn-sm btn-default write-action" disabled={selectedRows === 0} onClick={() => void bulkExport()}>Export</button>
                     <button className="btn btn-sm btn-default" disabled={page === 0} onClick={() => setPage((v) => Math.max(0, v - 1))}>« Prev</button>
                     <button className="btn btn-sm btn-default" disabled={activeValues < pageSize} onClick={() => setPage((v) => v + 1)}>Next »</button>
                   </div>
+                  {/* Bulk assign inline form */}
+                  {showBulkAssign && (
+                    <div className="filter-panel" style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px' }}>
+                      <span className="text-sm">Assign {selectedRows} selected to:</span>
+                      <input className="thehive-input py-1" placeholder="User login" value={bulkAssignee} onChange={e => setBulkAssignee(e.target.value)} style={{ maxWidth: 200 }} />
+                      <button className="btn btn-sm btn-primary" disabled={!bulkAssignee.trim() || bulkAssign.isPending} onClick={() => bulkAssign.mutate()}>
+                        {bulkAssign.isPending ? 'Assigning…' : 'Confirm'}
+                      </button>
+                      <button className="btn btn-sm btn-default" onClick={() => { setShowBulkAssign(false); setBulkAssignee(''); }}>Cancel</button>
+                    </div>
+                  )}
+                  {/* Bulk message */}
+                  {bulkMessage && (
+                    <div className="alert alert-info alert-dismissible" style={{ margin: '4px 12px' }}>
+                      {bulkMessage}
+                      <button type="button" className="close" onClick={() => setBulkMessage(null)}>×</button>
+                    </div>
+                  )}
 
                   {/* Filter panel */}
                   {showFilters && <FilterPanel activeTab={activeTab} filters={filters} onChange={updateFilter} onClear={clearFilter} onClearAll={clearAllFilters} />}

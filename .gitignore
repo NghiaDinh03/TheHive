@@ -60,3 +60,11 @@ credentials/
 
 # AI agent workspace
 .roo/
+
+# Playwright test artifacts (generated, not source)
+platform/frontend/test-results/
+platform/frontend/tests/visual/.auth/
+
+# Node modules
+platform/frontend/node_modules/
+platform/backend/vendor/

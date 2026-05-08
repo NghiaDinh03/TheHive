@@ -1,8 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const adminLogin = process.env.PLAYWRIGHT_ADMIN_LOGIN ?? 'nghia.dinh@ncsgroup.vn';
-const adminPassword = process.env.PLAYWRIGHT_ADMIN_PASSWORD ?? '12345@';
-
 const protectedScreens = [
   { name: 'dashboard', path: '/dashboard' },
   { name: 'investigation-cases', path: '/investigation?tab=cases' },
@@ -21,14 +18,22 @@ const protectedScreens = [
   { name: 'admin-organisations', path: '/admin/organisations' },
   { name: 'admin-profiles', path: '/admin/profiles' },
   { name: 'admin-case-templates', path: '/admin/case-templates' },
+  { name: 'admin-custom-fields', path: '/admin/custom-fields' },
   { name: 'admin-observable-types', path: '/admin/observable-types' },
+  { name: 'admin-taxonomy', path: '/admin/taxonomy' },
+  { name: 'admin-attack', path: '/admin/attack' },
   { name: 'admin-analyzer-templates', path: '/admin/analyzer-templates' },
+  { name: 'admin-platform-status', path: '/admin/platform-status' },
+  { name: 'admin-ui-settings', path: '/admin/ui-settings' },
+  { name: 'cases-create', path: '/cases/create' },
+  { name: 'change-password', path: '/change-password' },
+  { name: 'reset-password', path: '/reset-password' },
+  { name: 'about', path: '/about' },
 ];
-
-test.describe.configure({ mode: 'serial' });
 
 test.describe('TheHive 4 visual parity baseline', () => {
   test('login screen baseline', async ({ page }) => {
+    await page.context().clearCookies();
     await page.goto('/login');
     await page.getByRole('heading', { name: /sign in/i }).waitFor();
     await stabilize(page);
@@ -37,7 +42,6 @@ test.describe('TheHive 4 visual parity baseline', () => {
 
   for (const screen of protectedScreens) {
     test(`${screen.name} baseline`, async ({ page }) => {
-      await login(page);
       await page.goto(screen.path);
       await waitForAppShell(page);
       await stabilize(page);
@@ -45,20 +49,6 @@ test.describe('TheHive 4 visual parity baseline', () => {
     });
   }
 });
-
-async function login(page: Page) {
-  await page.context().clearCookies();
-  await page.goto('/login?visual=1');
-  await page.getByLabel('Login').fill(adminLogin);
-  await page.getByLabel('Password').fill(adminPassword);
-  await Promise.all([
-    page.waitForURL(/\/(dashboard|change-password)/, { timeout: 20_000 }),
-    page.locator('form').getByRole('button', { name: /sign in/i }).click(),
-  ]);
-  if (page.url().includes('/change-password')) {
-    throw new Error('Visual baseline user must not require first-login password rotation');
-  }
-}
 
 async function waitForAppShell(page: Page) {
   await page.locator('.content-wrapper, .login-box, main').first().waitFor({ timeout: 20_000 });

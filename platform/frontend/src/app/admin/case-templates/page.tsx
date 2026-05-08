@@ -3,14 +3,15 @@
 /**
  * Admin -> Case templates.
  * Mirrors legacy `frontend/app/views/components/org/case-template/*` list and modal partials.
+ * Wired: create, update, delete via backend API (B-UI-8).
  */
 
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ClipboardList, Edit2, Eye, Plus, Trash2, Upload } from '@/components/FaIcon';
 import { AdminShell } from '@/components/AdminShell';
 import { Pap, Severity, TagList, Tlp } from '@/components/Badges';
-import { apiFetch, normalizeList } from '@/lib/api';
+import { ApiError, apiFetch, normalizeList } from '@/lib/api';
 
 type SeverityValue = 1 | 2 | 3 | 4;
 type TemplateTask = { title: string; group?: string; owner?: string; description?: string; order?: number };
@@ -40,19 +41,32 @@ type CaseTemplate = {
 type TemplateModalMode = 'view' | 'edit' | 'new';
 
 export default function CaseTemplatesAdminPage() {
+  const queryClient = useQueryClient();
   const [filter, setFilter] = useState('');
   const [modal, setModal] = useState<{ mode: TemplateModalMode; template: CaseTemplate } | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const templates = useQuery({
     queryKey: ['admin-case-templates'],
     queryFn: async () => {
       try {
-        const data = await apiFetch<unknown>('/api/v1/admin/case-templates');
+        const data = await apiFetch<unknown>('/api/v1/case-templates');
         return normalizeList<CaseTemplate>(data as never);
       } catch {
         return [] as CaseTemplate[];
       }
     },
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/v1/case-templates/${id}`, { method: 'DELETE' }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin-case-templates'] });
+      setMessage('Template deleted.');
+      setError(null);
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.problem.detail || err.problem.title : 'Delete failed'),
   });
 
   const filtered = useMemo(() => {
@@ -68,6 +82,9 @@ export default function CaseTemplatesAdminPage() {
 
   return (
     <AdminShell title="Case templates" small="organisation-scoped triage templates">
+      {message && <div className="alert alert-success alert-dismissible"><button type="button" className="close" onClick={() => setMessage(null)}>×</button>{message}</div>}
+      {error && <div className="alert alert-danger alert-dismissible"><button type="button" className="close" onClick={() => setError(null)}>×</button>{error}</div>}
+
       <div className="box box-primary">
         <div className="box-header with-border">
           <h3 className="box-title">
@@ -128,7 +145,17 @@ export default function CaseTemplatesAdminPage() {
                     <td className="text-center nowrap">
                       <button className="btn btn-icon btn-clear" onClick={() => setModal({ mode: 'view', template })} title="View template"><Eye size={14} className="text-info" /></button>
                       <button className="btn btn-icon btn-clear" onClick={() => setModal({ mode: 'edit', template })} title="Edit template"><Edit2 size={14} className="text-info" /></button>
-                      <button className="btn btn-icon btn-clear" disabled title="Delete endpoint pending"><Trash2 size={14} className="text-danger" /></button>
+                      <button
+                        className="btn btn-icon btn-clear"
+                        onClick={() => {
+                          if (template.id && window.confirm(`Delete template "${displayName(template)}"?`)) {
+                            deleteTemplate.mutate(template.id);
+                          }
+                        }}
+                        title="Delete template"
+                      >
+                        <Trash2 size={14} className="text-danger" />
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -138,12 +165,31 @@ export default function CaseTemplatesAdminPage() {
         </div>
       </div>
 
-      {modal && <CaseTemplateModal mode={modal.mode} template={modal.template} onClose={() => setModal(null)} />}
+      {modal && (
+        <CaseTemplateModal
+          mode={modal.mode}
+          template={modal.template}
+          onClose={() => setModal(null)}
+          onSaved={async () => {
+            await queryClient.invalidateQueries({ queryKey: ['admin-case-templates'] });
+            setModal(null);
+            setMessage(modal.mode === 'new' ? 'Template created.' : 'Template updated.');
+            setError(null);
+          }}
+          onError={(msg) => { setError(msg); setMessage(null); }}
+        />
+      )}
     </AdminShell>
   );
 }
 
-function CaseTemplateModal({ mode, template, onClose }: { mode: TemplateModalMode; template: CaseTemplate; onClose: () => void }) {
+function CaseTemplateModal({ mode, template, onClose, onSaved, onError }: {
+  mode: TemplateModalMode;
+  template: CaseTemplate;
+  onClose: () => void;
+  onSaved: () => void;
+  onError: (msg: string) => void;
+}) {
   const [tab, setTab] = useState<'details' | 'tasks' | 'customFields'>('details');
   const [draft, setDraft] = useState<CaseTemplate>(normalizeTemplate(template));
   const readonly = mode === 'view';
@@ -153,6 +199,50 @@ function CaseTemplateModal({ mode, template, onClose }: { mode: TemplateModalMod
   const patch = (change: Partial<CaseTemplate>) => setDraft((current) => ({ ...current, ...change }));
   const addTask = () => patch({ tasks: [...tasks, { title: 'New task', group: 'default', description: '', order: tasks.length + 1 }] });
   const addCustomField = () => patch({ custom_fields: [...customFields, { name: 'customField', value: '', type: 'string', description: 'No description' }] });
+
+  // Build payload matching backend API
+  function buildPayload() {
+    return {
+      name: draft.name,
+      display_name: draft.display_name || draft.displayName || '',
+      title_prefix: draft.title_prefix || draft.titlePrefix || '',
+      description: draft.description || '',
+      severity: draft.severity ?? 2,
+      tlp: draft.tlp ?? 2,
+      pap: draft.pap ?? 2,
+      tags: draft.tags ?? [],
+      tasks: tasks.map((t, i) => ({
+        title: t.title,
+        description: t.description || '',
+        group_name: t.group || 'default',
+        order_index: t.order ?? i + 1,
+      })),
+      custom_fields: customFields.map((cf) => ({
+        field_name: cf.name,
+        field_type: cf.type || 'string',
+        default_value: String(cf.value ?? ''),
+        field_order: 0,
+      })),
+    };
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const payload = buildPayload();
+      if (mode === 'new') {
+        return apiFetch('/api/v1/case-templates', { method: 'POST', json: payload });
+      } else {
+        return apiFetch(`/api/v1/case-templates/${template.id}`, { method: 'PATCH', json: payload });
+      }
+    },
+    onSuccess: onSaved,
+    onError: (err) => onError(err instanceof ApiError ? err.problem.detail || err.problem.title : 'Save failed'),
+  });
+
+  function handleSave() {
+    if (!draft.name.trim()) { onError('Template name is required.'); return; }
+    saveMutation.mutate();
+  }
 
   return (
     <div className="thehive-modal-backdrop" role="dialog">
@@ -178,7 +268,11 @@ function CaseTemplateModal({ mode, template, onClose }: { mode: TemplateModalMod
         <footer className="thehive-modal-footer text-left">
           <button className="btn btn-default" onClick={onClose}>Cancel</button>
           {!readonly && <span className="ml-xxs"><i className="fa fa-asterisk text-danger mr-xxxs" />Required field</span>}
-          <button className="btn btn-primary pull-right" disabled title="Save endpoint wiring pending">Save template</button>
+          {!readonly && (
+            <button className="btn btn-primary pull-right" onClick={handleSave} disabled={saveMutation.isPending}>
+              {saveMutation.isPending ? 'Saving…' : 'Save template'}
+            </button>
+          )}
         </footer>
       </div>
     </div>
@@ -221,7 +315,13 @@ function TemplateTasks({ tasks, readonly, addTask, patch }: { tasks: TemplateTas
             {!readonly && <span className="pull-right"><a className="text-danger" onClick={() => patch(tasks.filter((_, i) => i !== index))}><i className="fa fa-trash" /> Delete</a></span>}
           </div>
           <div className="panel-body">
-            {!readonly ? <textarea className="form-control" value={task.description || ''} onChange={(e) => patch(tasks.map((item, i) => i === index ? { ...item, description: e.target.value } : item))} /> : task.description ? <p>{task.description}</p> : <p className="text-warning"><em>No description specified</em></p>}
+            {!readonly ? (
+              <div>
+                <input className="form-control input-sm mb-1" value={task.title} onChange={(e) => patch(tasks.map((item, i) => i === index ? { ...item, title: e.target.value } : item))} placeholder="Task title" />
+                <input className="form-control input-sm mb-1" value={task.group || ''} onChange={(e) => patch(tasks.map((item, i) => i === index ? { ...item, group: e.target.value } : item))} placeholder="Group name" />
+                <textarea className="form-control" value={task.description || ''} onChange={(e) => patch(tasks.map((item, i) => i === index ? { ...item, description: e.target.value } : item))} placeholder="Task description" />
+              </div>
+            ) : task.description ? <p>{task.description}</p> : <p className="text-warning"><em>No description specified</em></p>}
           </div>
         </div>
       ))}
@@ -237,8 +337,18 @@ function TemplateCustomFields({ fields, readonly, addField, patch }: { fields: T
         <div className="customfield-item" key={`${field.name}-${index}`}>
           <div className="row">
             <div className="col-sm-12"><span className="drag-handle text-primary clickable mr-xxs"><i className="fa fa-bars" /></span>{!readonly && <a onClick={() => patch(fields.filter((_, i) => i !== index))}><span className="pull-right text-danger"><i className="fa fa-trash" /> Delete</span></a>}</div>
-            <div className="col-sm-6"><input disabled={readonly} className="form-control" value={field.name} onChange={(e) => patch(fields.map((item, i) => i === index ? { ...item, name: e.target.value } : item))} /></div>
-            <div className="col-sm-6"><input disabled={readonly} className="form-control" value={String(field.value ?? '')} onChange={(e) => patch(fields.map((item, i) => i === index ? { ...item, value: e.target.value } : item))} /></div>
+            <div className="col-sm-4"><input disabled={readonly} className="form-control" value={field.name} onChange={(e) => patch(fields.map((item, i) => i === index ? { ...item, name: e.target.value } : item))} placeholder="Field name" /></div>
+            <div className="col-sm-3">
+              <select disabled={readonly} className="form-control" value={field.type || 'string'} onChange={(e) => patch(fields.map((item, i) => i === index ? { ...item, type: e.target.value } : item))}>
+                <option value="string">String</option>
+                <option value="integer">Integer</option>
+                <option value="float">Float</option>
+                <option value="boolean">Boolean</option>
+                <option value="date">Date</option>
+                <option value="enumeration">Enumeration</option>
+              </select>
+            </div>
+            <div className="col-sm-5"><input disabled={readonly} className="form-control" value={String(field.value ?? '')} onChange={(e) => patch(fields.map((item, i) => i === index ? { ...item, value: e.target.value } : item))} placeholder="Default value" /></div>
             <div className="col-sm-12"><i className="pl-xxss fa fa-question-circle" /> <small>{field.description || 'No description'}</small></div>
           </div>
         </div>

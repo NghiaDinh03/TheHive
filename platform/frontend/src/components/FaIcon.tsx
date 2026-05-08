@@ -78,6 +78,7 @@ import {
   faUserCog,
   faUserPlus,
   faUsers,
+  faWifi,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import type { CSSProperties } from 'react';
@@ -190,6 +191,8 @@ export const UserCircle2 = makeIcon(faUserCircle);
 export const UserCog = makeIcon(faUserCog);
 export const UserPlus = makeIcon(faUserPlus);
 export const Users = makeIcon(faUsers);
+export const Wifi = makeIcon(faWifi);
+export const WifiOff = makeIcon(faTimesCircle);
 export const XCircle = makeIcon(faTimesCircle);
 
 export const QuestionCircle = makeIcon(faQuestionCircle);

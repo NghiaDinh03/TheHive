@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,9 @@ func NewRateLimiter(limit int, window time.Duration, block time.Duration) *RateL
 func (r *RateLimiter) Middleware(scope string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			if os.Getenv("RATE_LIMIT_DISABLED") == "true" {
+				return next(c)
+			}
 			key := scope + ":" + c.RealIP() + ":" + strings.ToLower(strings.TrimSpace(c.Request().Header.Get("X-Login")))
 			now := time.Now()
 			r.mu.Lock()

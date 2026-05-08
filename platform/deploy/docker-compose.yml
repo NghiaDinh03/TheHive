@@ -132,6 +132,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      RATE_LIMIT_DISABLED: ${RATE_LIMIT_DISABLED:-true}
       HTTP_ADDR: :8080
       POSTGRES_DSN: postgres://${POSTGRES_USER:-thehive}:${POSTGRES_PASSWORD:-thehive}@postgres:5432/${POSTGRES_DB:-thehive}?sslmode=disable
       POSTGRES_MIGRATIONS_PATH: file:///app/migrations

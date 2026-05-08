@@ -12,6 +12,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BarChart3, Bell, Download, Eye, EyeOff, FileText, Flag, GitMerge, Link2, Mail, MailOpen, Search, ShieldAlert, Tag, Trash2 } from '@/components/FaIcon';
 import { ObservableFlags, Pap, Severity, TagList, Tlp } from '@/components/Badges';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { apiFetch } from '@/lib/api';
@@ -29,6 +30,7 @@ type SimilarAlert = {
   observable_overlap?: number; ioc_overlap?: number; tag_overlap?: number; created_at?: string;
 };
 type History = { action: string; actor_id: string; created_at: string };
+type AlertCustomField = { id?: string; name: string; value: string; field_type?: string };
 type AlertItem = {
   id: string; title: string; description?: string; type: string;
   source: string; source_ref: string; external_link?: string;
@@ -41,6 +43,7 @@ type AlertItem = {
   observables?: AlertObservable[];
   similar_alerts?: SimilarAlert[];
   history?: History[];
+  custom_fields?: AlertCustomField[];
 };
 type AlertObservableCopy = {
   source_observable_id: string; observable_id: string; action: string;
@@ -85,6 +88,7 @@ export default function AlertDetailPage() {
   const [targetAlertId, setTargetAlertId] = useState('');
   const [lastResult, setLastResult] = useState<AlertActionResult | null>(null);
   const [editing, setEditing] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editForm, setEditForm] = useState({
     title: '', description: '', severity: 2, tlp: 2, pap: 2,
     case_template: '', external_link: '', tags: '',
@@ -276,6 +280,25 @@ export default function AlertDetailPage() {
                             </>
                           )}
                         </dl>
+
+                        {/* Custom fields — mirrors legacy alert/custom.fields.html */}
+                        {item.custom_fields && item.custom_fields.length > 0 && (
+                          <>
+                            <h4 className="text-primary" style={{ marginTop: 12 }}>Custom fields</h4>
+                            <table className="table table-striped table-condensed">
+                              <thead><tr><th>Name</th><th>Value</th><th>Type</th></tr></thead>
+                              <tbody>
+                                {item.custom_fields.map((cf, i) => (
+                                  <tr key={cf.id || i}>
+                                    <td>{cf.name}</td>
+                                    <td>{cf.value || <em className="text-muted">—</em>}</td>
+                                    <td>{cf.field_type && <span className="label label-info">{cf.field_type}</span>}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </>
+                        )}
                       </div>
 
                       {/* Edit form (inline, TheHive 4 style) */}
@@ -572,7 +595,7 @@ export default function AlertDetailPage() {
                   <button
                     className="btn btn-danger btn-block"
                     disabled={!canWrite || deleteAlert.isPending}
-                    onClick={() => { if (confirm('Delete this alert?')) deleteAlert.mutate(); }}
+                    onClick={() => setShowDeleteDialog(true)}
                   >
                     <Trash2 size={14} /> Delete
                   </button>
@@ -582,6 +605,17 @@ export default function AlertDetailPage() {
           </section>
         </main>
       </div>
+      <ConfirmDialog
+        open={showDeleteDialog}
+        title="Delete alert"
+        message={`Are you sure you want to permanently delete alert "${item?.title ?? ''}"? This action cannot be undone.`}
+        variant="danger"
+        confirmLabel="Delete alert"
+        cancelLabel="Keep alert"
+        pending={deleteAlert.isPending}
+        onConfirm={() => { deleteAlert.mutate(); setShowDeleteDialog(false); }}
+        onCancel={() => setShowDeleteDialog(false)}
+      />
     </div>
   );
 }

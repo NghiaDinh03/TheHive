@@ -14,12 +14,9 @@ import (
 )
 
 // A2 Core SOC Workflow Smoke Tests
-// These tests verify the end-to-end analyst workflow
+// tests verify end-to-end analyst workflow
 
-const (
-	baseURL     = "http://localhost:8080"
-	frontendURL = "http://localhost:3000"
-)
+const frontendURL = "http://localhost:3000"
 
 var (
 	adminToken       string
@@ -28,12 +25,13 @@ var (
 	testObservableID string
 )
 
-// TestA2_LoginAndAuth verifies login and profile loading
+// TestA2_LoginAndAuth verifies login profile loading
 func TestA2_LoginAndAuth(t *testing.T) {
 	loginReq := map[string]string{
 		"login":    "admin@thehive.local",
-		"password": "secret",
+		"password": "12345@",
 	}
+
 	body, _ := json.Marshal(loginReq)
 
 	resp, err := http.Post(baseURL+"/api/v1/auth/login", "application/json", bytes.NewBuffer(body))
@@ -43,19 +41,19 @@ func TestA2_LoginAndAuth(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Login should succeed")
 
 	var loginResp struct {
-		Token string `json:"token"`
-		User  struct {
-			Login string `json:"login"`
-			Name  string `json:"name"`
-		} `json:"user"`
+		Token              string `json:"token"`
+		Login              string `json:"login"`
+		ExpiresAt          string `json:"expires_at"`
+		MustChangePassword bool   `json:"must_change_password"`
 	}
+
 	err = json.NewDecoder(resp.Body).Decode(&loginResp)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, loginResp.Token, "Token should be returned")
 	adminToken = loginResp.Token
 
-	t.Logf("Login successful for user: %s", loginResp.User.Login)
+	t.Logf("Login successful for user: %s", loginResp.Login)
 
 	req, _ := http.NewRequest("GET", baseURL+"/api/v1/auth/me", nil)
 	req.Header.Set("Authorization", "Bearer "+adminToken)
@@ -83,6 +81,7 @@ func TestA2_CaseCreate(t *testing.T) {
 		"tags":        []string{"smoke-test", "a2"},
 		"owner":       "admin@thehive.local",
 	}
+
 	body, _ := json.Marshal(caseReq)
 
 	req, _ := http.NewRequest("POST", baseURL+"/api/v1/cases", bytes.NewBuffer(body))
@@ -101,6 +100,7 @@ func TestA2_CaseCreate(t *testing.T) {
 		Title  string `json:"title"`
 		Status string `json:"status"`
 	}
+
 	err = json.NewDecoder(resp.Body).Decode(&caseResp)
 	require.NoError(t, err)
 
@@ -111,7 +111,7 @@ func TestA2_CaseCreate(t *testing.T) {
 	t.Logf("Case created: #%d (%s)", caseResp.Number, testCaseID)
 }
 
-// TestA2_CaseOpen verifies case can be opened
+// TestA2_CaseOpen verifies case opened
 func TestA2_CaseOpen(t *testing.T) {
 	if testCaseID == "" {
 		t.Skip("Skipping: no test case")
@@ -134,6 +134,7 @@ func TestA2_CaseOpen(t *testing.T) {
 			Status      string `json:"status"`
 		} `json:"case"`
 	}
+
 	err = json.NewDecoder(resp.Body).Decode(&caseDetail)
 	require.NoError(t, err)
 
@@ -141,7 +142,7 @@ func TestA2_CaseOpen(t *testing.T) {
 	t.Logf("Case opened: %s", caseDetail.Case.Title)
 }
 
-// TestA2_TaskLifecycle verifies task creation and lifecycle
+// TestA2_TaskLifecycle verifies task creation lifecycle
 func TestA2_TaskLifecycle(t *testing.T) {
 	if testCaseID == "" {
 		t.Skip("Skipping: no test case")
@@ -153,6 +154,7 @@ func TestA2_TaskLifecycle(t *testing.T) {
 		"description": "Test task",
 		"group_name":  "smoke",
 	}
+
 	body, _ := json.Marshal(taskReq)
 
 	req, _ := http.NewRequest("POST", baseURL+"/api/v1/tasks", bytes.NewBuffer(body))
@@ -170,6 +172,7 @@ func TestA2_TaskLifecycle(t *testing.T) {
 		Title  string `json:"title"`
 		Status string `json:"status"`
 	}
+
 	err = json.NewDecoder(resp.Body).Decode(&taskResp)
 	require.NoError(t, err)
 
@@ -199,7 +202,7 @@ func TestA2_TaskLifecycle(t *testing.T) {
 	t.Log("Task closed")
 }
 
-// TestA2_ObservableToggles verifies observable creation and toggles
+// TestA2_ObservableToggles verifies observable creation toggles
 func TestA2_ObservableToggles(t *testing.T) {
 	if testCaseID == "" {
 		t.Skip("Skipping: no test case")
@@ -215,6 +218,7 @@ func TestA2_ObservableToggles(t *testing.T) {
 		"sighted":   false,
 		"tags":      []string{"smoke-test"},
 	}
+
 	body, _ := json.Marshal(obsReq)
 
 	req, _ := http.NewRequest("POST", baseURL+"/api/v1/observables", bytes.NewBuffer(body))
@@ -233,6 +237,7 @@ func TestA2_ObservableToggles(t *testing.T) {
 		IOC     bool   `json:"ioc"`
 		Sighted bool   `json:"sighted"`
 	}
+
 	err = json.NewDecoder(resp.Body).Decode(&obsResp)
 	require.NoError(t, err)
 
@@ -269,7 +274,7 @@ func TestA2_ObservableToggles(t *testing.T) {
 	t.Log("Sighted toggled")
 }
 
-// TestA2_CaseCloseReopen verifies case close and reopen
+// TestA2_CaseCloseReopen verifies case close reopen
 func TestA2_CaseCloseReopen(t *testing.T) {
 	if testCaseID == "" {
 		t.Skip("Skipping: no test case")
@@ -280,6 +285,7 @@ func TestA2_CaseCloseReopen(t *testing.T) {
 		"resolution_status": "TruePositive",
 		"summary":           "A2 smoke test closure",
 	}
+
 	body, _ := json.Marshal(closeReq)
 
 	req, _ := http.NewRequest("POST", baseURL+"/api/v1/cases/"+testCaseID+"/close", bytes.NewBuffer(body))
@@ -315,13 +321,13 @@ func TestA2_HealthEndpoints(t *testing.T) {
 	resp, err = http.Get(frontendURL)
 	require.NoError(t, err)
 	defer resp.Body.Close()
-	// Frontend may redirect (307) or return OK
+	// Frontend may redirect (307)
 	assert.True(t, resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusTemporaryRedirect || resp.StatusCode == http.StatusMovedPermanently,
 		"Frontend should be accessible, got status: %d", resp.StatusCode)
 	t.Log("Frontend accessible")
 }
 
-// TestMain handles setup and teardown
+// TestMain handles setup teardown
 func TestMain(m *testing.M) {
 	fmt.Println("=== A2 Core SOC Workflow Smoke Tests ===")
 	fmt.Println("Testing against:", baseURL)

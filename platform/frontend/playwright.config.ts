@@ -4,6 +4,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
 
 export default defineConfig({
   testDir: './tests/visual',
+  globalSetup: './tests/visual/global-setup.ts',
   outputDir: './test-results/visual',
   snapshotDir: './tests/visual/__screenshots__',
   timeout: 30_000,
@@ -16,6 +17,7 @@ export default defineConfig({
   },
   use: {
     baseURL,
+    storageState: './tests/visual/.auth/admin.json',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

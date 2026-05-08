@@ -4,15 +4,16 @@
  * Global tasks list page.
  * Mirrors legacy TheHive 4 tasks list view.
  * Shows all tasks across cases with filters: status, assignee, group, flag.
+ * Supports bulk close and bulk assign actions (TheHive 4 parity).
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { CheckCircle, CheckSquare, Clock, Flag, Play, RotateCcw, XCircle } from '@/components/FaIcon';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle, CheckSquare, Clock, Flag, Play, RotateCcw, UserCheck, XCircle } from '@/components/FaIcon';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 
 type UserInfo = { login: string; name: string; permissions?: string[] };
 type Task = {
@@ -62,6 +63,7 @@ function statusClass(status: string): string {
 
 export default function TasksListPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [authedLogin, setAuthedLogin] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [assigneeFilter, setAssigneeFilter] = useState('');
@@ -70,6 +72,13 @@ export default function TasksListPage() {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const pageSize = 25;
+
+  // Bulk selection state
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkAssignee, setBulkAssignee] = useState('');
+  const [showBulkAssign, setShowBulkAssign] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login');
@@ -94,11 +103,11 @@ export default function TasksListPage() {
     enabled: !!authedLogin,
   });
 
-  const items = tasks.data?.values ?? [];
   const total = tasks.data?.total ?? 0;
   const totalPages = Math.ceil(total / pageSize);
 
   const filtered = useMemo(() => {
+    const items = tasks.data?.values ?? [];
     if (!query.trim()) return items;
     const q = query.toLowerCase();
     return items.filter((t) =>
@@ -107,7 +116,7 @@ export default function TasksListPage() {
       (t.assignee ?? '').toLowerCase().includes(q) ||
       (t.group_name ?? '').toLowerCase().includes(q)
     );
-  }, [items, query]);
+  }, [tasks.data, query]);
 
   function resetFilters() {
     setStatusFilter('');
@@ -118,7 +127,82 @@ export default function TasksListPage() {
     setPage(0);
   }
 
+  // Selection helpers
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((t) => t.id)));
+    }
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+    setShowBulkAssign(false);
+    setBulkAssignee('');
+  }
+
+  function reportSuccess(msg: string) { setError(null); setMessage(msg); }
+  function reportError(e: unknown) { setMessage(null); setError(e instanceof ApiError ? (e.problem.detail || e.problem.title) : String(e)); }
+
+  // Bulk close mutation
+  // TheHive 4 semantics: InProgress → Completed, Waiting → Cancel
+  const bulkClose = useMutation({
+    mutationFn: async () => {
+      const ids = Array.from(selected);
+      const results = await Promise.allSettled(
+        ids.map((id) => {
+          const task = filtered.find((t) => t.id === id);
+          const newStatus = task?.status === 'InProgress' ? 'Completed' : 'Cancel';
+          return apiFetch(`/api/v1/tasks/${id}`, { method: 'PATCH', json: { status: newStatus } });
+        })
+      );
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      return { succeeded, failed, total: ids.length };
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['tasks-list'] });
+      clearSelection();
+      reportSuccess(`Bulk close: ${result.succeeded}/${result.total} tasks updated.${result.failed > 0 ? ` ${result.failed} failed.` : ''}`);
+    },
+    onError: (e) => reportError(e),
+  });
+
+  // Bulk assign mutation
+  const bulkAssign = useMutation({
+    mutationFn: async () => {
+      const ids = Array.from(selected);
+      const results = await Promise.allSettled(
+        ids.map((id) =>
+          apiFetch(`/api/v1/tasks/${id}`, { method: 'PATCH', json: { assignee: bulkAssignee.trim() || null } })
+        )
+      );
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      return { succeeded, failed, total: ids.length };
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ['tasks-list'] });
+      clearSelection();
+      reportSuccess(`Bulk assign: ${result.succeeded}/${result.total} tasks updated.${result.failed > 0 ? ` ${result.failed} failed.` : ''}`);
+    },
+    onError: (e) => reportError(e),
+  });
+
   if (!authedLogin) return null;
+
+  const allSelected = filtered.length > 0 && selected.size === filtered.length;
+  const someSelected = selected.size > 0 && selected.size < filtered.length;
 
   return (
     <div className="flex min-h-screen thehive-app-shell">
@@ -131,6 +215,9 @@ export default function TasksListPage() {
             <ol className="breadcrumb"><li>Home</li><li className="active">Tasks</li></ol>
           </section>
           <section className="content">
+            {message && <div className="alert alert-success alert-dismissible"><button type="button" className="close" onClick={() => setMessage(null)}>×</button>{message}</div>}
+            {error && <div className="alert alert-danger alert-dismissible"><button type="button" className="close" onClick={() => setError(null)}>×</button>{error}</div>}
+
             {/* Filters */}
             <div className="box box-default">
               <div className="box-header with-border">
@@ -184,6 +271,70 @@ export default function TasksListPage() {
               </div>
             </div>
 
+            {/* Bulk action toolbar — shown when tasks are selected */}
+            {selected.size > 0 && (
+              <div className="box box-info" style={{ borderLeft: '3px solid #3c8dbc' }}>
+                <div className="box-body" style={{ padding: '8px 16px' }}>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-sm font-medium">
+                      <CheckSquare size={14} className="mr-1" />
+                      {selected.size} task(s) selected
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-success btn-sm"
+                      onClick={() => {
+                        if (window.confirm(`Close ${selected.size} selected task(s)? InProgress→Completed, Waiting→Cancel.`)) {
+                          bulkClose.mutate();
+                        }
+                      }}
+                      disabled={bulkClose.isPending}
+                    >
+                      <CheckCircle size={12} className="mr-1" />
+                      {bulkClose.isPending ? 'Closing…' : 'Bulk close'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-info btn-sm"
+                      onClick={() => setShowBulkAssign((v) => !v)}
+                    >
+                      <UserCheck size={12} className="mr-1" />
+                      Bulk assign
+                    </button>
+                    <button type="button" className="btn btn-default btn-xs" onClick={clearSelection}>
+                      Clear selection
+                    </button>
+                  </div>
+                  {showBulkAssign && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        className="form-control input-sm"
+                        placeholder="Assignee login…"
+                        value={bulkAssignee}
+                        onChange={(e) => setBulkAssignee(e.target.value)}
+                        style={{ maxWidth: 220 }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => {
+                          if (!bulkAssignee.trim() && !window.confirm('Remove assignee from selected tasks?')) return;
+                          bulkAssign.mutate();
+                        }}
+                        disabled={bulkAssign.isPending}
+                      >
+                        {bulkAssign.isPending ? 'Assigning…' : 'Apply'}
+                      </button>
+                      <button type="button" className="btn btn-default btn-xs" onClick={() => { setShowBulkAssign(false); setBulkAssignee(''); }}>
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Task list */}
             <div className="box">
               <div className="box-header with-border">
@@ -205,7 +356,15 @@ export default function TasksListPage() {
                   <table className="thehive-table">
                     <thead>
                       <tr>
-                        <th style={{ width: 30 }}></th>
+                        <th style={{ width: 30 }}>
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            ref={(el) => { if (el) el.indeterminate = someSelected; }}
+                            onChange={toggleSelectAll}
+                            title="Select all"
+                          />
+                        </th>
                         <th>Title</th>
                         <th style={{ width: 110 }}>Status</th>
                         <th style={{ width: 130 }}>Assignee</th>
@@ -219,16 +378,21 @@ export default function TasksListPage() {
                       {filtered.map((task) => (
                         <tr
                           key={task.id}
-                          className="cursor-pointer hover:bg-gray-50"
+                          className={`cursor-pointer hover:bg-gray-50 ${selected.has(task.id) ? 'bg-blue-50' : ''}`}
                           onClick={() => router.push(`/tasks/${task.id}`)}
                         >
-                          <td className="text-center">
-                            {task.flag && <Flag size={12} className="text-warning" />}
+                          <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selected.has(task.id)}
+                              onChange={() => toggleSelect(task.id)}
+                            />
                           </td>
                           <td>
                             <div className="flex items-center gap-2">
                               {statusIcon(task.status)}
                               <span className="font-medium text-sm">{task.title}</span>
+                              {task.flag && <Flag size={11} className="text-warning ml-1" />}
                             </div>
                             {task.description && (
                               <div className="text-muted text-xs mt-0.5 truncate" style={{ maxWidth: 400 }}>{task.description}</div>

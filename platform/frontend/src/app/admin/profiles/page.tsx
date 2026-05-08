@@ -10,6 +10,8 @@ import { useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Edit2, Plus, Settings, Trash2 } from '@/components/FaIcon';
 import { AdminShell } from '@/components/AdminShell';
+import { PermissionChecklist, PermissionMatrix } from '@/components/PermissionMatrix';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ApiError, apiFetch, normalizeList } from '@/lib/api';
 
 type Profile = {
@@ -32,6 +34,8 @@ export default function ProfilesAdminPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<Profile | null>(null);
   const [creating, setCreating] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +93,9 @@ export default function ProfilesAdminPage() {
         <div className="box-header with-border">
           <h3 className="box-title"><Settings size={14} /> List of profiles</h3>
           <div className="box-tools pull-right">
+            <button className="btn btn-sm btn-default mr-1" onClick={() => setShowMatrix(v => !v)}>
+              {showMatrix ? 'Hide matrix' : 'Show matrix'}
+            </button>
             <button className="btn btn-sm btn-primary" onClick={() => { setCreating(true); setEditing(null); }}>
               <Plus size={13} /> Add profile
             </button>
@@ -132,7 +139,7 @@ export default function ProfilesAdminPage() {
                           </button>
                           <button
                             className="btn btn-xs btn-danger clickable"
-                            onClick={() => { if (confirm(`Delete profile "${profile.name}"?`)) remove.mutate(profile.name); }}
+                            onClick={() => setDeleteTarget(profile)}
                           >
                             <Trash2 size={12} /> Delete
                           </button>
@@ -147,6 +154,19 @@ export default function ProfilesAdminPage() {
         </div>
       </div>
 
+      {showMatrix && sorted.length > 0 && (
+        <div className="box box-default">
+          <div className="box-header with-border">
+            <h3 className="box-title">Permission matrix</h3>
+          </div>
+          <div className="box-body no-padding">
+            <PermissionMatrix
+              profiles={sorted.map((p) => ({ profile: p.name, permissions: p.permissions ?? [] }))}
+            />
+          </div>
+        </div>
+      )}
+
       {(creating || editing) && (
         <ProfileModal
           profile={editing}
@@ -155,6 +175,17 @@ export default function ProfilesAdminPage() {
           saving={upsert.isPending}
         />
       )}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete profile"
+        message={`Are you sure you want to delete profile "${deleteTarget?.name ?? ''}"? Users assigned to this profile will lose their permissions.`}
+        variant="danger"
+        confirmLabel="Delete profile"
+        cancelLabel="Keep profile"
+        pending={remove.isPending}
+        onConfirm={() => { if (deleteTarget) remove.mutate(deleteTarget.name); setDeleteTarget(null); }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </AdminShell>
   );
 }
@@ -167,12 +198,6 @@ function ProfileModal({ profile, onClose, onSave, saving }: {
 }) {
   const [selected, setSelected] = useState<string[]>(profile?.permissions ?? []);
 
-  function toggle(perm: string) {
-    setSelected((current) =>
-      current.includes(perm) ? current.filter((p) => p !== perm) : [...current, perm],
-    );
-  }
-
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -180,38 +205,27 @@ function ProfileModal({ profile, onClose, onSave, saving }: {
   }
 
   return (
-    <div className="modal-backdrop-inline">
-      <div className="modal-dialog-inline modal-lg">
-        <div className="box box-primary">
-          <div className="box-header with-border">
-            <h3 className="box-title">{profile ? `Edit profile: ${profile.name}` : 'Create profile'}</h3>
-            <button className="close pull-right" onClick={onClose}>×</button>
+    <div className="modal-backdrop-th4">
+      <div className="th4-modal-dialog" style={{ maxWidth: 720 }}>
+        <div className="th4-modal-content">
+          <div className="modal-header bg-primary">
+            <h3 className="modal-title">{profile ? `Edit profile: ${profile.name}` : 'Create profile'}</h3>
+            <button className="close" onClick={onClose}>×</button>
           </div>
           <form onSubmit={submit}>
-            <div className="box-body">
+            <div className="modal-body">
               <div className="form-group">
                 <label>Name</label>
                 <input name="name" className="form-control" defaultValue={profile?.name ?? ''} required placeholder="Profile name" />
               </div>
               <div className="form-group">
                 <label>Permissions</label>
-                <div className="permission-grid">
-                  {ALL_PERMISSIONS.map((perm) => (
-                    <label key={perm} className="permission-item">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(perm)}
-                        onChange={() => toggle(perm)}
-                      />
-                      <span className="ml-xs">{perm}</span>
-                    </label>
-                  ))}
-                </div>
+                <PermissionChecklist selected={selected} onChange={setSelected} />
               </div>
             </div>
-            <div className="box-footer">
+            <div className="modal-footer">
+              <button type="button" className="btn btn-default" onClick={onClose}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-              <button type="button" className="btn btn-default ml-xs" onClick={onClose}>Cancel</button>
             </div>
           </form>
         </div>

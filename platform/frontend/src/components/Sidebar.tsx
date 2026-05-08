@@ -17,6 +17,8 @@ import {
   Search,
   Shield,
   Circle,
+  Wifi,
+  Clock,
 } from '@/components/FaIcon';
 import clsx from 'clsx';
 import type { Permission } from '@/lib/permissions';
@@ -99,6 +101,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const [userLogin, setUserLogin] = useState<string>('');
+  const [userName, setUserName] = useState<string>('');
+  const [userOrg, setUserOrg] = useState<string>('');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -120,6 +124,8 @@ export function Sidebar() {
       const perms = (payload.permissions as string[]) || [];
       setUserPermissions(perms);
       setUserLogin((payload.login as string) || (payload.sub as string) || fallbackLogin);
+      setUserName((payload.name as string) || '');
+      setUserOrg((payload.organisation as string) || '');
     }
   }, []);
 
@@ -138,13 +144,17 @@ export function Sidebar() {
         <Image src="/logo-white.svg" alt="TheHive" width={108} height={36} priority />
       </div>
 
+      {/* User panel — mirrors legacy TheHive 4 sidebar user panel with online status */}
       <div className="thehive-user-panel">
         <div className="thehive-user-avatar">
           <Circle size={10} fill="#3c763d" strokeWidth={0} />
         </div>
         <div className="thehive-user-info min-w-0">
-          <div className="truncate" title={userLogin || 'unknown'}>{userLogin || 'unknown'}</div>
-          <span>Online</span>
+          <div className="truncate" title={userName || userLogin || 'unknown'}>{userName || userLogin || 'unknown'}</div>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Wifi size={9} style={{ color: '#3c763d' }} />
+            Online
+          </span>
         </div>
       </div>
 

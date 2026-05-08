@@ -148,6 +148,18 @@ func TestGetCaseReturnsFullDetail(t *testing.T) {
 	// Audit history
 	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("case", caseID).
 		WillReturnRows(historyRows().AddRow("case.create", "admin", now))
+	// Related cases (new: mirrors case.links.html)
+	mock.ExpectQuery("FROM observables o1").WithArgs(caseID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "number", "title", "severity", "tlp", "status", "resolution_status", "start_date", "end_date", "tags"}).
+			AddRow("00000000-0000-0000-0000-000000000060", 2, "Related Phishing", 2, 2, "Open", "", &now, nil, "{phishing}"))
+	// Related case linked observables
+	mock.ExpectQuery("FROM observables o").WithArgs("00000000-0000-0000-0000-000000000060", caseID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "data_type", "data", "ioc", "sighted"}).
+			AddRow("00000000-0000-0000-0000-000000000030", "ip", "10.0.0.1", true, false))
+	// Responder actions (new: mirrors responder-actions.html)
+	mock.ExpectQuery("FROM responder_actions WHERE object_id").WithArgs(caseID).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "responder_id", "responder_name", "status", "object_type", "object_id", "start_date", "end_date"}).
+			AddRow("00000000-0000-0000-0000-000000000070", "resp-1", "Responder1", "Success", "case", caseID, &now, &now))
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))
 	e := echo.New()
@@ -186,6 +198,10 @@ func TestGetCaseReturnsFullDetail(t *testing.T) {
 		`"shares":[`,
 		`"history":[`,
 		`"case.create"`,
+		`"related_cases":[`,
+		`"Related Phishing"`,
+		`"responder_actions":[`,
+		`"Responder1"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("expected body to contain %q, got:\n%s", want, body)

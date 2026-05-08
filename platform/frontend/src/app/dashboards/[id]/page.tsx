@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, BarChart3, Edit2, PieChart, Plus, Save, Trash2 } from '@/components/FaIcon';
+import { DashboardWidgetEditor, type WidgetDefinition } from '@/components/DashboardWidgetEditor';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { apiFetch, ApiError } from '@/lib/api';
@@ -54,12 +55,12 @@ const WIDGET_COLORS: Record<string, string> = {
   text: '#777',
 };
 
-function WidgetCard({ widget }: { widget: Widget }) {
+function WidgetCard({ widget, refetchInterval }: { widget: Widget; refetchInterval?: number | null }) {
   const query = useQuery({
     queryKey: ['widget-data', widget.id, widget.query],
     queryFn: () => apiFetch<WidgetData>(`/api/v1/dashboard/widget?type=${widget.type}&query=${encodeURIComponent(widget.query ?? '')}&field=${encodeURIComponent(widget.field ?? '')}`),
     enabled: widget.type !== 'text' && !!widget.query,
-    refetchInterval: 30_000,
+    refetchInterval: refetchInterval ? refetchInterval * 1000 : 30_000,
   });
 
   const color = widget.color || WIDGET_COLORS[widget.type] || '#3c8dbc';
@@ -160,9 +161,28 @@ export default function DashboardDetailPage() {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', description: '', status: 'Shared' });
   const [addingWidget, setAddingWidget] = useState(false);
+  const [useAdvancedEditor, setUseAdvancedEditor] = useState(false);
   const [widgetForm, setWidgetForm] = useState({ type: 'counter' as Widget['type'], title: '', query: '', field: '', text: '', color: '' });
+  const [advancedWidget, setAdvancedWidget] = useState<WidgetDefinition>({
+    type: 'counter', title: '', entity: 'case', field: 'status',
+  });
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Auto-refresh — mirrors legacy dashboard view.html auto-refresh buttons
+  const [autoRefresh, setAutoRefresh] = useState<number | null>(null);
+  // Period selector — mirrors legacy dashboard/view.html period selector
+  const [period, setPeriod] = useState<string>('all');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const dashboardPeriods = [
+    { type: 'all', label: 'All time' },
+    { type: '1d', label: '1 day' },
+    { type: '7d', label: '7 days' },
+    { type: '1m', label: '1 month' },
+    { type: '3m', label: '3 months' },
+    { type: '6m', label: '6 months' },
+    { type: '1y', label: '1 year' },
+  ];
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login');
@@ -209,19 +229,35 @@ export default function DashboardDetailPage() {
   });
 
   function addWidget() {
-    if (!widgetForm.title.trim()) { reportError('Widget title is required.'); return; }
-    const newWidget: Widget = {
-      id: `w-${Date.now()}`,
-      type: widgetForm.type,
-      title: widgetForm.title.trim(),
-      query: widgetForm.query.trim() || undefined,
-      field: widgetForm.field.trim() || undefined,
-      text: widgetForm.text.trim() || undefined,
-      color: widgetForm.color || undefined,
-    };
-    const newDef: DashboardDefinition = { widgets: [...definition.widgets, newWidget] };
-    updateDashboard.mutate(newDef);
-    setWidgetForm({ type: 'counter', title: '', query: '', field: '', text: '', color: '' });
+    if (useAdvancedEditor) {
+      if (!advancedWidget.title.trim()) { reportError('Widget title is required.'); return; }
+      const newWidget: Widget = {
+        id: `w-${Date.now()}`,
+        type: advancedWidget.type === 'multiline' ? 'line' : advancedWidget.type,
+        title: advancedWidget.title.trim(),
+        query: advancedWidget.entity || undefined,
+        field: advancedWidget.field?.trim() || undefined,
+        text: advancedWidget.text?.trim() || undefined,
+        color: undefined,
+      };
+      const newDef: DashboardDefinition = { widgets: [...definition.widgets, newWidget] };
+      updateDashboard.mutate(newDef);
+      setAdvancedWidget({ type: 'counter', title: '', entity: 'case', field: 'status' });
+    } else {
+      if (!widgetForm.title.trim()) { reportError('Widget title is required.'); return; }
+      const newWidget: Widget = {
+        id: `w-${Date.now()}`,
+        type: widgetForm.type,
+        title: widgetForm.title.trim(),
+        query: widgetForm.query.trim() || undefined,
+        field: widgetForm.field.trim() || undefined,
+        text: widgetForm.text.trim() || undefined,
+        color: widgetForm.color || undefined,
+      };
+      const newDef: DashboardDefinition = { widgets: [...definition.widgets, newWidget] };
+      updateDashboard.mutate(newDef);
+      setWidgetForm({ type: 'counter', title: '', query: '', field: '', text: '', color: '' });
+    }
   }
 
   function removeWidget(id: string) {
@@ -262,6 +298,14 @@ export default function DashboardDetailPage() {
                   <div className="box-header with-border">
                     <h3 className="box-title"><Activity size={14} className="mr-1" /> {dash.title}</h3>
                     <div className="box-tools pull-right flex gap-2">
+                      {/* Auto-refresh buttons — mirrors legacy dashboard/view.html */}
+                      <div className="btn-group btn-group-sm">
+                        <button type="button" className={`btn btn-sm ${autoRefresh === null ? 'btn-primary' : 'btn-default'}`} onClick={() => setAutoRefresh(null)}>Off</button>
+                        <button type="button" className={`btn btn-sm ${autoRefresh === 60 ? 'btn-primary' : 'btn-default'}`} onClick={() => setAutoRefresh(60)}>1m</button>
+                        <button type="button" className={`btn btn-sm ${autoRefresh === 300 ? 'btn-primary' : 'btn-default'}`} onClick={() => setAutoRefresh(300)}>5m</button>
+                        <button type="button" className={`btn btn-sm ${autoRefresh === 600 ? 'btn-primary' : 'btn-default'}`} onClick={() => setAutoRefresh(600)}>10m</button>
+                        <button type="button" className={`btn btn-sm ${autoRefresh === 900 ? 'btn-primary' : 'btn-default'}`} onClick={() => setAutoRefresh(900)}>15m</button>
+                      </div>
                       <button type="button" className="btn btn-default btn-sm" onClick={() => setEditing((v) => !v)}>
                         <Edit2 size={12} className="mr-1" /> {editing ? 'Cancel edit' : 'Edit'}
                       </button>
@@ -276,6 +320,56 @@ export default function DashboardDetailPage() {
                       <p className="text-muted text-xs">By {dash.created_by} · Updated {fmt(dash.updated_at)}</p>
                     </div>
                   )}
+                </div>
+
+                {/* Period selector — mirrors legacy dashboard/view.html period selector */}
+                <div className="box" style={{ marginBottom: 0 }}>
+                  <div className="box-body" style={{ padding: '8px 12px' }}>
+                    <div className="dashboard-period">
+                      <div className="mv-xxxs">
+                        <span className="label label-lg mr-xs text-black">Select period</span>
+                        {dashboardPeriods.map((p) => (
+                          <button
+                            key={p.type}
+                            type="button"
+                            className={`btn btn-xs ${period === p.type ? 'btn-primary' : 'btn-default'} mr-xxs`}
+                            onClick={() => setPeriod(p.type)}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          className={`btn btn-xs ${period === 'custom' ? 'btn-primary' : 'btn-default'} mr-xxs`}
+                          onClick={() => setPeriod('custom')}
+                        >
+                          Custom period
+                        </button>
+                      </div>
+                      {period === 'custom' && (
+                        <div className="mv-xxxs form-inline" style={{ marginTop: 8 }}>
+                          <div className="form-group" style={{ marginRight: 12 }}>
+                            <label style={{ marginRight: 4 }}>From</label>
+                            <input
+                              type="date"
+                              className="form-control input-sm"
+                              value={customFrom}
+                              onChange={(e) => setCustomFrom(e.target.value)}
+                            />
+                          </div>
+                          <div className="form-group" style={{ marginRight: 12 }}>
+                            <label style={{ marginRight: 4 }}>To</label>
+                            <input
+                              type="date"
+                              className="form-control input-sm"
+                              value={customTo}
+                              onChange={(e) => setCustomTo(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Edit form */}
@@ -308,64 +402,78 @@ export default function DashboardDetailPage() {
                   </div>
                 )}
 
-                {/* Add widget form */}
+                {/* Add widget form — simple or advanced editor */}
                 {addingWidget && (
                   <div className="box">
-                    <div className="box-header with-border"><h3 className="box-title">Add widget</h3></div>
-                    <div className="box-body">
-                      <div className="row">
-                        <div className="col-md-3">
-                          <div className="form-group">
-                            <label className="control-label">Type</label>
-                            <select className="form-control input-sm" value={widgetForm.type} onChange={(e) => setWidgetForm((f) => ({ ...f, type: e.target.value as Widget['type'] }))}>
-                              <option value="counter">Counter</option>
-                              <option value="donut">Donut / Bar</option>
-                              <option value="bar">Bar chart</option>
-                              <option value="line">Line / Trend</option>
-                              <option value="text">Text / Markdown</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="form-group">
-                            <label className="control-label">Title <span className="text-danger">*</span></label>
-                            <input type="text" className="form-control input-sm" value={widgetForm.title} onChange={(e) => setWidgetForm((f) => ({ ...f, title: e.target.value }))} />
-                          </div>
-                        </div>
-                        <div className="col-md-2">
-                          <div className="form-group">
-                            <label className="control-label">Color</label>
-                            <input type="color" className="form-control input-sm" value={widgetForm.color || '#3c8dbc'} onChange={(e) => setWidgetForm((f) => ({ ...f, color: e.target.value }))} />
-                          </div>
+                    <div className="box-header with-border">
+                      <h3 className="box-title">Add widget</h3>
+                      <div className="box-tools pull-right">
+                        <div className="btn-group btn-group-xs">
+                          <button type="button" className={`btn btn-xs ${!useAdvancedEditor ? 'btn-primary' : 'btn-default'}`} onClick={() => setUseAdvancedEditor(false)}>Simple</button>
+                          <button type="button" className={`btn btn-xs ${useAdvancedEditor ? 'btn-primary' : 'btn-default'}`} onClick={() => setUseAdvancedEditor(true)}>Advanced</button>
                         </div>
                       </div>
-                      {widgetForm.type !== 'text' && (
-                        <div className="row">
-                          <div className="col-md-5">
-                            <div className="form-group">
-                              <label className="control-label">Query (entity type)</label>
-                              <select className="form-control input-sm" value={widgetForm.query} onChange={(e) => setWidgetForm((f) => ({ ...f, query: e.target.value }))}>
-                                <option value="">— Select entity —</option>
-                                <option value="case">Cases</option>
-                                <option value="alert">Alerts</option>
-                                <option value="observable">Observables</option>
-                                <option value="task">Tasks</option>
-                              </select>
+                    </div>
+                    <div className="box-body">
+                      {useAdvancedEditor ? (
+                        <DashboardWidgetEditor widget={advancedWidget} onChange={setAdvancedWidget} />
+                      ) : (
+                        <>
+                          <div className="row">
+                            <div className="col-md-3">
+                              <div className="form-group">
+                                <label className="control-label">Type</label>
+                                <select className="form-control input-sm" value={widgetForm.type} onChange={(e) => setWidgetForm((f) => ({ ...f, type: e.target.value as Widget['type'] }))}>
+                                  <option value="counter">Counter</option>
+                                  <option value="donut">Donut / Bar</option>
+                                  <option value="bar">Bar chart</option>
+                                  <option value="line">Line / Trend</option>
+                                  <option value="text">Text / Markdown</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="col-md-4">
+                              <div className="form-group">
+                                <label className="control-label">Title <span className="text-danger">*</span></label>
+                                <input type="text" className="form-control input-sm" value={widgetForm.title} onChange={(e) => setWidgetForm((f) => ({ ...f, title: e.target.value }))} />
+                              </div>
+                            </div>
+                            <div className="col-md-2">
+                              <div className="form-group">
+                                <label className="control-label">Color</label>
+                                <input type="color" className="form-control input-sm" value={widgetForm.color || '#3c8dbc'} onChange={(e) => setWidgetForm((f) => ({ ...f, color: e.target.value }))} />
+                              </div>
                             </div>
                           </div>
-                          <div className="col-md-4">
-                            <div className="form-group">
-                              <label className="control-label">Group by field</label>
-                              <input type="text" className="form-control input-sm" placeholder="e.g. status, severity, tlp" value={widgetForm.field} onChange={(e) => setWidgetForm((f) => ({ ...f, field: e.target.value }))} />
+                          {widgetForm.type !== 'text' && (
+                            <div className="row">
+                              <div className="col-md-5">
+                                <div className="form-group">
+                                  <label className="control-label">Query (entity type)</label>
+                                  <select className="form-control input-sm" value={widgetForm.query} onChange={(e) => setWidgetForm((f) => ({ ...f, query: e.target.value }))}>
+                                    <option value="">— Select entity —</option>
+                                    <option value="case">Cases</option>
+                                    <option value="alert">Alerts</option>
+                                    <option value="observable">Observables</option>
+                                    <option value="task">Tasks</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div className="col-md-4">
+                                <div className="form-group">
+                                  <label className="control-label">Group by field</label>
+                                  <input type="text" className="form-control input-sm" placeholder="e.g. status, severity, tlp" value={widgetForm.field} onChange={(e) => setWidgetForm((f) => ({ ...f, field: e.target.value }))} />
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      )}
-                      {widgetForm.type === 'text' && (
-                        <div className="form-group">
-                          <label className="control-label">Content</label>
-                          <textarea className="form-control" rows={4} value={widgetForm.text} onChange={(e) => setWidgetForm((f) => ({ ...f, text: e.target.value }))} />
-                        </div>
+                          )}
+                          {widgetForm.type === 'text' && (
+                            <div className="form-group">
+                              <label className="control-label">Content</label>
+                              <textarea className="form-control" rows={4} value={widgetForm.text} onChange={(e) => setWidgetForm((f) => ({ ...f, text: e.target.value }))} />
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="box-footer">
@@ -379,7 +487,7 @@ export default function DashboardDetailPage() {
 
                 {/* Widgets grid */}
                 {definition.widgets.length === 0 && (
-                  <div className="thehive-empty">No widgets yet. Click "Add widget" to create the first one.</div>
+                  <div className="thehive-empty">No widgets yet. Click &ldquo;Add widget&rdquo; to create the first one.</div>
                 )}
                 <div className="row">
                   {definition.widgets.map((widget) => (
@@ -394,7 +502,7 @@ export default function DashboardDetailPage() {
                         >
                           <Trash2 size={11} />
                         </button>
-                        <WidgetCard widget={widget} />
+                        <WidgetCard widget={widget} refetchInterval={autoRefresh} />
                       </div>
                     </div>
                   ))}

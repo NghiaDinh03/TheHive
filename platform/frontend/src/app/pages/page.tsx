@@ -4,12 +4,13 @@
  * Knowledge base pages list.
  * Mirrors legacy TheHive 4 pages/wiki feature.
  * Lists pages, allows create/edit/delete with markdown content.
+ * Includes inline Markdown preview renderer (B-UI-4b).
  */
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Edit2, FileText, Plus, Save, Trash2 } from '@/components/FaIcon';
+import { Edit2, Eye, FileText, Plus, Save, Trash2 } from '@/components/FaIcon';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { apiFetch, ApiError } from '@/lib/api';
@@ -31,6 +32,154 @@ type Collection<T> = { values: T[]; total: number };
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 function fmt(v?: string | null) { if (!v) return '-'; const d = new Date(v); return Number.isNaN(d.getTime()) ? '-' : dateFormatter.format(d); }
 
+/**
+ * Lightweight inline Markdown → HTML renderer.
+ * Handles: headings (#–######), bold (**), italic (*), strikethrough (~~),
+ * inline code (`), code blocks (```), links [](), images ![](),
+ * unordered lists (-/*), ordered lists (1.), blockquotes (>),
+ * horizontal rules (---), and paragraphs.
+ */
+function renderMarkdown(md: string): string {
+  if (!md) return '';
+  const lines = md.split('\n');
+  const html: string[] = [];
+  let inCodeBlock = false;
+  let codeBuffer: string[] = [];
+  let inList = false;
+  let listType: 'ul' | 'ol' = 'ul';
+  let inBlockquote = false;
+  let bqBuffer: string[] = [];
+
+  function closeList() {
+    if (inList) {
+      html.push(listType === 'ul' ? '</ul>' : '</ol>');
+      inList = false;
+    }
+  }
+
+  function closeBlockquote() {
+    if (inBlockquote && bqBuffer.length > 0) {
+      html.push(`<blockquote>${inline(bqBuffer.join('<br>'))}</blockquote>`);
+      bqBuffer = [];
+      inBlockquote = false;
+    }
+  }
+
+  function inline(text: string): string {
+    // Code spans first (protect from other transforms)
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Images
+    text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%" />');
+    // Links
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    // Bold
+    text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__(.+?)__/g, '<strong>$1</strong>');
+    // Italic
+    text = text.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+    text = text.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
+    // Strikethrough
+    text = text.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    return text;
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Code block toggle
+    if (line.trimStart().startsWith('```')) {
+      if (inCodeBlock) {
+        html.push(`<pre class="md-code-block"><code>${codeBuffer.join('\n').replace(/</g, '<').replace(/>/g, '>')}</code></pre>`);
+        codeBuffer = [];
+        inCodeBlock = false;
+      } else {
+        closeList();
+        closeBlockquote();
+        inCodeBlock = true;
+      }
+      continue;
+    }
+    if (inCodeBlock) {
+      codeBuffer.push(line);
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^(\s*[-*_]\s*){3,}$/.test(line)) {
+      closeList();
+      closeBlockquote();
+      html.push('<hr />');
+      continue;
+    }
+
+    // Headings
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      closeList();
+      closeBlockquote();
+      const level = headingMatch[1].length;
+      html.push(`<h${level}>${inline(headingMatch[2])}</h${level}>`);
+      continue;
+    }
+
+    // Blockquote
+    if (line.trimStart().startsWith('> ')) {
+      closeList();
+      inBlockquote = true;
+      bqBuffer.push(line.replace(/^>\s?/, ''));
+      continue;
+    } else {
+      closeBlockquote();
+    }
+
+    // Unordered list
+    const ulMatch = line.match(/^(\s*)[-*+]\s+(.+)$/);
+    if (ulMatch) {
+      closeBlockquote();
+      if (!inList || listType !== 'ul') {
+        closeList();
+        html.push('<ul>');
+        inList = true;
+        listType = 'ul';
+      }
+      html.push(`<li>${inline(ulMatch[2])}</li>`);
+      continue;
+    }
+
+    // Ordered list
+    const olMatch = line.match(/^(\s*)\d+\.\s+(.+)$/);
+    if (olMatch) {
+      closeBlockquote();
+      if (!inList || listType !== 'ol') {
+        closeList();
+        html.push('<ol>');
+        inList = true;
+        listType = 'ol';
+      }
+      html.push(`<li>${inline(olMatch[2])}</li>`);
+      continue;
+    }
+
+    // Empty line
+    if (line.trim() === '') {
+      closeList();
+      continue;
+    }
+
+    // Paragraph
+    closeList();
+    html.push(`<p>${inline(line)}</p>`);
+  }
+
+  closeList();
+  closeBlockquote();
+  if (inCodeBlock && codeBuffer.length > 0) {
+    html.push(`<pre class="md-code-block"><code>${codeBuffer.join('\n').replace(/</g, '<').replace(/>/g, '>')}</code></pre>`);
+  }
+
+  return html.join('\n');
+}
+
 export default function PagesPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -39,6 +188,7 @@ export default function PagesPage() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', category: '', order: 0 });
+  const [editorTab, setEditorTab] = useState<'write' | 'preview'>('write');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -98,12 +248,14 @@ export default function PagesPage() {
     setEditing(false);
     setSelected(null);
     setForm({ title: '', content: '', category: '', order: 0 });
+    setEditorTab('write');
   }
 
   function startEdit(page: Page) {
     setEditing(true);
     setCreating(false);
     setForm({ title: page.title, content: page.content, category: page.category ?? '', order: page.order ?? 0 });
+    setEditorTab('write');
   }
 
   function submitForm(e: FormEvent) {
@@ -111,6 +263,8 @@ export default function PagesPage() {
     if (creating) createPage.mutate();
     else if (editing) updatePage.mutate();
   }
+
+  const previewHtml = useMemo(() => renderMarkdown(form.content), [form.content]);
 
   if (!authedLogin) return null;
 
@@ -123,7 +277,7 @@ export default function PagesPage() {
         <Topbar user={me.data ? { login: me.data.login, name: me.data.name } : { login: authedLogin }} />
         <main className="content-wrapper flex-1">
           <section className="content-header">
-            <h1>Knowledge Base <small>pages &amp; wiki</small></h1>
+            <h1>Knowledge Base <small>pages & wiki</small></h1>
             <ol className="breadcrumb"><li>Home</li><li className="active">Pages</li></ol>
           </section>
           <section className="content">
@@ -178,6 +332,24 @@ export default function PagesPage() {
                   <div className="box">
                     <div className="box-header with-border">
                       <h3 className="box-title">{creating ? 'New page' : `Edit: ${selected?.title}`}</h3>
+                      <div className="box-tools pull-right">
+                        <div className="btn-group btn-group-xs">
+                          <button
+                            type="button"
+                            className={`btn ${editorTab === 'write' ? 'btn-primary' : 'btn-default'}`}
+                            onClick={() => setEditorTab('write')}
+                          >
+                            <Edit2 size={11} className="mr-1" /> Write
+                          </button>
+                          <button
+                            type="button"
+                            className={`btn ${editorTab === 'preview' ? 'btn-primary' : 'btn-default'}`}
+                            onClick={() => setEditorTab('preview')}
+                          >
+                            <Eye size={11} className="mr-1" /> Preview
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     <form onSubmit={submitForm}>
                       <div className="box-body">
@@ -195,13 +367,32 @@ export default function PagesPage() {
                         </div>
                         <div className="form-group">
                           <label className="control-label">Content (Markdown)</label>
-                          <textarea
-                            className="form-control"
-                            rows={16}
-                            value={form.content}
-                            onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                            placeholder="Write page content in Markdown…"
-                          />
+                          {editorTab === 'write' ? (
+                            <textarea
+                              className="form-control"
+                              rows={16}
+                              value={form.content}
+                              onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                              placeholder="Write page content in Markdown…"
+                              style={{ fontFamily: 'monospace', fontSize: '0.88rem' }}
+                            />
+                          ) : (
+                            <div
+                              className="md-preview"
+                              style={{
+                                border: '1px solid #d2d6de',
+                                borderRadius: 3,
+                                padding: '12px 16px',
+                                minHeight: 300,
+                                maxHeight: 500,
+                                overflowY: 'auto',
+                                fontSize: '0.92rem',
+                                lineHeight: 1.65,
+                                background: '#fafbfc',
+                              }}
+                              dangerouslySetInnerHTML={{ __html: previewHtml || '<span class="text-muted">Nothing to preview.</span>' }}
+                            />
+                          )}
                         </div>
                       </div>
                       <div className="box-footer">
@@ -237,9 +428,11 @@ export default function PagesPage() {
                     <div className="box-body">
                       {selected.category && <p className="text-muted text-sm mb-2">Category: {selected.category}</p>}
                       <p className="text-muted text-xs mb-3">By {selected.created_by} · Created {fmt(selected.created_at)} · Updated {fmt(selected.updated_at)}</p>
-                      <div className="page-content" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', lineHeight: 1.6 }}>
-                        {selected.content || <span className="text-muted">No content.</span>}
-                      </div>
+                      <div
+                        className="md-preview"
+                        style={{ fontSize: '0.92rem', lineHeight: 1.65 }}
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(selected.content) || '<span class="text-muted">No content.</span>' }}
+                      />
                     </div>
                   </div>
                 )}

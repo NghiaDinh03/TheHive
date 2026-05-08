@@ -19,16 +19,63 @@ type DetailHandler struct {
 
 func NewDetailHandler(db *sqlx.DB) *DetailHandler { return &DetailHandler{db: db} }
 
+type detailRelatedCase struct {
+	ID                string             `db:"id" json:"id"`
+	Number            int                `db:"number" json:"number"`
+	Title             string             `db:"title" json:"title"`
+	Severity          int                `db:"severity" json:"severity"`
+	TLP               int                `db:"tlp" json:"tlp"`
+	Status            string             `db:"status" json:"status"`
+	ResolutionStatus  string             `db:"resolution_status" json:"resolution_status,omitempty"`
+	StartDate         *time.Time         `db:"start_date" json:"start_date,omitempty"`
+	EndDate           *time.Time         `db:"end_date" json:"end_date,omitempty"`
+	Tags              pq.StringArray     `db:"tags" json:"tags"`
+	LinksCount        int                `json:"links_count"`
+	LinkedObservables []detailObservable `json:"linked_observables"`
+}
+
+type detailResponderAction struct {
+	ID            string     `db:"id" json:"id"`
+	ResponderID   string     `db:"responder_id" json:"responder_id"`
+	ResponderName string     `db:"responder_name" json:"responder_name"`
+	Status        string     `db:"status" json:"status"`
+	ObjectType    string     `db:"object_type" json:"object_type"`
+	ObjectID      string     `db:"object_id" json:"object_id"`
+	StartDate     *time.Time `db:"start_date" json:"start_date,omitempty"`
+	EndDate       *time.Time `db:"end_date" json:"end_date,omitempty"`
+}
+
+type detailAlertCustomField struct {
+	Name      string `db:"name" json:"name"`
+	Value     string `db:"value" json:"value"`
+	FieldType string `db:"field_type" json:"field_type,omitempty"`
+}
+
+type detailCaseAlert struct {
+	ID        string         `db:"id" json:"id"`
+	Title     string         `db:"title" json:"title"`
+	Type      string         `db:"type" json:"type"`
+	Source    string         `db:"source" json:"source"`
+	SourceRef string         `db:"source_ref" json:"source_ref"`
+	Severity  int            `db:"severity" json:"severity"`
+	Status    string         `db:"status" json:"status"`
+	Tags      pq.StringArray `db:"tags" json:"tags"`
+	CreatedAt time.Time      `db:"created_at" json:"created_at"`
+}
+
 type CaseDetail struct {
-	Case        detailCase         `json:"case"`
-	Tasks       []detailTask       `json:"tasks"`
-	Logs        []detailLog        `json:"logs"`
-	Attachments []detailAttach     `json:"attachments"`
-	Custom      []detailCustom     `json:"custom_fields"`
-	Observables []detailObservable `json:"observables"`
-	Procedures  []detailProcedure  `json:"procedures"`
-	Shares      []detailShare      `json:"shares"`
-	History     []detailHistory    `json:"history"`
+	Case             detailCase              `json:"case"`
+	Tasks            []detailTask            `json:"tasks"`
+	Logs             []detailLog             `json:"logs"`
+	Attachments      []detailAttach          `json:"attachments"`
+	Custom           []detailCustom          `json:"custom_fields"`
+	Observables      []detailObservable      `json:"observables"`
+	Procedures       []detailProcedure       `json:"procedures"`
+	Shares           []detailShare           `json:"shares"`
+	History          []detailHistory         `json:"history"`
+	RelatedCases     []detailRelatedCase     `json:"related_cases"`
+	ResponderActions []detailResponderAction `json:"responder_actions"`
+	Alerts           []detailCaseAlert       `json:"alerts"`
 }
 
 type detailCase struct {
@@ -120,33 +167,34 @@ type detailSimilarAlert struct {
 }
 
 type detailAlert struct {
-	ID             string               `db:"id" json:"id"`
-	Title          string               `db:"title" json:"title"`
-	Description    string               `db:"description" json:"description"`
-	Type           string               `db:"type" json:"type"`
-	Source         string               `db:"source" json:"source"`
-	SourceRef      string               `db:"source_ref" json:"source_ref"`
-	Severity       int                  `db:"severity" json:"severity"`
-	TLP            int                  `db:"tlp" json:"tlp"`
-	PAP            int                  `db:"pap" json:"pap"`
-	Status         string               `db:"status" json:"status"`
-	Read           bool                 `db:"read" json:"read"`
-	Follow         bool                 `db:"follow" json:"follow"`
-	Flag           bool                 `db:"flag" json:"flag"`
-	ExternalLink   string               `db:"external_link" json:"external_link"`
-	OrganisationID string               `db:"organisation_id" json:"organisation_id"`
-	CaseTemplate   string               `db:"case_template" json:"case_template"`
-	CaseID         string               `db:"case_id" json:"case_id,omitempty"`
-	CaseNumber     int                  `db:"case_number" json:"case_number,omitempty"`
-	CaseTitle      string               `db:"case_title" json:"case_title,omitempty"`
-	Tags           pq.StringArray       `db:"tags" json:"tags"`
-	OccurredAt     *time.Time           `db:"occurred_at" json:"occurred_at,omitempty"`
-	LastSyncDate   *time.Time           `db:"last_sync_date" json:"last_sync_date,omitempty"`
-	CreatedAt      time.Time            `db:"created_at" json:"created_at"`
-	UpdatedAt      time.Time            `db:"updated_at" json:"updated_at"`
-	Observables    []detailObservable   `json:"observables" db:"-"`
-	Similar        []detailSimilarAlert `json:"similar_alerts" db:"-"`
-	History        []detailHistory      `json:"history" db:"-"`
+	ID             string                   `db:"id" json:"id"`
+	Title          string                   `db:"title" json:"title"`
+	Description    string                   `db:"description" json:"description"`
+	Type           string                   `db:"type" json:"type"`
+	Source         string                   `db:"source" json:"source"`
+	SourceRef      string                   `db:"source_ref" json:"source_ref"`
+	Severity       int                      `db:"severity" json:"severity"`
+	TLP            int                      `db:"tlp" json:"tlp"`
+	PAP            int                      `db:"pap" json:"pap"`
+	Status         string                   `db:"status" json:"status"`
+	Read           bool                     `db:"read" json:"read"`
+	Follow         bool                     `db:"follow" json:"follow"`
+	Flag           bool                     `db:"flag" json:"flag"`
+	ExternalLink   string                   `db:"external_link" json:"external_link"`
+	OrganisationID string                   `db:"organisation_id" json:"organisation_id"`
+	CaseTemplate   string                   `db:"case_template" json:"case_template"`
+	CaseID         string                   `db:"case_id" json:"case_id,omitempty"`
+	CaseNumber     int                      `db:"case_number" json:"case_number,omitempty"`
+	CaseTitle      string                   `db:"case_title" json:"case_title,omitempty"`
+	Tags           pq.StringArray           `db:"tags" json:"tags"`
+	OccurredAt     *time.Time               `db:"occurred_at" json:"occurred_at,omitempty"`
+	LastSyncDate   *time.Time               `db:"last_sync_date" json:"last_sync_date,omitempty"`
+	CreatedAt      time.Time                `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time                `db:"updated_at" json:"updated_at"`
+	Observables    []detailObservable       `json:"observables" db:"-"`
+	Similar        []detailSimilarAlert     `json:"similar_alerts" db:"-"`
+	History        []detailHistory          `json:"history" db:"-"`
+	CustomFields   []detailAlertCustomField `json:"custom_fields" db:"-"`
 }
 
 type TaskDetail struct {
@@ -252,7 +300,19 @@ func (h *DetailHandler) GetCase(c echo.Context) error {
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "case history failed")
 	}
-	return c.JSON(http.StatusOK, CaseDetail{Case: item, Tasks: tasks, Logs: logs, Attachments: attachments, Custom: custom, Observables: observables, Procedures: procedures, Shares: shares, History: history})
+	relatedCases, err := h.relatedCases(c, id)
+	if err != nil {
+		relatedCases = []detailRelatedCase{}
+	}
+	responderActions, err := h.caseResponderActions(c, id)
+	if err != nil {
+		responderActions = []detailResponderAction{}
+	}
+	caseAlerts, err := h.caseAlerts(c, id)
+	if err != nil {
+		caseAlerts = []detailCaseAlert{}
+	}
+	return c.JSON(http.StatusOK, CaseDetail{Case: item, Tasks: tasks, Logs: logs, Attachments: attachments, Custom: custom, Observables: observables, Procedures: procedures, Shares: shares, History: history, RelatedCases: relatedCases, ResponderActions: responderActions, Alerts: caseAlerts})
 }
 
 func (h *DetailHandler) GetAlert(c echo.Context) error {
@@ -275,9 +335,14 @@ func (h *DetailHandler) GetAlert(c echo.Context) error {
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "alert history failed")
 	}
+	alertCustomFields, err := h.alertCustomFields(c, id)
+	if err != nil {
+		alertCustomFields = []detailAlertCustomField{}
+	}
 	item.Observables = observables
 	item.Similar = similar
 	item.History = history
+	item.CustomFields = alertCustomFields
 	return c.JSON(http.StatusOK, item)
 }
 
@@ -628,6 +693,57 @@ func (h *DetailHandler) GetObservable(c echo.Context) error {
 	})
 }
 
+// SimilarObservables returns observables in other cases that share the same data/data_type.
+// Mirrors legacy observable detail "Links" panel (observables/details/summary.html).
+func (h *DetailHandler) SimilarObservables(c echo.Context) error {
+	id := strings.TrimSpace(c.Param("id"))
+	if id == "" {
+		return apierr.New(http.StatusBadRequest, "missing id")
+	}
+	// Get the source observable
+	srcRows := []detailObservable{}
+	if err := h.db.SelectContext(c.Request().Context(), &srcRows, observableSelectSQL+` WHERE id = $1::uuid LIMIT 1`, id); err != nil || len(srcRows) == 0 {
+		return apierr.New(http.StatusNotFound, "observable not found")
+	}
+	src := srcRows[0]
+	if src.IgnoreSimilarity {
+		return c.JSON(http.StatusOK, map[string]any{"values": []any{}, "total": 0})
+	}
+
+	type similarObs struct {
+		ID               string         `db:"id" json:"id"`
+		DataType         string         `db:"data_type" json:"data_type"`
+		Data             string         `db:"data" json:"data"`
+		Message          string         `db:"message" json:"message"`
+		TLP              int            `db:"tlp" json:"tlp"`
+		IOC              bool           `db:"ioc" json:"ioc"`
+		Sighted          bool           `db:"sighted" json:"sighted"`
+		IgnoreSimilarity bool           `db:"ignore_similarity" json:"ignore_similarity"`
+		Tags             pq.StringArray `db:"tags" json:"tags"`
+		CaseID           string         `db:"case_id" json:"case_id"`
+		CaseNumber       int            `db:"case_number" json:"case_number"`
+		CaseTitle        string         `db:"case_title" json:"case_title"`
+		StartDate        *time.Time     `db:"start_date" json:"start_date,omitempty"`
+		CreatedAt        time.Time      `db:"created_at" json:"created_at"`
+	}
+	rows := []similarObs{}
+	err := h.db.SelectContext(c.Request().Context(), &rows, `
+		SELECT o.id::text AS id, o.data_type, o.data, o.message, o.tlp, o.ioc, o.sighted,
+			o.ignore_similarity, o.tags, o.case_id::text AS case_id,
+			c.number AS case_number, c.title AS case_title, c.start_date, o.created_at
+		FROM observables o
+		JOIN cases c ON c.id = o.case_id
+		WHERE o.data_type = $1 AND lower(o.data) = lower($2)
+			AND o.id <> $3::uuid
+			AND o.ignore_similarity = false
+		ORDER BY o.created_at DESC
+		LIMIT 50`, src.DataType, src.Data, id)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "similar observables query failed")
+	}
+	return c.JSON(http.StatusOK, map[string]any{"values": rows, "total": len(rows)})
+}
+
 // ListTaskLogs returns logs scoped to a specific task.
 func (h *DetailHandler) ListTaskLogs(c echo.Context) error {
 	taskID := strings.TrimSpace(c.Param("id"))
@@ -636,4 +752,194 @@ func (h *DetailHandler) ListTaskLogs(c echo.Context) error {
 		return apierr.New(http.StatusInternalServerError, "task logs failed")
 	}
 	return c.JSON(http.StatusOK, map[string]any{"values": rows, "total": len(rows)})
+}
+
+// relatedCases returns cases linked by shared observables (mirrors legacy case.links.html).
+func (h *DetailHandler) relatedCases(c echo.Context, caseID string) ([]detailRelatedCase, error) {
+	rows := []detailRelatedCase{}
+	err := h.db.SelectContext(c.Request().Context(), &rows,
+		`SELECT DISTINCT c.id::text AS id, c.number, c.title, c.severity, c.tlp, c.status,
+			COALESCE(c.resolution_status, '') AS resolution_status, c.start_date, c.end_date, c.tags
+		 FROM observables o1
+		 JOIN observables o2 ON o1.data = o2.data AND o1.data_type = o2.data_type AND o1.case_id != o2.case_id
+		 JOIN cases c ON c.id = o2.case_id
+		 WHERE o1.case_id = $1::uuid
+		 ORDER BY c.updated_at DESC
+		 LIMIT 50`, caseID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		obs := []detailObservable{}
+		_ = h.db.SelectContext(c.Request().Context(), &obs,
+			`SELECT o.id::text, o.data_type, o.data, o.ioc, o.sighted
+			 FROM observables o
+			 WHERE o.case_id = $1::uuid AND o.data IN (
+				SELECT o2.data FROM observables o2 WHERE o2.case_id = $2::uuid AND o2.data_type = o.data_type
+			 ) LIMIT 10`, rows[i].ID, caseID)
+		rows[i].LinkedObservables = obs
+		rows[i].LinksCount = len(obs)
+	}
+	return rows, nil
+}
+
+// caseResponderActions returns Cortex responder actions for a case.
+func (h *DetailHandler) caseResponderActions(c echo.Context, caseID string) ([]detailResponderAction, error) {
+	rows := []detailResponderAction{}
+	err := h.db.SelectContext(c.Request().Context(), &rows,
+		`SELECT id::text, COALESCE(responder_id, '') AS responder_id, COALESCE(responder_name, '') AS responder_name,
+			COALESCE(status, 'Unknown') AS status, COALESCE(object_type, '') AS object_type,
+			COALESCE(object_id, '') AS object_id, start_date, end_date
+		 FROM responder_actions WHERE object_id = $1::text ORDER BY created_at DESC LIMIT 50`, caseID)
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+// alertCustomFields returns custom fields for an alert.
+func (h *DetailHandler) alertCustomFields(c echo.Context, alertID string) ([]detailAlertCustomField, error) {
+	rows := []detailAlertCustomField{}
+	err := h.db.SelectContext(c.Request().Context(), &rows,
+		`SELECT cf.name, COALESCE(acf.value, '') AS value, COALESCE(cf.type, '') AS field_type
+		 FROM alert_custom_fields acf
+		 JOIN custom_fields cf ON cf.id = acf.custom_field_id
+		 WHERE acf.alert_id = $1::uuid
+		 ORDER BY cf.name`, alertID)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// caseAlerts returns alerts linked to a case (mirrors legacy case.alerts.html).
+func (h *DetailHandler) caseAlerts(c echo.Context, caseID string) ([]detailCaseAlert, error) {
+	rows := []detailCaseAlert{}
+	err := h.db.SelectContext(c.Request().Context(), &rows,
+		`SELECT a.id::text AS id, a.title, a.type, a.source, a.source_ref, a.severity, a.status, a.tags, a.created_at
+		 FROM alerts a WHERE a.case_id = $1::uuid ORDER BY a.created_at DESC`, caseID)
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// CaseStats returns aggregated case statistics for the dashboard.
+// Mirrors legacy TheHive 4 case stats API.
+func (h *DetailHandler) CaseStats(c echo.Context) error {
+	stats := struct {
+		TotalCases    int            `db:"total_cases" json:"total_cases"`
+		OpenCases     int            `db:"open_cases" json:"open_cases"`
+		ResolvedCases int            `db:"resolved_cases" json:"resolved_cases"`
+		DupCases      int            `db:"dup_cases" json:"dup_cases"`
+		BySeverity    map[string]int `json:"by_severity"`
+		ByStatus      map[string]int `json:"by_status"`
+		ByOwner       map[string]int `json:"by_owner"`
+	}{BySeverity: map[string]int{}, ByStatus: map[string]int{}, ByOwner: map[string]int{}}
+
+	// Total/open/resolved/duplicated counts
+	err := h.db.GetContext(c.Request().Context(), &stats,
+		`SELECT
+			COUNT(*) AS total_cases,
+			COUNT(*) FILTER (WHERE status = 'Open') AS open_cases,
+			COUNT(*) FILTER (WHERE status = 'Resolved') AS resolved_cases,
+			COUNT(*) FILTER (WHERE status = 'Duplicated') AS dup_cases
+		 FROM cases`)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "failed to get case stats"})
+	}
+
+	// By severity
+	sevRows := []struct {
+		Key   string `db:"key"`
+		Count int    `db:"count"`
+	}{}
+	_ = h.db.SelectContext(c.Request().Context(), &sevRows,
+		`SELECT severity::text AS key, COUNT(*) AS count FROM cases GROUP BY severity ORDER BY severity`)
+	for _, r := range sevRows {
+		stats.BySeverity[r.Key] = r.Count
+	}
+
+	// By status
+	statusRows := []struct {
+		Key   string `db:"key"`
+		Count int    `db:"count"`
+	}{}
+	_ = h.db.SelectContext(c.Request().Context(), &statusRows,
+		`SELECT status AS key, COUNT(*) AS count FROM cases GROUP BY status ORDER BY status`)
+	for _, r := range statusRows {
+		stats.ByStatus[r.Key] = r.Count
+	}
+
+	// By owner (top 10)
+	ownerRows := []struct {
+		Key   string `db:"key"`
+		Count int    `db:"count"`
+	}{}
+	_ = h.db.SelectContext(c.Request().Context(), &ownerRows,
+		`SELECT owner AS key, COUNT(*) AS count FROM cases GROUP BY owner ORDER BY count DESC LIMIT 10`)
+	for _, r := range ownerRows {
+		stats.ByOwner[r.Key] = r.Count
+	}
+
+	return c.JSON(200, stats)
+}
+
+// AlertStats returns aggregated alert statistics for the dashboard.
+func (h *DetailHandler) AlertStats(c echo.Context) error {
+	stats := struct {
+		TotalAlerts int            `db:"total_alerts" json:"total_alerts"`
+		NewAlerts   int            `db:"new_alerts" json:"new_alerts"`
+		Imported    int            `db:"imported" json:"imported"`
+		Merged      int            `db:"merged" json:"merged"`
+		Ignored     int            `db:"ignored" json:"ignored"`
+		BySeverity  map[string]int `json:"by_severity"`
+		ByType      map[string]int `json:"by_type"`
+		BySource    map[string]int `json:"by_source"`
+	}{BySeverity: map[string]int{}, ByType: map[string]int{}, BySource: map[string]int{}}
+
+	err := h.db.GetContext(c.Request().Context(), &stats,
+		`SELECT
+			COUNT(*) AS total_alerts,
+			COUNT(*) FILTER (WHERE status = 'New') AS new_alerts,
+			COUNT(*) FILTER (WHERE status = 'Imported') AS imported,
+			COUNT(*) FILTER (WHERE status = 'Merged') AS merged,
+			COUNT(*) FILTER (WHERE status = 'Ignored') AS ignored
+		 FROM alerts`)
+	if err != nil {
+		return c.JSON(500, map[string]string{"error": "failed to get alert stats"})
+	}
+
+	sevRows := []struct {
+		Key   string `db:"key"`
+		Count int    `db:"count"`
+	}{}
+	_ = h.db.SelectContext(c.Request().Context(), &sevRows,
+		`SELECT severity::text AS key, COUNT(*) AS count FROM alerts GROUP BY severity ORDER BY severity`)
+	for _, r := range sevRows {
+		stats.BySeverity[r.Key] = r.Count
+	}
+
+	typeRows := []struct {
+		Key   string `db:"key"`
+		Count int    `db:"count"`
+	}{}
+	_ = h.db.SelectContext(c.Request().Context(), &typeRows,
+		`SELECT type AS key, COUNT(*) AS count FROM alerts GROUP BY type ORDER BY count DESC LIMIT 10`)
+	for _, r := range typeRows {
+		stats.ByType[r.Key] = r.Count
+	}
+
+	sourceRows := []struct {
+		Key   string `db:"key"`
+		Count int    `db:"count"`
+	}{}
+	_ = h.db.SelectContext(c.Request().Context(), &sourceRows,
+		`SELECT source AS key, COUNT(*) AS count FROM alerts GROUP BY source ORDER BY count DESC LIMIT 10`)
+	for _, r := range sourceRows {
+		stats.BySource[r.Key] = r.Count
+	}
+
+	return c.JSON(200, stats)
 }
