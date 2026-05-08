@@ -111,3 +111,27 @@ Missing/upgrade: F2-F6 side-by-side comparison requires running legacy instance.
 [x] PLAN-DONE: Created `agent_memory/plan_done.md` with all completed task evidence
 Build: `go build ./...` exit 0
 Missing/upgrade: E1 feature flags tests require Docker rebuild (migration 000031 not applied). F3 tags test requires Docker rebuild. Docker rebuild needed: `docker-compose build && docker-compose up -d`
+
+### Session 2026-05-09T00:00+07:00 — Batch G: Router Parity + GitHub Push
+
+[x] GIT-PUSH: Pushed 114 files (commit 2dea8452) — Phase A-F complete
+[x] G1-TASK-ACTION-REQUIRED: Wired GetTaskActionRequired, SetTaskActionRequired, SetTaskActionDone to routes
+[x] G2-ALERT-FIX-CASE-LINK: Wired FixAlertCaseLink to POST /api/v1/alerts/fix-case-link
+[x] G2-ALERT-UNFOLLOW-UNREAD: Added /alerts/:id/unfollow and /alerts/:id/unread routes
+[x] G2-ALERT-CREATE: Added POST /api/v1/alerts (standalone create)
+[x] G2-OBSERVABLE-RENAME: Wired RenameObservableType to PUT /api/v1/observable-types/rename/:from/:to
+[x] G2-OBSERVABLE-SIMILAR: Wired SimilarObservables to GET /api/v1/observables/:id/similar
+[x] G2-OBSERVABLE-BULK: Wired BulkUpdateObservables to PATCH /api/v1/observables/bulk
+[x] G3-ADMIN-CHECK: Wired AdminCheckHandler (CheckStats, TriggerGlobalCheck, TriggerDedup, CancelCurrentCheck, SetLogLevel) to admin routes
+[x] G3-ADMIN-SCHEMA: Wired AdminSchemaHandler (SchemaRepair, SchemaInfo) to admin routes
+[x] G3-ADMIN-INDEX: Admin index status/reindex/rebuild already registered — verified
+[x] G4-TAGS-ROUTES: Wired TagHandler (GetTag, UpdateTag, DeleteTag) to /tags/* routes
+[x] G4-TAGS-LIST: Moved tags list inline to routes (predicate AS name fix)
+[x] G4-PATTERNS: Wired PatternHandler to /patterns/* routes
+[x] G4-DESCRIBE: Wired DescribeHandler to /describe/* routes
+[x] G5-LOGS-ROUTES: Wired UpdateLog, DeleteLog to PATCH/DELETE /logs/:id
+[x] G5-OBS-TYPES: Replaced inline observable-types handler with ObservableTypeHandler (List/Create/Delete)
+[x] G5-TASK-SHARES: Added DELETE /tasks/:id/shares, GET /cases/:id/tasks/:taskid/shares
+Build: go build ./... exit 0, npm run build exit 0 (38/38 routes)
+Pushed: commit 9923abab to main
+Missing/upgrade: Docker rebuild needed to apply migration 000031-000032 in running containers.

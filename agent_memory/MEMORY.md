@@ -181,3 +181,14 @@ Build: go build ./... exit 0
 Key lesson: tags table has predicate column not name - SQL query must use predicate AS name  
 Key lesson: API returns snake_case fields (created_at) not camelCase (createdAt) - tests must match  
 Key lesson: testutil.go non-test file can define shared consts but *_test.go files cannot redeclare them 
+
+### 2026-05-09T00:00+07:00 — Batch G: Router Parity + GitHub Push
+[x] GIT-PUSH: 2 commits pushed to NghiaDinh03/TheHive main (2dea8452, 9923abab)
+[x] G-GITIGNORE: Added test-results/, .auth/, node_modules/, vendor/ to .gitignore
+[x] G-ROUTES: 20+ unregistered handlers wired to routes_investigation.go + routes_auth.go
+[x] G-VERIFY: go build ./... exit 0, npm run build exit 0 (38 routes)
+Build: go build ./... exit 0, npm run build exit 0
+Key lesson: Handlers in legacy_parity.go were defined but never registered in any routes file — always verify route registration after adding handler
+Key lesson: DetailHandler.SimilarObservables not GetSimilarObservables — check exact method names before wiring
+Key lesson: `&&` không work trong PowerShell — dùng `;` hoặc tách thành 2 lệnh riêng biệt
+

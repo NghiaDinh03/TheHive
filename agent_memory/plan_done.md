@@ -78,3 +78,16 @@
 - [x] B4-SIMILAR-UI: Links panel observable detail
 - [x] C4-AUTOREFRESH: Auto-refresh buttons dashboard
 - [x] C4-IMPORT: Dashboard import dialog
+
+## Session 2026-05-09T00:00+07:00 — Batch G: Router Parity Gaps Wired
+
+### G-ROUTES-ALL: All legacy_parity.go handlers wired to routes
+- **Input**: `Router.scala` comparison vs routes Go files
+- **Output**: 20+ missing routes registered in routes_investigation.go + routes_auth.go
+- **What changed**:
+  - `routes_investigation.go`: +task actionRequired GET/PUT, +alert fix-case-link, +alert unfollow/unread, +POST /alerts (create), +observable rename, +observable similar, +observable bulk update, +tags list/get/patch/delete, +patterns get/delete/case-patterns, +describe all/model, +logs patch/delete, +ObservableTypeHandler (List/Create/Delete), +task shares, +case-task shares
+  - `routes_auth.go`: +AdminCheckHandler (stats/global-trigger/dedup-trigger/cancel/log-level), +AdminSchemaHandler (repair/info)
+- **Effect**: API parity ~99% vs Router.scala (all routes now registered)
+- **Verification**: `go build ./...` exit 0, `npm run build` exit 0 (38 routes)
+- **Commits**: 2dea8452 (Phase A-F), 9923abab (Batch G)
+- **Missing/upgrade**: Docker rebuild needed for feature_flags + archive_links migration in live containers
