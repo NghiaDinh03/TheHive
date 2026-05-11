@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"encoding/base64"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/labstack/echo/v4"
@@ -501,14 +502,24 @@ func (h *DescribeHandler) DescribeModel(c echo.Context) error {
 // attachment/S3 integration is complete.
 func GetUserAvatar(c echo.Context) error {
 	userID := strings.TrimSpace(c.Param("id"))
-	// Check if user exists
-	var exists bool
+	// Check if user exists and get avatar
+	var avatar sql.NullString
 	db := c.Get("db").(*sqlx.DB)
 	if db != nil {
 		if err := db.QueryRowContext(c.Request().Context(),
-			`SELECT EXISTS(SELECT 1 FROM users WHERE login = $1)`, userID,
-		).Scan(&exists); err != nil || !exists {
+			`SELECT avatar FROM users WHERE login = $1`, userID,
+		).Scan(&avatar); err != nil {
 			return apierr.New(http.StatusNotFound, "user not found")
+		}
+	}
+	if avatar.Valid && avatar.String != "" {
+		// Clean base64 string if it contains data URI prefix
+		b64 := avatar.String
+		if idx := strings.Index(b64, ","); idx != -1 {
+			b64 = b64[idx+1:]
+		}
+		if data, err := base64.StdEncoding.DecodeString(b64); err == nil {
+			return c.Blob(http.StatusOK, "image/jpeg", data) // default to jpeg
 		}
 	}
 	// Return a 1x1 transparent PNG placeholder

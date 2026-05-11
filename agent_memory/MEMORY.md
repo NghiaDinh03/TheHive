@@ -204,3 +204,9 @@ Key lesson: ObservableSummary struct trong types.go khÃ´ng cÃ³ case_id â€” pháº£
 Key lesson: Legacy merged_from lÃ  UUID[] â†’ cáº§n ARRAY(SELECT unnest(c.merged_from)::text) Ä‘á»ƒ scan vÃ o pq.StringArray
 Key lesson: Template literal trong JSX className pháº£i dÃ¹ng backtick (${}) khÃ´ng pháº£i string literal ("bg-tlp-${rc.tlp}" lÃ  sai)
 
+
+### 2026-05-09T01:15+07:00 — Agent Memory Gitignore + 3 Solutions
+- [x] Thêm agent_memory/ vào .gitignore — không ?nh hu?ng project git history
+- [x] C?p nh?t STRUCTURE.md v?i c?u trúc th?c t? d?y d? (38 routes)
+- [x] C?p nh?t MASTER_PROMPT.md v?i 3 solutions b?t bu?c
+- Key lesson: agent_memory ph?i luôn vào .gitignore d? clean repo

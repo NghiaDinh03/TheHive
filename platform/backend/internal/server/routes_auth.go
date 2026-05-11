@@ -14,28 +14,34 @@ func (s *Server) registerAuthRoutes(api *echo.Group) {
 	auditRecorder := s.newAuditRecorder()
 	mailSender := s.newMailSender()
 	authLimiter := NewRateLimiter(10, 5*time.Minute, 15*time.Minute)
-	auth := handler.NewAuthHandler(s.db, s.cfg.JWTSecret, s.cfg.JWTExpiry, auditRecorder, mailSender)
+	authHandler := handler.NewAuthHandler(s.db, s.cfg.JWTSecret, s.cfg.JWTExpiry, auditRecorder, mailSender)
 
 	authGrp := api.Group("/auth")
-	authGrp.POST("/login", auth.Login, authLimiter.Middleware("login"))
-	authGrp.POST("/register", auth.Register, authLimiter.Middleware("register"))
-	authGrp.POST("/password-reset/request", auth.RequestPasswordReset, authLimiter.Middleware("password-reset-request"))
-	authGrp.POST("/password-reset/confirm", auth.ResetPassword, authLimiter.Middleware("password-reset-confirm"))
+	authGrp.POST("/login", authHandler.Login, authLimiter.Middleware("login"))
+	authGrp.POST("/totp/login", authHandler.LoginTOTP, authLimiter.Middleware("login"))
+	authGrp.POST("/register", authHandler.Register, authLimiter.Middleware("register"))
+	authGrp.POST("/password-reset/request", authHandler.RequestPasswordReset, authLimiter.Middleware("password-reset-request"))
+	authGrp.POST("/password-reset/confirm", authHandler.ResetPassword, authLimiter.Middleware("password-reset-confirm"))
 
-	authRequired := Authenticate(s.cfg.JWTSecret, s.db)
-	authGrp.POST("/logout", auth.Logout, authRequired)
-	authGrp.GET("/me", auth.Me, authRequired)
-	authGrp.PATCH("/me", auth.UpdateMe, authRequired)
-	authGrp.POST("/password", auth.ChangePassword, authRequired)
-	authGrp.GET("/sessions", auth.ListSessions, authRequired)
-	authGrp.POST("/sessions/revoke-all", auth.RevokeAllSessions, authRequired)
+	authMiddleware := Authenticate(s.cfg.JWTSecret, s.db)
+	// TOTP setup and management (requires authentication)
+	authGrp.GET("/totp/setup", authHandler.SetupTOTP, authMiddleware)
+	authGrp.POST("/totp/verify", authHandler.VerifyAndEnableTOTP, authMiddleware)
+	authGrp.POST("/totp/disable", authHandler.DisableTOTP, authMiddleware)
+
+	authGrp.POST("/logout", authHandler.Logout, authMiddleware)
+	authGrp.GET("/me", authHandler.Me, authMiddleware)
+	authGrp.PATCH("/me", authHandler.UpdateMe, authMiddleware)
+	authGrp.POST("/password", authHandler.ChangePassword, authMiddleware)
+	authGrp.GET("/sessions", authHandler.ListSessions, authMiddleware)
+	authGrp.POST("/sessions/revoke-all", authHandler.RevokeAllSessions, authMiddleware)
 	// API key management (personal-settings API key tab)
-	authGrp.POST("/api-key", auth.GenerateAPIKey, authRequired)
+	authGrp.POST("/api-key", authHandler.GenerateAPIKey, authMiddleware)
 
 	// Legacy parity: TOTP 2FA (mirrors legacy POST /api/v1/auth/totp/set, /auth/totp/unset)
-	authGrp.POST("/totp/set", handler.TOTPSetSecret, authRequired)
-	authGrp.POST("/totp/unset", handler.TOTPUnsetSecret, authRequired)
-	authGrp.POST("/totp/unset/:user", handler.TOTPUnsetSecret, authRequired, RequirePermission("manageUser"))
+	authGrp.POST("/totp/set", handler.TOTPSetSecret, authMiddleware)
+	authGrp.POST("/totp/unset", handler.TOTPUnsetSecret, authMiddleware)
+	authGrp.POST("/totp/unset/:user", handler.TOTPUnsetSecret, authMiddleware, RequirePermission("manageUser"))
 }
 
 // registerAdminRoutes registers admin management routes under /api/v1/admin.
@@ -111,6 +117,19 @@ func (s *Server) registerAdminRoutes(api *echo.Group, authRequired echo.Middlewa
 		c.Set("db", s.db)
 		return handler.ResetUserFailedAttempts(c)
 	}, RequirePermission("manageUser"))
+
+	// Legacy parity: Feature flags management (mirrors legacy /api/v1/admin/feature-flags)
+	featureFlagHandler := handler.NewFeatureFlagHandler(s.db)
+	adminGrp.GET("/feature-flags", featureFlagHandler.List, RequirePermission("managePlatform"))
+	adminGrp.GET("/feature-flags/:name", featureFlagHandler.Get, RequirePermission("managePlatform"))
+	adminGrp.POST("/feature-flags", featureFlagHandler.Create, RequirePermission("managePlatform"))
+	adminGrp.PATCH("/feature-flags/:name", featureFlagHandler.Patch, RequirePermission("managePlatform"))
+	adminGrp.DELETE("/feature-flags/:name", featureFlagHandler.Delete, RequirePermission("managePlatform"))
+
+	// Legacy parity: Archive links management
+	adminGrp.GET("/archive-links", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, []map[string]interface{}{})
+	}, RequirePermission("managePlatform"))
 }
 
 // registerAuditRoutes registers audit log routes under /api/v1/audit.

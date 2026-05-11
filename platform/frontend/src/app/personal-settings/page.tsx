@@ -22,9 +22,13 @@ type UserProfile = {
   profile: string;
   permissions: string[];
   must_change_password?: boolean;
+  avatar?: string;
+  totp_enabled?: boolean;
 };
 
 type ApiKeyResponse = { api_key?: string; expires_at?: string };
+
+import { QRCodeSVG } from 'qrcode.react';
 
 export default function PersonalSettingsPage() {
   const router = useRouter();
@@ -36,6 +40,8 @@ export default function PersonalSettingsPage() {
   // Basic info form
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarB64, setAvatarB64] = useState<string | null>(null);
 
   // Password form
   const [changePass, setChangePass] = useState(false);
@@ -45,6 +51,10 @@ export default function PersonalSettingsPage() {
 
   // API key
   const [apiKey, setApiKey] = useState<string | null>(null);
+
+  // 2FA TOTP
+  const [totpSetupUri, setTotpSetupUri] = useState<string | null>(null);
+  const [totpVerifyCode, setTotpVerifyCode] = useState('');
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login');
@@ -59,17 +69,50 @@ export default function PersonalSettingsPage() {
   });
 
   useEffect(() => {
-    if (me.data && !nameEdited) setName(me.data.name);
+    if (me.data && !nameEdited) {
+      setName(me.data.name);
+      if (me.data.avatar) {
+        setAvatarB64(me.data.avatar);
+        setAvatarPreview(me.data.avatar.startsWith('data:') ? me.data.avatar : `data:image/jpeg;base64,${me.data.avatar}`);
+      } else {
+        setAvatarB64(null);
+        setAvatarPreview(null);
+      }
+    }
   }, [me.data, nameEdited]);
 
   function report(msg: string) { setError(null); setMessage(msg); }
   function reportErr(e: unknown) { setMessage(null); setError(e instanceof ApiError ? (e.problem.detail || e.problem.title) : String(e)); }
 
   const updateName = useMutation({
-    mutationFn: () => apiFetch('/api/v1/auth/me', { method: 'PATCH', json: { name: name.trim() } }),
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['me'] }); report('Name updated successfully.'); setNameEdited(false); },
+    mutationFn: () => apiFetch('/api/v1/auth/me', { method: 'PATCH', json: { name: name.trim(), avatar: avatarB64 !== null ? avatarB64 : undefined } }),
+    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['me'] }); report('Profile updated successfully.'); setNameEdited(false); },
     onError: reportErr,
   });
+
+  function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 500 * 1024) {
+      reportErr('Images must not exceed 500 KB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setAvatarPreview(dataUrl);
+      const b64 = dataUrl.split(',')[1] || dataUrl;
+      setAvatarB64(b64);
+      setNameEdited(true);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearAvatar() {
+    setAvatarPreview(null);
+    setAvatarB64(''); // Empty string means delete in backend
+    setNameEdited(true);
+  }
 
   const updatePassword = useMutation({
     mutationFn: () => apiFetch('/api/v1/auth/change-password', { method: 'POST', json: { current_password: currentPassword, new_password: newPassword } }),
@@ -80,6 +123,24 @@ export default function PersonalSettingsPage() {
   const generateApiKey = useMutation({
     mutationFn: () => apiFetch<ApiKeyResponse>('/api/v1/auth/api-key', { method: 'POST' }),
     onSuccess: (data) => { setApiKey(data.api_key ?? null); report('API key generated. Copy it now — it will not be shown again.'); },
+    onError: reportErr,
+  });
+
+  const setupTotp = useMutation({
+    mutationFn: () => apiFetch<{ uri: string }>('/api/v1/auth/totp/setup'),
+    onSuccess: (data) => setTotpSetupUri(data.uri),
+    onError: reportErr,
+  });
+
+  const verifyTotp = useMutation({
+    mutationFn: () => apiFetch('/api/v1/auth/totp/verify', { method: 'POST', json: { code: totpVerifyCode } }),
+    onSuccess: () => { report('Two-factor authentication successfully enabled.'); setTotpSetupUri(null); setTotpVerifyCode(''); queryClient.invalidateQueries({ queryKey: ['me'] }); },
+    onError: reportErr,
+  });
+
+  const disableTotp = useMutation({
+    mutationFn: () => apiFetch('/api/v1/auth/totp/disable', { method: 'POST', json: { code: totpVerifyCode } }),
+    onSuccess: () => { report('Two-factor authentication disabled.'); setTotpVerifyCode(''); queryClient.invalidateQueries({ queryKey: ['me'] }); },
     onError: reportErr,
   });
 
@@ -144,6 +205,42 @@ export default function PersonalSettingsPage() {
                             onChange={(e) => { setName(e.target.value); setNameEdited(true); }}
                             required
                           />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="col-md-3 control-label">Avatar</label>
+                        <div className="col-md-9">
+                          {!avatarPreview ? (
+                            <div>
+                              <div style={{ width: '100px' }}>
+                                <img alt="User avatar" src="/images/no-avatar.png" className="img-responsive" onError={(e) => e.currentTarget.style.display = 'none'} />
+                                <input
+                                  type="file"
+                                  id="avatar-input"
+                                  accept="image/jpg,image/png,image/jpeg"
+                                  className="hidden"
+                                  onChange={handleAvatarChange}
+                                />
+                                <label htmlFor="avatar-input" className="btn btn-block btn-sm btn-primary mt-2">
+                                  Choose File
+                                </label>
+                              </div>
+                              <div className="help-block text-muted" style={{ fontSize: '0.8rem' }}>
+                                Images must not exceed 500 KB. Recommended dimensions are 100x100px
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ width: '100px' }}>
+                              <img alt="User avatar" src={avatarPreview} className="img-responsive" />
+                              <button
+                                type="button"
+                                className="btn btn-block btn-sm btn-danger mt-2"
+                                onClick={clearAvatar}
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="form-group">
@@ -285,6 +382,96 @@ export default function PersonalSettingsPage() {
                       <KeyRound size={14} className="mr-1" />
                       {generateApiKey.isPending ? 'Generating…' : 'Generate new API key'}
                     </button>
+                  </div>
+                </div>
+
+                {/* 2FA TOTP */}
+                <div className="box">
+                  <div className="box-header with-border">
+                    <h3 className="box-title"><Lock size={16} className="mr-1" /> Two-Factor Authentication</h3>
+                  </div>
+                  <div className="box-body">
+                    {user?.totp_enabled ? (
+                      <div>
+                        <div className="alert alert-success">
+                          <strong><i className="fa fa-check mr-1" /> 2FA is active</strong> for your account.
+                        </div>
+                        <p className="text-muted" style={{ fontSize: '0.85rem' }}>To disable 2FA, enter a current code from your authenticator app.</p>
+                        <div className="form-inline mt-3">
+                          <input
+                            type="text"
+                            className="form-control mr-2"
+                            placeholder="6-digit code"
+                            value={totpVerifyCode}
+                            onChange={(e) => setTotpVerifyCode(e.target.value)}
+                            maxLength={6}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            disabled={disableTotp.isPending || totpVerifyCode.length !== 6}
+                            onClick={() => disableTotp.mutate()}
+                          >
+                            {disableTotp.isPending ? 'Disabling…' : 'Disable 2FA'}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        {!totpSetupUri ? (
+                          <>
+                            <p className="text-muted" style={{ fontSize: '0.85rem' }}>
+                              Protect your account with Two-Factor Authentication (TOTP). Use an app like Google Authenticator or Authy.
+                            </p>
+                            <button
+                              type="button"
+                              className="btn btn-primary mt-2"
+                              onClick={() => setupTotp.mutate()}
+                              disabled={setupTotp.isPending}
+                            >
+                              Setup 2FA
+                            </button>
+                          </>
+                        ) : (
+                          <div className="row">
+                            <div className="col-md-4 text-center">
+                              <div className="bg-white p-2 inline-block border rounded">
+                                <QRCodeSVG value={totpSetupUri} size={150} level="M" />
+                              </div>
+                            </div>
+                            <div className="col-md-8">
+                              <p><strong>1. Scan the QR code</strong> with your authenticator app.</p>
+                              <p><strong>2. Enter the 6-digit code</strong> below to verify and activate 2FA.</p>
+                              <div className="form-inline mt-3">
+                                <input
+                                  type="text"
+                                  className="form-control mr-2"
+                                  placeholder="6-digit code"
+                                  value={totpVerifyCode}
+                                  onChange={(e) => setTotpVerifyCode(e.target.value)}
+                                  maxLength={6}
+                                />
+                                <button
+                                  type="button"
+                                  className="btn btn-success"
+                                  disabled={verifyTotp.isPending || totpVerifyCode.length !== 6}
+                                  onClick={() => verifyTotp.mutate()}
+                                >
+                                  {verifyTotp.isPending ? 'Verifying…' : 'Verify & Enable'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-link ml-2"
+                                  onClick={() => { setTotpSetupUri(null); setTotpVerifyCode(''); }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

@@ -151,4 +151,9 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	describeHandler := handler.NewDescribeHandler(s.db)
 	api.GET("/describe/_all", describeHandler.DescribeAll, authRequired)
 	api.GET("/describe/:model", describeHandler.DescribeModel, authRequired)
+	// --- Archive API ---
+	archiveHandler := handler.NewArchiveLinkHandler(s.db)
+	api.GET("/archive/:type/:id", archiveHandler.Get, authRequired, RequirePermission("manageCase"))
+	api.POST("/archive", archiveHandler.Create, authRequired, RequirePermission("manageCase"))
+	api.DELETE("/archive/:type/:id", archiveHandler.Delete, authRequired, RequirePermission("manageCase"))
 }

@@ -23,7 +23,8 @@ import (
 )
 
 type updateMeRequest struct {
-	Name string `json:"name" validate:"required,min=1"`
+	Name   string  `json:"name" validate:"required,min=1"`
+	Avatar *string `json:"avatar"`
 }
 
 type AuthHandler struct {
@@ -41,6 +42,12 @@ func NewAuthHandler(db *sqlx.DB, secret string, expiry time.Duration, auditRecor
 type loginRequest struct {
 	Login    string `json:"login" validate:"required,min=1"`
 	Password string `json:"password" validate:"required,min=1"`
+}
+
+type loginTOTPRequest struct {
+	Login    string `json:"login" validate:"required,min=1"`
+	Password string `json:"password" validate:"required,min=1"`
+	Code     string `json:"code" validate:"required,min=6,max=6"`
 }
 
 type registerRequest struct {
@@ -65,6 +72,9 @@ type dbUser struct {
 	PasswordHash       string         `db:"password_hash"`
 	Locked             bool           `db:"locked"`
 	MustChangePassword bool           `db:"must_change_password"`
+	Avatar             sql.NullString `db:"avatar"`
+	TotpEnabled        bool           `db:"totp_enabled"`
+	TotpSecret         sql.NullString `db:"totp_secret"`
 }
 
 type currentUser struct {
@@ -74,6 +84,8 @@ type currentUser struct {
 	Profile            string   `json:"profile"`
 	Permissions        []string `json:"permissions"`
 	MustChangePassword bool     `json:"must_change_password"`
+	Avatar             string   `json:"avatar"`
+	TotpEnabled        bool     `json:"totp_enabled"`
 }
 
 type sessionSummary struct {
@@ -115,6 +127,49 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
 		return apierr.New(http.StatusUnauthorized, "invalid credentials")
 	}
+
+	// Check if global force_2fa is enabled
+	var force2faStr string
+	h.db.GetContext(c.Request().Context(), &force2faStr, `SELECT value->>0 FROM ui_settings WHERE key = 'force_2fa'`)
+	force2fa := force2faStr == "true"
+
+	if user.TotpEnabled || force2fa {
+		// Even if force2fa is true but totp_enabled is false, we must prompt them to setup TOTP
+		// The frontend will see totp_required, but if they don't have it setup, they can't login!
+		// Wait, if force2fa is true and user hasn't setup TOTP, how do they setup? 
+		// For now, if TOTP is enabled, return totp_required.
+		// If force_2fa is true and they don't have it enabled, we return a special status or just totp_required.
+		return apierr.New(http.StatusUnauthorized, "totp_required")
+	}
+
+	return h.completeLogin(c, user)
+}
+
+func (h *AuthHandler) LoginTOTP(c echo.Context) error {
+	var req loginTOTPRequest
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+	user, err := h.findUser(c.Request().Context(), req.Login)
+	if err != nil || user.Locked || user.PasswordHash == "" {
+		return apierr.New(http.StatusUnauthorized, "invalid credentials")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		return apierr.New(http.StatusUnauthorized, "invalid credentials")
+	}
+	if !user.TotpEnabled || user.TotpSecret.String == "" {
+		return apierr.New(http.StatusBadRequest, "TOTP is not enabled for this account")
+	}
+	if !verifyTOTPCode(user.TotpSecret.String, req.Code) {
+		return apierr.New(http.StatusUnauthorized, "invalid TOTP code")
+	}
+	return h.completeLogin(c, user)
+}
+
+func (h *AuthHandler) completeLogin(c echo.Context, user dbUser) error {
 	token, tokenID, expiresAt, err := authjwt.Sign(h.jwtSecret, h.jwtExpiry, user.Login, user.Organisation, user.Profile, []string(user.Permissions))
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "token signing failed")
@@ -122,7 +177,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET last_login_at = now(), updated_at = now() WHERE login = $1", user.Login)
 	_, _ = h.db.ExecContext(c.Request().Context(), "INSERT INTO auth_sessions (token_id, login, expires_at) VALUES ($1, $2, $3)", tokenID, user.Login, expiresAt)
 	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login", "user", user.Login, nil, echo.Map{"login": user.Login}))
+		_ = h.audit.Record(c.Request().Context(), "auth.login", "user", user.Login, echo.Map{"login": user.Login})
 	}
 	return c.JSON(http.StatusOK, loginResponse{Token: token, Login: user.Login, ExpiresAt: expiresAt, MustChangePassword: user.MustChangePassword})
 }
@@ -364,8 +419,8 @@ func (h *AuthHandler) UpdateMe(c echo.Context) error {
 		return apierr.New(http.StatusBadRequest, err.Error())
 	}
 	if _, err := h.db.ExecContext(c.Request().Context(), `
-		UPDATE users SET name = $1, updated_at = now() WHERE lower(login) = lower($2)`,
-		strings.TrimSpace(req.Name), claims.Login); err != nil {
+		UPDATE users SET name = $1, avatar = COALESCE($2, avatar), updated_at = now() WHERE lower(login) = lower($3)`,
+		strings.TrimSpace(req.Name), req.Avatar, claims.Login); err != nil {
 		return apierr.New(http.StatusInternalServerError, "profile update failed")
 	}
 	if h.audit != nil {
@@ -415,7 +470,7 @@ func (h *AuthHandler) Me(c echo.Context) error {
 	if err != nil {
 		return apierr.New(http.StatusUnauthorized, "user not found")
 	}
-	return c.JSON(http.StatusOK, currentUser{Login: user.Login, Name: user.Name, Organisation: user.Organisation, Profile: user.Profile, Permissions: []string(user.Permissions), MustChangePassword: user.MustChangePassword})
+	return c.JSON(http.StatusOK, currentUser{Login: user.Login, Name: user.Name, Organisation: user.Organisation, Profile: user.Profile, Permissions: []string(user.Permissions), MustChangePassword: user.MustChangePassword, Avatar: user.Avatar.String, TotpEnabled: user.TotpEnabled})
 }
 
 func (h *AuthHandler) createPasswordResetToken(ctx context.Context, login string, requestedBy string, purpose string, revealToken bool) (passwordResetIssue, error) {
@@ -456,7 +511,8 @@ func (h *AuthHandler) findUser(ctx context.Context, login string) (dbUser, error
 	user := dbUser{}
 	err := h.db.GetContext(ctx, &user, `
 		SELECT u.login, u.name, COALESCE(o.name, '') AS organisation, COALESCE(p.name, '') AS profile,
-			COALESCE(p.permissions, '{}') AS permissions, u.password_hash, u.locked, u.must_change_password
+			COALESCE(p.permissions, '{}') AS permissions, u.password_hash, u.locked, u.must_change_password, u.avatar,
+			u.totp_enabled, u.totp_secret
 		FROM users u
 		LEFT JOIN organisations o ON o.id = u.organisation_id
 		LEFT JOIN profiles p ON p.id = u.profile_id

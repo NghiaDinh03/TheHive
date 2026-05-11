@@ -378,7 +378,7 @@ export default function TasksListPage() {
                       {filtered.map((task) => (
                         <tr
                           key={task.id}
-                          className={`cursor-pointer hover:bg-gray-50 ${selected.has(task.id) ? 'bg-blue-50' : ''}`}
+                          className={`cursor-pointer ${selected.has(task.id) ? 'bg-blue-50/5' : ''}`}
                           onClick={() => router.push(`/tasks/${task.id}`)}
                         >
                           <td className="text-center" onClick={(e) => e.stopPropagation()}>

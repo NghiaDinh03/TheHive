@@ -1,179 +1,133 @@
-# STRUCTURE.md — Project Structure Map
+# STRUCTURE.md — Cấu Trúc Project TheHive
 
-> **Rules:** This file is ALWAYS kept up-to-date with the current project structure. When adding/removing/renaming directories or key files, update this file immediately. This is the single source of truth for "where things live."
+> **Quy tắc:** File này LUÔN LUÔN được cập nhật ngay khi cấu trúc project thay đổi. Đây là bản đồ navigation cho mọi AI session.
 
 ---
 
-## Top-Level Layout
+## Tổng Quan
 
-```text
+**Project:** TheHive Platform — Migration từ TheHive 4 (Scala/AngularJS) sang Go + Next.js  
+**Mục tiêu:** 100% parity với TheHive 4 về chức năng và UX  
+**Stack:** Go (Echo v4) · Next.js 15 · PostgreSQL · MinIO · OpenSearch · Docker Compose
+
+---
+
+## Cấu Trúc Thư Mục
+
+```
 TheHive/
-├── agent_memory/              # Agent persistent memory (this folder)
-│   ├── MEMORY.md              # Append-only decisions/lessons/patterns log
-│   ├── STRUCTURE.md           # This file — always-current project map
-│   ├── CODING_GUIDELINES.md   # Coding rules + self-debate mechanism
-│   ├── MASTER_PROMPT.md       # Prompt template for new sessions
-│   ├── MIGRATION_ANALYSIS.md  # Honest migration assessment (English)
-│   ├── REVIEW_PLAN_vi.md      # Vietnamese review summary for user
-│   ├── context.md             # Product/architecture/version context
-│   ├── plan.md                # Control plan, phase map, execution order
-│   ├── plan_done.md           # Completed evidence log
-│   └── plan_unfinish.md       # Actionable unfinished backlog
-│
-├── platform/                  # NEW platform (Go + Next.js) — active development
-│   ├── backend/               # Go API service
-│   │   ├── cmd/
-│   │   │   ├── server/        # Backend entrypoint
-│   │   │   └── fixturemigrate/# Migrator preview from legacy fixtures
+├── platform/                   ← ✅ CODE ĐANG PHÁT TRIỂN (Go + Next.js)
+│   ├── backend/
+│   │   ├── cmd/server/         ← main.go — entry point
 │   │   ├── internal/
-│   │   │   ├── apierr/        # RFC7807-style error responses
-│   │   │   ├── audit/         # Append-only audit recorder/helper
-│   │   │   ├── authjwt/       # JWT claims/session helpers
-│   │   │   ├── config/        # Env config loader
-│   │   │   ├── db/            # PostgreSQL connection/migrations
-│   │   │   ├── fixturemigrate/# Fixture migration preview logic
-│   │   │   ├── handler/        # HTTP handlers (Echo v4)
-│   │   │   │   ├── legacy_parity.go  # 22 legacy TheHive 4 parity endpoints
-│   │   │   ├── logger/        # zap structured logging
-│   │   │   ├── mail/          # SMTP/Mailpit foundation
-│   │   │   ├── metrics/       # Prometheus metrics
-│   │   │   ├── mq/            # RabbitMQ client
-│   │   │   ├── repository/    # Domain repositories (read/write split)
-│   │   │   ├── server/        # Echo server, routes, middleware
-│   │   │   ├── tests/         # Integration/smoke tests
-│   │   │   └── version/       # Build/version metadata
-│   │   ├── migrations/        # Versioned SQL up/down migrations
-│   │   │   └── seed/          # Seed data (password hashes, etc.)
-│   │   ├── api/
-│   │   │   └── openapi.yaml   # OpenAPI v1 contract
-│   │   ├── go.mod
-│   │   ├── go.sum
-│   │   ├── Dockerfile
-│   │   └── Makefile
-│   │
-│   ├── frontend/              # Next.js 14 + TypeScript UI
-│   │   ├── src/
-│   │   │   ├── app/           # App Router pages
-│   │   │   │   ├── admin/     # Admin pages (users, profiles, templates, taxonomy)
-│   │   │   │   ├── alerts/    # Alert detail pages
-│   │   │   │   ├── cases/     # Case list, create, detail pages
-│   │   │   │   ├── dashboards/# Dashboard list and detail
-│   │   │   │   ├── investigation/ # Main investigation view (alerts/cases/observables)
-│   │   │   │   ├── observables/   # Observable detail pages
-│   │   │   │   ├── pages/     # Knowledge pages
-│   │   │   │   └── tasks/     # Global task list
-│   │   │   ├── components/    # Shared UI components
-│   │   │   │   ├── Sidebar.tsx
-│   │   │   │   ├── FaIcon.tsx
-│   │   │   │   ├── ConfirmDialog.tsx
-│   │   │   │   ├── CustomFieldEditor.tsx
-│   │   │   │   ├── Dropzone.tsx
-│   │   │   │   ├── FilterBox.tsx
-│   │   │   │   ├── FlowPanel.tsx
-│   │   │   │   ├── MarkdownEditor.tsx
-│   │   │   │   ├── ObservableReportModal.tsx
-│   │   │   │   ├── PageSizer.tsx
-│   │   │   │   └── PermissionMatrix.tsx
-│   │   │   ├── lib/           # API client, query provider, utilities
-│   │   │   ├── styles/        # TheHive/AdminLTE parity CSS
-│   │   │   │   └── globals.css
-│   │   │   └── types/         # TypeScript type definitions
-│   │   ├── tests/
-│   │   │   └── visual/        # Playwright visual regression tests
-│   │   ├── tsconfig.json
-│   │   └── package.json
-│   │
-│   ├── deploy/                # Docker Compose/env/nginx production foundation
-│   ├── docs/                  # Operational docs
-│   ├── scripts/               # Build/push/healthcheck scripts
-│   ├── Makefile
-│   └── README.md
+│   │   │   ├── handler/        ← HTTP handlers (thin layer)
+│   │   │   │   ├── investigation/
+│   │   │   │   ├── auth/
+│   │   │   │   └── ...
+│   │   │   ├── repository/     ← Business logic + DB queries
+│   │   │   │   ├── investigation/
+│   │   │   │   │   ├── types.go        ← Structs & types
+│   │   │   │   │   ├── postgres.go     ← DB queries
+│   │   │   │   │   └── ...
+│   │   │   │   ├── workwrite/  ← Write operations
+│   │   │   │   └── ...
+│   │   │   ├── server/         ← Route registration, middleware
+│   │   │   │   ├── routes_investigation.go
+│   │   │   │   ├── routes_auth.go
+│   │   │   │   └── routes_health.go
+│   │   │   ├── apierr/         ← RFC7807 error types
+│   │   │   ├── authjwt/        ← JWT auth middleware
+│   │   │   └── tests/          ← Smoke tests
+│   │   │       ├── testutil.go
+│   │   │       ├── smoke_a2_core_soc_test.go
+│   │   │       ├── smoke_a3_attachments_test.go
+│   │   │       └── smoke_*.go
+│   │   └── migrations/         ← golang-migrate SQL files
+│   │       ├── 000001_init.up.sql ... 000030_totp_2fa.up.sql
+│   │       └── seed/
+│   └── frontend/
+│       └── src/
+│           ├── app/            ← Next.js App Router pages
+│           │   ├── cases/
+│           │   ├── alerts/
+│           │   ├── observables/
+│           │   ├── tasks/
+│           │   ├── dashboards/
+│           │   └── ...
+│           ├── components/     ← Reusable React components
+│           │   ├── MarkdownEditor.tsx
+│           │   ├── Dropzone.tsx
+│           │   └── ...
+│           ├── lib/            ← API client, utilities
+│           └── types/          ← TypeScript type definitions
 │
-├── thehive/                   # LEGACY Scala/Play backend — read-only reference
-├── frontend/                  # LEGACY AngularJS UI — read-only reference
-├── cortex/                    # LEGACY Cortex client/dto reference
-├── misp/                      # LEGACY MISP integration reference
-├── dto/                       # Legacy DTO definitions (Scala)
-├── migration/                 # Legacy migration code (Scala)
-├── conf/                      # Legacy config samples
-├── client/                    # Legacy Scala client
-├── client-common/             # Legacy common client code
-├── lib/                       # Legacy library jars
-├── project/                   # SBT build config
-├── test/                      # Legacy test data (JSON fixtures)
-├── images/                    # Documentation images
-├── package/                   # Packaging scripts (Docker, RPM, Debian)
+├── thehive/                    ← 📖 LEGACY READ-ONLY (Scala/AngularJS TheHive 4)
+├── frontend/                   ← 📖 LEGACY READ-ONLY (AngularJS UI)
+├── cortex/                     ← 📖 LEGACY READ-ONLY (Cortex integration)
+├── misp/                       ← 📖 LEGACY READ-ONLY (MISP integration)
 │
-├── build.sbt                  # Legacy SBT build
-├── CHANGELOG.md
-├── LICENSE
-└── README.md
+├── agent_memory/               ← 🧠 AI Agent Memory System
+│   ├── MEMORY.md               ← Append-only log
+│   ├── STRUCTURE.md            ← This file
+│   ├── CODING_GUIDELINES.md    ← Rules + Self-Debate Protocol
+│   ├── MASTER_PROMPT.md        ← Session startup prompt
+│   ├── context.md              ← Product/architecture context
+│   ├── plan.md                 ← Active work plan
+│   ├── plan_done.md            ← Completed tasks evidence
+│   └── plan_unfinish.md        ← Backlog
+│
+└── docker-compose.yml          ← Dev stack: backend + frontend + postgres + minio + opensearch
 ```
 
 ---
 
-## Key File Locations (Quick Reference)
+## Key Files
 
-| What | Where |
+| File | Mô tả |
 |------|-------|
-| Backend entrypoint | `platform/backend/cmd/server/` |
-| HTTP handlers | `platform/backend/internal/handler/` |
-| Domain repositories | `platform/backend/internal/repository/` |
-| DB migrations | `platform/backend/migrations/` |
-| Seed data | `platform/backend/migrations/seed/` |
-| OpenAPI spec | `platform/backend/api/openapi.yaml` |
-| Frontend pages | `platform/frontend/src/app/` |
-| Shared components | `platform/frontend/src/components/` |
-| API client | `platform/frontend/src/lib/` |
-| Global CSS | `platform/frontend/src/styles/globals.css` |
-| Visual tests | `platform/frontend/tests/visual/` |
-| Agent memory | `agent_memory/` |
-| Legacy backend ref | `thehive/` |
-| Legacy frontend ref | `frontend/` |
+| `platform/backend/internal/server/routes_investigation.go` | Route registration cho investigation endpoints |
+| `platform/backend/internal/repository/investigation/types.go` | Tất cả structs dùng cho cases, alerts, observables |
+| `platform/backend/internal/repository/investigation/postgres.go` | SQL queries chính |
+| `platform/frontend/src/app/cases/[id]/page.tsx` | Case detail page |
+| `platform/frontend/src/app/alerts/page.tsx` | Alerts list page |
+| `platform/backend/migrations/` | SQL migration files (000001 → 000030+) |
 
 ---
 
-## Stack Summary
+## Backend Route Map (38 routes hiện tại)
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Frontend framework | Next.js (App Router) | 14 |
-| Frontend language | TypeScript | 5 |
-| Frontend styling | Tailwind CSS + custom CSS tokens | — |
-| Frontend data | @tanstack/react-query + fetch | — |
-| Backend language | Go | 1.22 |
-| Backend HTTP | Echo v4 | 4 |
-| Database | PostgreSQL | 16 |
-| DB access | sqlx + pgx stdlib | — |
-| Migration | golang-migrate (SQL up/down) | — |
-| Logging | zap (structured JSON) | — |
-| Metrics | Prometheus client | — |
-| Auth | JWT + PostgreSQL session revocation | — |
-| Object storage | MinIO/S3 | — |
-| Search index | OpenSearch | — |
-| Queue | RabbitMQ | — |
-| Testing (frontend) | Playwright (visual regression) | — |
-| Testing (backend) | Go testing + testify | — |
+| Group | Path Prefix | Handler File |
+|-------|------------|-------------|
+| Auth | `/api/v1/auth/*` | `routes_auth.go` |
+| Cases | `/api/v1/cases/*` | `routes_investigation.go` |
+| Alerts | `/api/v1/alerts/*` | `routes_investigation.go` |
+| Observables | `/api/v1/observables/*` | `routes_investigation.go` |
+| Tasks | `/api/v1/tasks/*` | `routes_investigation.go` |
+| Dashboards | `/api/v1/dashboards/*` | `routes_investigation.go` |
+| Health | `/healthz`, `/readyz` | `routes_health.go` |
 
 ---
 
-## Domain Entities
+## Docker Services
 
-| Entity | Backend Repository | Frontend Page |
-|--------|-------------------|---------------|
-| Case | `repository/casewrite/` | `app/cases/` |
-| Alert | `repository/alertwrite/` | `app/alerts/` |
-| Observable | `repository/observablewrite/` | `app/observables/` |
-| Task | `repository/workwrite/` | `app/tasks/` |
-| Log | `repository/workwrite/` | (within case detail) |
-| Case Template | `repository/casetemplate/` | `app/admin/case-templates/` |
-| Custom Field | `handler/case_sub.go` | `components/CustomFieldEditor.tsx` |
-| Dashboard | `handler/` | `app/dashboards/` |
-| Page | `handler/` | `app/pages/` |
-| User | `handler/admin.go` | `app/admin/users/` |
-| Profile | `handler/admin.go` | `app/admin/profiles/` |
-| Organisation | `handler/admin.go` | `app/admin/` |
+| Service | Port | Vai trò |
+|---------|------|---------|
+| backend | 8080 | Go API server |
+| frontend | 3000 | Next.js dev server |
+| postgres | 5432 | Primary DB |
+| minio | 9000/9001 | File attachments |
+| opensearch | 9200 | Full-text search |
 
 ---
 
-> **Maintenance:** Update this file whenever directories or key files are added, removed, or renamed. The agent reads this file to understand project layout before making changes.
+## Quy Tắc Navigation
+
+1. **Trước khi sửa code**: Đọc `agent_memory/plan.md` và `agent_memory/context.md`
+2. **Tìm handler**: Xem `internal/server/routes_*.go` → tìm handler file
+3. **Tìm DB query**: Xem `internal/repository/*/postgres.go`
+4. **Legacy reference**: Chỉ đọc — không sửa `thehive/`, `frontend/`, `cortex/`, `misp/`
+5. **Cập nhật file này**: Ngay khi thêm/xóa route, file, hoặc thay đổi cấu trúc
+
+---
+
+*Cập nhật lần cuối: 2026-05-09*

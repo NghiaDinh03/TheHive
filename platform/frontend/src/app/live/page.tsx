@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Live stream page.
+ * System Audit page.
  * Mirrors legacy TheHive 4 live stream / audit feed.
  * Shows real-time audit events with auto-refresh.
  */
@@ -52,6 +52,10 @@ function actionClass(action: string): string {
   }
 }
 
+function hasPermission(userPermissions: string[], required: string): boolean {
+  return userPermissions.includes(required) || userPermissions.includes('managePlatform');
+}
+
 export default function LivePage() {
   const router = useRouter();
   const [authedLogin, setAuthedLogin] = useState<string | null>(null);
@@ -74,6 +78,28 @@ export default function LivePage() {
 
   if (!authedLogin) return null;
 
+  if (me.data && !hasPermission(me.data.permissions || [], 'managePlatform')) {
+    return (
+      <div className="flex min-h-screen thehive-app-shell">
+        <Sidebar />
+        <div className="flex-1 flex flex-col min-w-0">
+          <Topbar user={{ login: me.data.login, name: me.data.name }} />
+          <main className="content-wrapper flex-1">
+            <section className="content-header">
+              <h1>Access Denied</h1>
+            </section>
+            <section className="content">
+              <div className="alert alert-danger">
+                <h4><Activity size={15} className="mr-2" />Permission Error</h4>
+                <p>You do not have the required permissions (managePlatform) to view the System Audit feed.</p>
+              </div>
+            </section>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   const items = events.data?.values ?? [];
   const total = events.data?.total ?? 0;
 
@@ -84,8 +110,8 @@ export default function LivePage() {
         <Topbar user={me.data ? { login: me.data.login, name: me.data.name } : { login: authedLogin }} />
         <main className="content-wrapper flex-1">
           <section className="content-header">
-            <h1>Live Stream <small>real-time audit events</small></h1>
-            <ol className="breadcrumb"><li>Home</li><li className="active">Live</li></ol>
+            <h1>System Audit <small>real-time audit events</small></h1>
+            <ol className="breadcrumb"><li>Home</li><li className="active">System Audit</li></ol>
           </section>
           <section className="content">
             <div className="box">

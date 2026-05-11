@@ -20,6 +20,7 @@ import {
   ClipboardList,
   Settings,
   Activity,
+  Link2,
 } from '@/components/FaIcon';
 
 const TABS = [
@@ -34,6 +35,8 @@ const TABS = [
   { href: '/admin/analyzer-templates', label: 'Analyzer templates', icon: FileCode2, match: /^\/admin\/analyzer-templates/ },
   { href: '/admin/ui-settings', label: 'UI settings', icon: Settings, match: /^\/admin\/ui-settings/ },
   { href: '/admin/platform-status', label: 'Platform status', icon: Activity, match: /^\/admin\/platform-status/ },
+  { href: '/admin/cortex', label: 'Cortex Analyzer', icon: Link2, match: /^\/admin\/cortex/ },
+  { href: '/admin/misp', label: 'MISP', icon: Link2, match: /^\/admin\/misp/ },
 ];
 
 export function AdminSubnav() {

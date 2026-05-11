@@ -233,6 +233,14 @@ export default function CaseDetailPage() {
                 <span><strong>PAP</strong> <Pap value={item?.pap ?? 2} /></span>
                 <span><strong>Assignee</strong> {item?.assignee || 'None'}</span>
                 <span><strong>Owner</strong> {item?.owner || item?.owning_organisation || 'None'}</span>
+                {item?.organisation_ids && item.organisation_ids.length > 0 && (
+                  <span className="flex items-center gap-1">
+                    <strong>Tenant:</strong>
+                    {item.organisation_ids.map(org => (
+                      <span key={org} className="label bg-[#1d4ed8] uppercase tracking-wider text-[10px]">{org}</span>
+                    ))}
+                  </span>
+                )}
                 <span><strong>Updated</strong> {item?.updated_at ? new Date(item.updated_at).toLocaleString() : '-'}</span>
               </div>
             </div>
@@ -492,7 +500,25 @@ function TasksTab({ tasks, caseId, canWrite, showTaskForm, setShowTaskForm, task
     </div>}
     <table className="table table-hover valigned tasks-table data-list" style={{ marginTop: 10 }}><thead><tr><th></th><th>Group</th><th>Task</th><th>Status</th><th>Assignee</th><th>Date</th><th>Due/SLA</th><th>Order</th>{canWrite && <th className="text-right">Actions</th>}</tr></thead><tbody>
       {tasks.map(t => <Fragment key={t.id}>
-      <tr className={t.flag ? 'task-flagged' : ''}>
+      <tr
+        className={t.flag ? 'task-flagged' : ''}
+        draggable={canWrite}
+        onDragStart={(e) => e.dataTransfer.setData('taskId', t.id)}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const sourceId = e.dataTransfer.getData('taskId');
+          if (sourceId && sourceId !== t.id) {
+            const sourceTask = tasks.find(x => x.id === sourceId);
+            if (sourceTask) {
+              apiFetch('/api/v1/tasks/reorder', {
+                method: 'POST',
+                json: { case_id: caseId, tasks: [{ id: sourceTask.id, group_name: sourceTask.group_name || 'default', order_index: t.order_index }] }
+              }).then(() => window.location.reload());
+            }
+          }
+        }}
+      >
         <td className="task-status" align="center"><TaskFlags task={t} /></td>
         <td>{t.group_name || '—'}</td>
         <td>

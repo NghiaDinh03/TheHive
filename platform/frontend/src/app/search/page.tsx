@@ -21,9 +21,9 @@ type EntityType = 'case' | 'alert' | 'observable' | 'task' | 'log';
 
 type FilterField = { field: string; value: string };
 
-type CaseResult = { id: string; number: number; title: string; severity: number; status: string; assignee: string; tags: string[]; created_at: string };
-type AlertResult = { id: string; title: string; source: string; source_ref: string; severity: number; status: string; created_at: string };
-type ObservableResult = { id: string; data_type: string; data: string; ioc: boolean; sighted: boolean; case_number?: number; case_title?: string; created_at: string };
+type CaseResult = { id: string; number: number; title: string; severity: number; status: string; assignee: string; tags: string[]; tlp: number; pap: number; created_at: string };
+type AlertResult = { id: string; title: string; source: string; source_ref: string; severity: number; status: string; tags: string[]; tlp: number; pap: number; created_at: string };
+type ObservableResult = { id: string; data_type: string; data: string; ioc: boolean; sighted: boolean; case_number?: number; case_title?: string; tags: string[]; tlp: number; created_at: string };
 type TaskResult = { id: string; title: string; status: string; assignee: string; case_number?: number; case_title?: string; created_at: string };
 type LogResult = { id: string; message: string; created_by: string; task_id?: string; created_at: string };
 
@@ -247,7 +247,7 @@ function SearchWorkspace() {
                   )}
 
                   {!results.isLoading && values.length > 0 && (
-                    <div className="list-group">
+                    <div className="flex flex-col gap-3">
                       {values.map((item, idx) => (
                         <SearchResultCard key={idx} entity={entity} item={item} router={router} />
                       ))}
@@ -264,23 +264,35 @@ function SearchWorkspace() {
 }
 
 function SearchResultCard({ entity, item, router }: { entity: EntityType; item: Record<string, unknown>; router: ReturnType<typeof useRouter> }) {
+  const baseCardClass = "block bg-[#1D1E24] border border-[#2b2d35] rounded-lg p-4 shadow-sm hover:shadow-md hover:border-[#0077CC] transition-all duration-200 cursor-pointer relative overflow-hidden";
+  
   if (entity === 'case') {
     const c = item as CaseResult;
     return (
       <a
         href={`/cases/${c.id}`}
-        className="list-group-item list-group-item-action"
+        className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/cases/${c.id}`); }}
       >
-        <div className="flex items-start gap-2">
-          <Briefcase size={14} className="mt-1 text-muted flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#0077CC]"></div>
+        <div className="flex items-start gap-3">
+          <Briefcase size={20} className="mt-1 text-[#0077CC] flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">#{c.number} {c.title}</span>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="font-semibold text-lg text-white">#{c.number} {c.title}</span>
               <span className={`label ${severityClass[c.severity] ?? 'label-default'}`}>{severityLabels[c.severity] ?? c.severity}</span>
               <span className="label label-info">{c.status}</span>
+              {c.tlp !== undefined && <span className={`label label-default tlp-${c.tlp}`}>TLP:{c.tlp}</span>}
             </div>
-            <div className="text-muted text-xs mt-1">Assignee: {c.assignee || '-'} · {fmt(c.created_at)}</div>
+            {c.tags && c.tags.length > 0 && (
+              <div className="flex gap-1 flex-wrap mb-2">
+                {c.tags.map(t => <span key={t} className="label label-default bg-[#2b2d35] border-none">{t}</span>)}
+              </div>
+            )}
+            <div className="text-gray-400 text-sm mt-1 flex items-center gap-4">
+              <span>Assignee: <strong className="text-gray-300">{c.assignee || 'Unassigned'}</strong></span>
+              <span>Created: {fmt(c.created_at)}</span>
+            </div>
           </div>
         </div>
       </a>
@@ -291,18 +303,28 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
     return (
       <a
         href={`/alerts/${a.id}`}
-        className="list-group-item list-group-item-action"
+        className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/alerts/${a.id}`); }}
       >
-        <div className="flex items-start gap-2">
-          <AlertTriangle size={14} className="mt-1 text-muted flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#FF4500]"></div>
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={20} className="mt-1 text-[#FF4500] flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">{a.title}</span>
-              <span className="label label-default">{a.source}</span>
-              <span className="label label-info">{a.status}</span>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="font-semibold text-lg text-white">{a.title}</span>
+              <span className={`label ${severityClass[a.severity] ?? 'label-default'}`}>{severityLabels[a.severity] ?? a.severity}</span>
+              <span className="label label-info bg-[#2b2d35]">{a.source}</span>
+              <span className="label label-primary">{a.status}</span>
             </div>
-            <div className="text-muted text-xs mt-1">Ref: {a.source_ref} · {fmt(a.created_at)}</div>
+            {a.tags && a.tags.length > 0 && (
+              <div className="flex gap-1 flex-wrap mb-2">
+                {a.tags.map(t => <span key={t} className="label label-default bg-[#2b2d35] border-none">{t}</span>)}
+              </div>
+            )}
+            <div className="text-gray-400 text-sm mt-1 flex items-center gap-4">
+              <span>Ref: <strong className="text-gray-300">{a.source_ref || '-'}</strong></span>
+              <span>Created: {fmt(a.created_at)}</span>
+            </div>
           </div>
         </div>
       </a>
@@ -313,20 +335,26 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
     return (
       <a
         href={`/observables/${o.id}`}
-        className="list-group-item list-group-item-action"
+        className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/observables/${o.id}`); }}
       >
-        <div className="flex items-start gap-2">
-          <Eye size={14} className="mt-1 text-muted flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#00BFB3]"></div>
+        <div className="flex items-start gap-3">
+          <Eye size={20} className="mt-1 text-[#00BFB3] flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="label label-default">{o.data_type}</span>
-              <span className="font-medium font-mono text-sm">{o.data}</span>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="label label-default bg-[#2b2d35] uppercase tracking-wider">{o.data_type}</span>
+              <span className="font-mono text-base text-white">{o.data}</span>
               {o.ioc && <span className="label label-danger">IOC</span>}
               {o.sighted && <span className="label label-warning">Sighted</span>}
             </div>
-            <div className="text-muted text-xs mt-1">
-              {o.case_number ? `Case #${o.case_number} ${o.case_title ?? ''}` : ''} · {fmt(o.created_at)}
+            {o.tags && o.tags.length > 0 && (
+              <div className="flex gap-1 flex-wrap mb-2">
+                {o.tags.map(t => <span key={t} className="label label-default bg-[#2b2d35] border-none">{t}</span>)}
+              </div>
+            )}
+            <div className="text-gray-400 text-sm mt-1">
+              {o.case_number ? `Linked to Case #${o.case_number} ${o.case_title ?? ''}` : 'Unlinked'} · {fmt(o.created_at)}
             </div>
           </div>
         </div>
@@ -338,18 +366,21 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
     return (
       <a
         href={`/tasks/${t.id}`}
-        className="list-group-item list-group-item-action"
+        className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/tasks/${t.id}`); }}
       >
-        <div className="flex items-start gap-2">
-          <CheckSquare size={14} className="mt-1 text-muted flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-[#8A2BE2]"></div>
+        <div className="flex items-start gap-3">
+          <CheckSquare size={20} className="mt-1 text-[#8A2BE2] flex-shrink-0" />
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium">{t.title}</span>
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              <span className="font-semibold text-lg text-white">{t.title}</span>
               <span className="label label-info">{t.status}</span>
             </div>
-            <div className="text-muted text-xs mt-1">
-              Assignee: {t.assignee || '-'} · {t.case_number ? `Case #${t.case_number}` : ''} · {fmt(t.created_at)}
+            <div className="text-gray-400 text-sm mt-1 flex items-center gap-4">
+              <span>Assignee: <strong className="text-gray-300">{t.assignee || 'Unassigned'}</strong></span>
+              {t.case_number && <span>Case #{t.case_number}</span>}
+              <span>Created: {fmt(t.created_at)}</span>
             </div>
           </div>
         </div>
@@ -359,14 +390,18 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
   // log
   const l = item as LogResult;
   return (
-    <div className="list-group-item">
-      <div className="flex items-start gap-2">
-        <FileText size={14} className="mt-1 text-muted flex-shrink-0" />
+    <div className={`${baseCardClass} cursor-default hover:border-[#2b2d35] hover:shadow-sm`}>
+      <div className="absolute top-0 left-0 w-1 h-full bg-gray-500"></div>
+      <div className="flex items-start gap-3">
+        <FileText size={20} className="mt-1 text-gray-400 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="mb-0 text-sm">{l.message}</p>
-          <div className="text-muted text-xs mt-1">By {l.created_by} · {fmt(l.created_at)}</div>
+          <p className="mb-2 text-base text-gray-200 whitespace-pre-wrap">{l.message}</p>
+          <div className="text-gray-400 text-sm mt-2 pt-2 border-t border-[#2b2d35]">
+            By <strong className="text-gray-300">{l.created_by}</strong> · {fmt(l.created_at)}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+

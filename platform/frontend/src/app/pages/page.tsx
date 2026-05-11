@@ -380,15 +380,16 @@ export default function PagesPage() {
                             <div
                               className="md-preview"
                               style={{
-                                border: '1px solid #d2d6de',
-                                borderRadius: 3,
+                                border: '1px solid var(--ncs-card-border)',
+                                borderRadius: 6,
                                 padding: '12px 16px',
                                 minHeight: 300,
                                 maxHeight: 500,
                                 overflowY: 'auto',
                                 fontSize: '0.92rem',
                                 lineHeight: 1.65,
-                                background: '#fafbfc',
+                                background: 'var(--ncs-surface)',
+                                color: 'var(--ncs-text)',
                               }}
                               dangerouslySetInnerHTML={{ __html: previewHtml || '<span class="text-muted">Nothing to preview.</span>' }}
                             />

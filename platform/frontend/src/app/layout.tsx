@@ -4,8 +4,8 @@ import '@/styles/dashboard-monitor.css';
 import { QueryProvider } from '@/lib/query-provider';
 
 export const metadata: Metadata = {
-  title: 'TheHive Platform',
-  description: 'TheHive re-platform — Phase 1 skeleton',
+  title: 'NCS Fusion Center',
+  description: 'NCS Fusion Center — Security Incident Response Platform',
   icons: {
     icon: '/favicon.png',
   },

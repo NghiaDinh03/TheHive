@@ -1,193 +1,104 @@
-# MASTER_PROMPT.md — TheHive 4 Re-platform (Scala → Go + Next.js)
+# MASTER_PROMPT.md — Prompt Khởi Động Session AI
 
-> **Usage:** Copy the entire `## Prompt` section below to the start of each new session. This prompt ensures AI compliance with all rules in `agent_memory/`.
+> **Đọc file này đầu tiên khi bắt đầu bất kỳ session làm việc nào trên TheHive platform.**
 
 ---
 
-## Prompt
+## 🎯 Project Context
 
-```
-You are a migration engineer for the TheHive 4 Re-platform project. This project migrates from TheHive 4 legacy (Scala/AngularJS) to a new platform (Go/Next.js/PostgreSQL).
+**TheHive Platform** — Migration từ TheHive 4 (Scala/AngularJS) sang Go + Next.js với 100% parity.
 
-## STEP 1: READ CONTEXT (MANDATORY BEFORE ANY ACTION)
+**Stack:** Go (Echo v4) · Next.js 15 (App Router) · PostgreSQL (sqlx/pgx) · MinIO · OpenSearch · Docker Compose
 
-Read ALL files in `agent_memory/` in order:
-1. `agent_memory/MASTER_PROMPT.md` — This file
-2. `agent_memory/CODING_GUIDELINES.md` — ALL coding rules + self-debate protocol
-3. `agent_memory/STRUCTURE.md` — Project structure map
-4. `agent_memory/MEMORY.md` — Decisions, lessons, patterns learned
-5. `agent_memory/context.md` — Product/architecture/version context
-6. `agent_memory/plan.md` — Control plan, phase map, execution order
-7. `agent_memory/plan_done.md` — Completed evidence log
-8. `agent_memory/plan_unfinish.md` — Actionable unfinished backlog
+---
 
-## STEP 2: CAVEMAN MODE (TOKEN OPTIMIZATION)
+## ⚡ Ba Giải Pháp Bắt Buộc (LUÔN LUÔN ÁP DỤNG)
 
-Activate Caveman protocol for ALL responses:
-- `/caveman` — Default: terse, compressed technical responses (~75% token reduction)
-- `/caveman lite` — Moderate compression when clarity is critical
-- `/caveman ultra` — Maximum compression for simple operations
-- `/caveman-commit` — One-line commit messages
-- `/caveman-review` — One-line code reviews
-- `/caveman-compress <file>` — Compress memory files to save tokens
+### 1. Caveman Protocol — Token Compression
+Tất cả responses phải dùng style terse:
+- Bullet points ngắn, không có filler words
+- Bỏ qua context hiển nhiên, chỉ giữ thông tin kỹ thuật
+- Slash commands: `/caveman` (default) · `/caveman lite` · `/caveman ultra` · `/caveman-commit`
+- Ví dụ: Thay "I will now proceed to implement..." → "Implement:"
 
-Rules:
-- Strip all polite filler ("please", "thank you", "you're welcome")
-- Use bullet points, not prose paragraphs
-- Omit obvious context (don't restate the question)
-- Keep technical accuracy at 100%
+### 2. Karpathy Guidelines — Behavioral Rules
+| Nguyên tắc | Áp dụng |
+|-----------|---------|
+| **Think Before Coding** | State assumptions explicitly trước khi code. Nếu không chắc, HỎI. |
+| **Simplicity First** | Minimum code giải quyết vấn đề. Không thêm feature chưa được yêu cầu. |
+| **Surgical Changes** | Chỉ sửa những gì cần sửa. Không "improve" code liền kề. |
+| **Goal-Driven** | Định nghĩa success criteria trước. Verify sau mỗi bước. |
 
-## STEP 3: RTK COMMAND PREFIX
+### 3. RTK — Shell Command Efficiency
+- Prefix tất cả shell commands với `rtk`: `rtk go build ./...` · `rtk npm run build`
+- Plan Execution: Thực hiện tuần tự, commit sau mỗi phase hoàn thành
+- Tránh Rabbit Holes: Nếu verification cần >3 lệnh, DỪNG và hỏi user
 
-Always prefix shell commands with `rtk` to minimize token consumption:
-```bash
-rtk go build ./...
-rtk npm run build
-rtk ls platform/backend/internal/handler/
-rtk find "*.go" platform/backend/
-rtk grep "func " platform/backend/internal/handler/
-```
+---
 
-Meta commands:
-```bash
-rtk gain              # Show token savings
-rtk gain --history    # Command history with savings
-rtk discover          # Find missed RTK opportunities
-rtk proxy <cmd>       # Run raw (no filtering, for debugging)
-```
+## 📋 Self-Debate Protocol (BẮT BUỘC trước khi thêm rule mới)
 
-## STEP 4: KARPATHY GUIDELINES
+```markdown
+## 🔄 Self-Debate: [Chủ đề]
 
-1. **Think Before Coding** — State assumptions explicitly. If uncertain, ask. If multiple interpretations exist, present them all.
-2. **Simplicity First** — Minimum code that solves the problem. No speculative features. No abstractions for single-use code.
-3. **Surgical Changes** — Touch only what you must. Match existing style. Don't refactor things that aren't broken.
-4. **Goal-Driven Execution** — Define success criteria. Loop until verified. Every changed line must trace to the user's request.
+### 📌 Đề xuất
+[Mô tả rõ muốn thêm/thay đổi gì và tại sao]
 
-## STEP 5: SELF-DEBATE PROTOCOL
+### ✅ Lý do ủng hộ (Pro)
+1. [Lý do 1]
+2. [Lý do 2]
 
-Before adding any new rule, convention, or making architectural decisions, run self-debate:
-```
-## 🔄 Self-Debate: [Topic]
-### 📌 Proposal
-### ✅ Arguments FOR
-### ❌ Arguments AGAINST
-### 🔍 Alternatives Considered
-### ⚖️ Assessment (Confidence, Risk, Reversibility)
-### ❓ Question for User
-```
+### ❌ Lý do phản đối (Con)
+1. [Rủi ro 1]
+2. [Phương án thay thế tốt hơn?]
 
-Quick-path exceptions (skip debate): Trivial additions, user-explicit instructions, bug-fix learnings.
+### 🔍 Phương án thay thế
+1. [Option A] — [lý do bác bỏ hoặc cân nhắc]
 
-## STEP 6: COMPARE LEGACY vs NEW
+### ⚖️ Đánh giá
+- Confidence: [High/Medium/Low]
+- Risk nếu sai: [Low/Medium/High]
+- Reversibility: [Easy/Moderate/Hard]
 
-So sánh code cũ trong `thehive/` và `frontend/` với code mới trong `platform/`:
-- Backend: So sánh `thehive/app/org/thp/thehive/controllers/v1/Router.scala` với `platform/backend/internal/server/routes_*.go`
-- Frontend: So sánh `frontend/app/views/partials/` với `platform/frontend/src/app/`
-- Models: So sánh `thehive/app/org/thp/thehive/models/` với migrations trong `platform/backend/migrations/`
-- CSS: So sánh `frontend/app/styles/` với `platform/frontend/src/styles/globals.css`
-
-## BƯỚC 3: THỰC HIỆN TASKS (CODE THỰC SỰ, KHÔNG CHỈ PLAN)
-
-Từ file `plan_unfinish.md`, lấy các task chưa hoàn thành và CODE THỰC SỰ:
-- Clone/copy logic từ legacy code sang code mới
-- Giữ 100% style, tính năng, UI/UX của TheHive 4
-- Không bịa task hoặc giải pháp không có trong legacy
-- Chia theo batch: xử lý nhiều phase/subtask cùng lúc
-
-## BƯỚC 4: VERIFY
-
-Sau mỗi batch code:
-- Backend: `cd platform/backend && go build ./...`
-- Frontend: `cd platform/frontend && npm run build`
-- Nếu fail → fix ngay, không chuyển task khác
-
-## BƯỚC 5: UPDATE PLAN (BẮT BUỘC)
-
-Sau khi hoàn thành, cập nhật TẤT CẢ file agent_memory:
-
-### MEMORY.md (append-only, KHÔNG được xóa)
-Thêm session notes mới:
-```
-### YYYY-MM-DD — [Session Title]
-- [x] TASK-1: Mô tả ngắn
-- [x] TASK-2: Mô tả ngắn
-```
-
-### plan_done.md
-Thêm evidence cho mỗi task hoàn thành:
-```
-- [x] TASK-ID: Tên task
-  - Input: Legacy source reference
-  - Output: Files created/modified
-  - What changed/exists: Chi tiết
-  - Effect: Tác động
-  - Verification: Kết quả build/test
-  - Missing/upgrade: Nếu có
-```
-
-### plan_unfinish.md
-- Đánh dấu [x] cho task đã hoàn thành
-- Thêm session summary vào section 7
-- Giữ nguyên priority order
-
-### STRUCTURE.md
-- Thêm file mới vào project tree nếu có
-
-## QUY TẮC BẮT BUỘC
-
-1. **Karpathy Guidelines** (từ CODING_GUIDELINES.md §1):
-   - Think Before Coding: Nêu rõ assumptions, không chọn silent
-   - Simplicity First: Code tối thiểu, không over-engineer
-   - Surgical Changes: Chỉ sửa cái cần sửa
-   - Goal-Driven: Define success criteria, loop until verified
-
-2. **Self-Debate Protocol** (từ CODING_GUIDELINES.md §8):
-   - Khi muốn thêm rule mới → PHẢI chạy self-debate trước
-   - Format: Proposal → Arguments FOR → Arguments AGAINST → Alternatives → Assessment → Question
-   - Quick-path: Skip nếu user trực tiếp yêu cầu hoặc trivial
-
-3. **Legacy Reference Rule**:
-   - Code trong `thehive/`, `frontend/` là READ-ONLY reference
-   - Không sửa legacy files
-   - New platform phải preserve TheHive 4 workflows
-
-4. **Plan Format** (bắt buộc cho mọi task):
-   - Input: Source reference (legacy file nào)
-   - Will change: Files sẽ tạo/sửa
-   - Expected output: Kết quả mong muốn
-   - Actual output: Kết quả thực tế
-   - Effect: Tác động
-   - Completion check: Tiêu chí hoàn thành
-   - Missing/upgrade: Còn thiếu gì
-
-5. **Build Verification**:
-   - `go build ./...` phải exit 0
-   - `npm run build` phải exit 0
-   - Nếu fail → fix ngay
-
-## MỤC TIÊU
-
-Migration 100% style và tính năng của TheHive 4 sang platform mới (Go + Next.js + PostgreSQL). Mỗi session phải:
-1. Đọc context trước
-2. So sánh legacy vs new
-3. Code thực sự (không chỉ plan)
-4. Verify build
-5. Update plan files
-
-Bắt đầu ngay. Đọc các file agent_memory trước, rồi code tiếp các task chưa hoàn thành.
+### ❓ Câu hỏi cho User
+[Câu hỏi cụ thể một lần]
 ```
 
 ---
 
-## Lưu ý khi dùng
+## 📚 Files Phải Đọc Khi Bắt Đầu Session
 
-1. **Copy toàn bộ phần `## Prompt`** (từ ``` đến ```) vào session mới
-2. **Thay đổi batch/priority** nếu cần: sửa phần "Từ file plan_unfinish.md" để focus vào task cụ thể
-3. **Thêm context** nếu cần: thêm mô tả task cụ thể sau prompt
-4. **Verify output**: Kiểm tra AI có đọc file agent_memory không, có code thực sự không, có update plan không
+1. `agent_memory/MEMORY.md` — Lessons learned, decisions log
+2. `agent_memory/plan.md` — Work plan hiện tại
+3. `agent_memory/STRUCTURE.md` — Bản đồ project
 
-## Ví dụ prompt ngắn gọn cho session tiếp
+---
+
+## 🏗️ Architecture Chính
 
 ```
-Đọc toàn bộ folder agent_memory để nắm context. So sánh legacy TheHive 4 code trong thehive/ và frontend/ với code mới trong platform/. Code tiếp các task chưa hoàn thành trong plan_unfinish.md. Đảm bảo 100% parity với legacy. Update plan_done.md sau khi hoàn thành. Go build và npm build phải pass.
+HTTP Request
+    → Echo Handler (internal/handler/)  [thin — chỉ parse + route]
+    → Repository (internal/repository/) [business logic + SQL]
+    → PostgreSQL
 ```
+
+**Legacy reference** (chỉ đọc): `thehive/`, `frontend/`, `cortex/`, `misp/`  
+**Platform code** (active): `platform/backend/` + `platform/frontend/`
+
+---
+
+## ⚠️ Rules Quan Trọng
+
+- `agent_memory/MEMORY.md` — **APPEND ONLY**, không bao giờ xóa
+- `agent_memory/STRUCTURE.md` — Cập nhật ngay khi structure thay đổi
+- `CODING_GUIDELINES.md` — Đọc toàn bộ trước khi code
+- Không sửa legacy files
+- Luôn `go build ./...` và `npm run build` sau khi code
+- PowerShell không dùng `&&` — tách thành 2 lệnh riêng
+
+---
+
+## 🎯 Plan Hiện Tại
+
+Xem `agent_memory/plan.md` để biết task đang làm.

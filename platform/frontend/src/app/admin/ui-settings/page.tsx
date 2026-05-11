@@ -13,9 +13,10 @@ import { ApiError, apiFetch } from '@/lib/api';
 
 type UiConfig = {
   hideEmptyCaseButton: boolean;
+  force_2fa?: boolean;
 };
 
-const DEFAULT: UiConfig = { hideEmptyCaseButton: false };
+const DEFAULT: UiConfig = { hideEmptyCaseButton: false, force_2fa: false };
 
 export default function UiSettingsPage() {
   const queryClient = useQueryClient();
@@ -68,27 +69,51 @@ export default function UiSettingsPage() {
                 {config.isLoading ? (
                   <div className="empty-message">Loading UI settings...</div>
                 ) : (
-                  <div className="form-group">
-                    <label className="col-md-3 control-label">
-                      Hide <em>Empty Case</em> button
-                    </label>
-                    <div className="col-md-9">
-                      <div className="checkbox">
-                        <label>
-                          <input
-                            name="hideEmptyCaseButton"
-                            type="checkbox"
-                            checked={draft.hideEmptyCaseButton}
-                            onChange={(event) => setDraft({ hideEmptyCaseButton: event.target.checked })}
-                          />{' '}
-                          Check this to disallow creating empty cases
-                        </label>
+                  <>
+                    <div className="form-group">
+                      <label className="col-md-3 control-label">
+                        Hide <em>Empty Case</em> button
+                      </label>
+                      <div className="col-md-9">
+                        <div className="checkbox">
+                          <label>
+                            <input
+                              name="hideEmptyCaseButton"
+                              type="checkbox"
+                              checked={draft.hideEmptyCaseButton}
+                              onChange={(event) => setDraft({ ...draft, hideEmptyCaseButton: event.target.checked })}
+                            />{' '}
+                            Check this to disallow creating empty cases
+                          </label>
+                        </div>
+                        <span className="help-block">
+                          This mirrors TheHive 4 admin setting and hides the scratch-case entry point on the create case page.
+                        </span>
                       </div>
-                      <span className="help-block">
-                        This mirrors TheHive 4 admin setting and hides the scratch-case entry point on the create case page.
-                      </span>
                     </div>
-                  </div>
+
+                    <div className="form-group">
+                      <label className="col-md-3 control-label text-danger">
+                        Global Security
+                      </label>
+                      <div className="col-md-9">
+                        <div className="checkbox">
+                          <label>
+                            <input
+                              name="force_2fa"
+                              type="checkbox"
+                              checked={draft.force_2fa || false}
+                              onChange={(event) => setDraft({ ...draft, force_2fa: event.target.checked })}
+                            />{' '}
+                            <strong className="text-danger">Force 2FA for all users</strong>
+                          </label>
+                        </div>
+                        <span className="help-block">
+                          If enabled, any user who has not configured 2FA will not be able to log in. Ensure you have enabled 2FA for yourself first before turning this on!
+                        </span>
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div className="mt-s clearfix">

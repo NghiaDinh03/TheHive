@@ -92,6 +92,7 @@ type adminResetPasswordRequest struct {
 
 type uiSettingsResponse struct {
 	HideEmptyCaseButton bool `json:"hideEmptyCaseButton"`
+	Force2FA            bool `json:"force_2fa"`
 }
 
 type adminGenerateResetTokenRequest struct {
@@ -109,7 +110,7 @@ func (h *AdminHandler) GetUISettings(c echo.Context) error {
 	err := h.db.QueryRowxContext(c.Request().Context(), `SELECT value FROM ui_settings WHERE key = 'hideEmptyCaseButton'`).Scan(&raw)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return c.JSON(http.StatusOK, uiSettingsResponse{HideEmptyCaseButton: false})
+			return c.JSON(http.StatusOK, uiSettingsResponse{HideEmptyCaseButton: false, Force2FA: false})
 		}
 		return apierr.New(http.StatusInternalServerError, "ui settings load failed")
 	}
@@ -117,7 +118,15 @@ func (h *AdminHandler) GetUISettings(c echo.Context) error {
 	if err := json.Unmarshal(raw, &hide); err != nil {
 		return apierr.New(http.StatusInternalServerError, "ui settings decode failed")
 	}
-	return c.JSON(http.StatusOK, uiSettingsResponse{HideEmptyCaseButton: hide})
+	
+	var rawF2FA []byte
+	err = h.db.QueryRowxContext(c.Request().Context(), `SELECT value FROM ui_settings WHERE key = 'force_2fa'`).Scan(&rawF2FA)
+	var force2fa bool
+	if err == nil {
+		_ = json.Unmarshal(rawF2FA, &force2fa)
+	}
+
+	return c.JSON(http.StatusOK, uiSettingsResponse{HideEmptyCaseButton: hide, Force2FA: force2fa})
 }
 
 func (h *AdminHandler) SaveUISettings(c echo.Context) error {
@@ -136,8 +145,18 @@ func (h *AdminHandler) SaveUISettings(c echo.Context) error {
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "ui settings save failed")
 	}
+
+	rawF2FA, _ := json.Marshal(req.Force2FA)
+	_, err = h.db.ExecContext(c.Request().Context(), `
+		INSERT INTO ui_settings (key, value)
+		VALUES ('force_2fa', $1::jsonb)
+		ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, string(rawF2FA))
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "ui settings save failed")
+	}
+
 	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.ui_settings.save", "config", "hideEmptyCaseButton", nil, req))
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "admin.ui_settings.save", "config", "ui_settings", nil, req))
 	}
 	return c.JSON(http.StatusOK, req)
 }

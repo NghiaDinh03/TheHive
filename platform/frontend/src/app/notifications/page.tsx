@@ -172,10 +172,11 @@ export default function NotificationsPage() {
   function fmt(v?: string) { if (!v) return '-'; const d = new Date(v); return Number.isNaN(d.getTime()) ? '-' : dateFormatter.format(d); }
 
   return (
-    <div className="wrapper">
-      <Topbar />
+    <div className="flex min-h-screen thehive-app-shell">
       <Sidebar />
-      <div className="content-wrapper">
+      <div className="flex-1 flex flex-col min-w-0">
+        <Topbar />
+        <main className="content-wrapper flex-1">
         <section className="content-header">
           <h1>
             <Bell size={18} className="mr-xs" />
@@ -399,6 +400,7 @@ export default function NotificationsPage() {
             </div>
           </div>
         </section>
+        </main>
       </div>
     </div>
   );

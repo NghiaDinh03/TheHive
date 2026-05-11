@@ -126,8 +126,8 @@ export default function DashboardsPage() {
   }
 
   function sortIndicator(field: SortField) {
-    if (sortField !== field) return <i className="fa fa-sort" style={{ marginLeft: 4, opacity: 0.3 }} />;
-    return sortDir === 'ASC' ? <i className="fa fa-caret-up" style={{ marginLeft: 4 }} /> : <i className="fa fa-caret-down" style={{ marginLeft: 4 }} />;
+    if (sortField !== field) return <span style={{ marginLeft: 4, opacity: 0.3 }}>⇅</span>;
+    return sortDir === 'ASC' ? <span style={{ marginLeft: 4 }}>▲</span> : <span style={{ marginLeft: 4 }}>▼</span>;
   }
 
   function submitCreate(e: FormEvent) {
@@ -136,7 +136,12 @@ export default function DashboardsPage() {
     createDashboard.mutate();
   }
 
-  const rawItems = useMemo(() => dashboards.data?.values ?? [], [dashboards.data]);
+  const rawItems = useMemo(() => {
+    const data = dashboards.data;
+    if (!data) return [];
+    if (Array.isArray(data)) return data as Dashboard[];
+    return (data as Collection<Dashboard>).values ?? [];
+  }, [dashboards.data]);
   const filtered = useMemo(() => {
     const q = filter.toLowerCase().trim();
     const items = q ? rawItems.filter(d => d.title.toLowerCase().includes(q) || (d.description ?? '').toLowerCase().includes(q) || d.created_by.toLowerCase().includes(q)) : rawItems;
@@ -273,7 +278,7 @@ export default function DashboardsPage() {
                   <div className="thehive-empty">No records</div>
                 )}
                 {filtered.length > 0 && (
-                  <table className="table table-striped case-list">
+                  <table className="thehive-table">
                     <thead>
                       <tr>
                         <th style={{ width: 80 }}>
@@ -322,20 +327,20 @@ export default function DashboardsPage() {
                           </td>
                           <td>
                             <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href={`/dashboards/${d.id}`}><i className="fa fa-area-chart" /> <br />View</a>
+                              <a href={`/dashboards/${d.id}`}><Activity size={14} /> <br />View</a>
                             </div>
                             <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href={`/dashboards/${d.id}`}><i className="fa fa-pencil" /> <br />Edit</a>
+                              <a href={`/dashboards/${d.id}`}><Edit2 size={14} /> <br />Edit</a>
                             </div>
                             <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href="#" onClick={e => { e.preventDefault(); duplicateDashboard.mutate(d); }}><i className="fa fa-copy" /> <br />Copy</a>
+                              <a href="#" onClick={e => { e.preventDefault(); duplicateDashboard.mutate(d); }}><Copy size={14} /> <br />Copy</a>
                             </div>
                             <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href="#" onClick={e => { e.preventDefault(); exportDashboard(d); }}><i className="fa fa-download" /> <br />Export</a>
+                              <a href="#" onClick={e => { e.preventDefault(); exportDashboard(d); }}><Download size={14} /> <br />Export</a>
                             </div>
                             <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
                               <a href="#" className="text-danger" onClick={e => { e.preventDefault(); if (window.confirm('Delete this dashboard?')) deleteDashboard.mutate(d.id); }}>
-                                <i className="fa fa-trash" /> <br />Delete
+                                <Trash2 size={14} /> <br />Delete
                               </a>
                             </div>
                           </td>
