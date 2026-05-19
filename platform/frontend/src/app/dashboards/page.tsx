@@ -48,7 +48,7 @@ export default function DashboardsPage() {
   const [importing, setImporting] = useState(false);
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -248,16 +248,16 @@ export default function DashboardsPage() {
 
             {/* Dashboard list — mirrors legacy dashboard/list.html */}
             <div className="box">
-              <div className="box-header with-border">
-                <h3 className="box-title"><Activity size={14} className="mr-1" /> Dashboard List ({filtered.length} of {rawItems.length})</h3>
-                <div className="box-tools pull-right">
-                  <button type="button" className={`btn btn-sm btn-default ml-xs ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(v => !v)}>
+              <div className="box-header with-border flex justify-between items-center">
+                <h3 className="box-title flex items-center"><Activity size={16} className="mr-2" /> Dashboard List ({filtered.length} of {rawItems.length})</h3>
+                <div className="box-tools flex items-center gap-2">
+                  <button type="button" className={`btn btn-sm btn-default ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(v => !v)}>
                     <Filter size={13} /> Filters
                   </button>
-                  <button type="button" className="btn btn-default btn-sm ml-xs" onClick={() => setImporting(true)}>
+                  <button type="button" className="btn btn-default btn-sm" onClick={() => setImporting(true)}>
                     <Download size={13} /> Import
                   </button>
-                  <button type="button" className="btn btn-primary btn-sm ml-xs" onClick={() => setCreating(true)}>
+                  <button type="button" className="btn btn-primary btn-sm shadow-[0_0_15px_rgba(59,130,246,0.3)] hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]" onClick={() => setCreating(true)}>
                     <Plus size={13} /> New dashboard
                   </button>
                 </div>
@@ -326,21 +326,21 @@ export default function DashboardsPage() {
                             <div>U. <a href="#" onClick={e => { e.preventDefault(); setFilter(fmt(d.updated_at)); }}>{fmt(d.updated_at)}</a></div>
                           </td>
                           <td>
-                            <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href={`/dashboards/${d.id}`}><Activity size={14} /> <br />View</a>
-                            </div>
-                            <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href={`/dashboards/${d.id}`}><Edit2 size={14} /> <br />Edit</a>
-                            </div>
-                            <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href="#" onClick={e => { e.preventDefault(); duplicateDashboard.mutate(d); }}><Copy size={14} /> <br />Copy</a>
-                            </div>
-                            <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href="#" onClick={e => { e.preventDefault(); exportDashboard(d); }}><Download size={14} /> <br />Export</a>
-                            </div>
-                            <div className="media-right ph-xs text-center" style={{ display: 'inline-block', textAlign: 'center', padding: '0 6px' }}>
-                              <a href="#" className="text-danger" onClick={e => { e.preventDefault(); if (window.confirm('Delete this dashboard?')) deleteDashboard.mutate(d.id); }}>
-                                <Trash2 size={14} /> <br />Delete
+                            <div className="flex items-center gap-3">
+                              <a href={`/dashboards/${d.id}`} className="flex flex-col items-center text-ncs-muted hover:text-ncs-primary transition-colors">
+                                <Activity size={16} className="mb-1" /> <span className="text-xs">View</span>
+                              </a>
+                              <a href={`/dashboards/${d.id}`} className="flex flex-col items-center text-ncs-muted hover:text-ncs-success transition-colors">
+                                <Edit2 size={16} className="mb-1" /> <span className="text-xs">Edit</span>
+                              </a>
+                              <a href="#" onClick={e => { e.preventDefault(); duplicateDashboard.mutate(d); }} className="flex flex-col items-center text-ncs-muted hover:text-ncs-warning transition-colors">
+                                <Copy size={16} className="mb-1" /> <span className="text-xs">Copy</span>
+                              </a>
+                              <a href="#" onClick={e => { e.preventDefault(); exportDashboard(d); }} className="flex flex-col items-center text-ncs-muted hover:text-ncs-info transition-colors">
+                                <Download size={16} className="mb-1" /> <span className="text-xs">Export</span>
+                              </a>
+                              <a href="#" onClick={e => { e.preventDefault(); if (window.confirm('Delete this dashboard?')) deleteDashboard.mutate(d.id); }} className="flex flex-col items-center text-ncs-muted hover:text-ncs-danger transition-colors">
+                                <Trash2 size={16} className="mb-1" /> <span className="text-xs">Delete</span>
                               </a>
                             </div>
                           </td>

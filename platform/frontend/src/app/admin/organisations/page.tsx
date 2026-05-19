@@ -98,32 +98,32 @@ export default function OrganisationsAdminPage() {
       {message && <div className="admin-alert success">{message}</div>}
       {error && <div className="admin-alert error">{error}</div>}
 
-      <div className="box box-primary">
-        <div className="box-header with-border">
-          <h3 className="box-title">
-            <Building2 size={14} /> List of organisations ({filtered.length} of {orgs.data?.total ?? 0})
+      <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
+        <div className="px-6 py-4 border-b border-slate-700 bg-slate-900/50 flex flex-wrap gap-4 justify-between items-center">
+          <h3 className="text-blue-500 font-medium text-lg flex items-center gap-2">
+            <Building2 size={16} /> List of organisations ({filtered.length} of {orgs.data?.total ?? 0})
           </h3>
-          {/* Toolbar — mirrors list/toolbar.html */}
-          <div className="box-tools pull-right">
-            <button className="btn btn-sm btn-primary" onClick={() => { setCreating(true); setEditing(null); }}>
-              <Plus size={13} /> Add organisation
+          {/* Toolbar */}
+          <div className="flex items-center gap-2">
+            <button className="thehive-btn-primary flex items-center gap-2" onClick={() => { setCreating(true); setEditing(null); }}>
+              <Plus size={14} /> Add organisation
             </button>
-            <button className={`btn btn-sm btn-default ml-xs ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters((v) => !v)}>
-              <Filter size={13} /> Filters
+            <button className={`thehive-btn-secondary flex items-center gap-2 ${showFilters ? 'bg-slate-700 text-slate-200 border-slate-600' : ''}`} onClick={() => setShowFilters((v) => !v)}>
+              <Filter size={14} /> Filters
             </button>
           </div>
         </div>
 
         {/* Filter panel */}
         {showFilters && (
-          <div className="box-body filter-panel">
-            <div className="filter-grid">
-              <label className="filter-control">
-                <span>Search</span>
-                <div className="relative">
-                  <Search size={13} className="thehive-input-icon" />
+          <div className="bg-slate-900/50 p-6 border-b border-slate-700">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Search</span>
+                <div className="relative flex items-center">
+                  <Search size={14} className="absolute left-3 text-slate-500" />
                   <input
-                    className="thehive-input thehive-input-with-icon py-1.5"
+                    className="thehive-input pl-9 py-1.5"
                     placeholder="Name or description"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
@@ -134,62 +134,64 @@ export default function OrganisationsAdminPage() {
           </div>
         )}
 
-        <div className="box-body no-padding">
-          {orgs.isLoading && <div className="empty-message">Loading organisations…</div>}
-          {!orgs.isLoading && filtered.length === 0 && <div className="empty-message">No organisations found.</div>}
+        <div className="overflow-x-auto">
+          {orgs.isLoading && <div className="text-center py-10 text-slate-500">Loading organisations…</div>}
+          {!orgs.isLoading && filtered.length === 0 && <div className="text-center py-10 text-slate-500">No organisations found.</div>}
           {filtered.length > 0 && (
-            <table className="table table-striped case-list">
+            <table className="w-full text-left text-sm whitespace-nowrap">
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th style={{ width: 300 }}>Created By</th>
-                  <th style={{ width: 160 }}>Dates C. / U.</th>
-                  <th style={{ width: 250 }}></th>
+                <tr className="bg-slate-900 border-b border-slate-700 text-slate-400">
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium w-[300px]">Created By</th>
+                  <th className="px-4 py-3 font-medium w-[160px]">Dates C. / U.</th>
+                  <th className="px-4 py-3 font-medium text-right w-[250px]">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800">
                 {filtered.map((org) => (
-                  <tr key={org.id ?? org.name}>
-                    <td>
-                      <div className="org-name"><strong>{org.name}</strong></div>
-                      <div className="org-description text-muted">{org.description || 'No description'}</div>
-                      <div className="mt-xs">
-                        <span className="text-muted mr-xxs">Linked organisations:</span>
+                  <tr key={org.id ?? org.name} className="hover:bg-slate-800/50 transition-colors">
+                    <td className="px-4 py-3 whitespace-normal">
+                      <div className="font-semibold text-slate-200">{org.name}</div>
+                      <div className="text-slate-500 text-xs mt-1">{org.description || 'No description'}</div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 items-center">
+                        <span className="text-slate-500 text-[10px] uppercase tracking-wider font-semibold">Linked:</span>
                         {(org.links ?? []).length > 0
                           ? (org.links ?? []).sort().map((link) => (
-                              <span key={link} className="label label-default mr-xxs mb-xxs">{link}</span>
+                              <span key={link} className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs">{link}</span>
                             ))
-                          : <span className="text-warning"><em>None</em></span>
+                          : <span className="text-slate-500 text-xs italic">None</span>
                         }
                       </div>
                     </td>
-                    <td>{org.created_by ?? <em className="text-muted">unknown</em>}</td>
-                    <td className="date-stack">
+                    <td className="px-4 py-3 text-slate-400">{org.created_by ?? <em className="text-slate-500">unknown</em>}</td>
+                    <td className="px-4 py-3 text-xs text-slate-400 flex flex-col gap-0.5">
                       <div>C. {fmt(org.created_at)}</div>
                       <div>U. {fmt(org.updated_at)}</div>
                     </td>
-                    <td className="text-right nowrap">
-                      <button
-                        className="btn btn-xs btn-default mr-xs"
-                        onClick={() => { setEditing(org); setCreating(false); }}
-                        title="Edit organisation"
-                      >
-                        <Edit2 size={12} /> Edit
-                      </button>
-                      <button
-                        className="btn btn-xs btn-default mr-xs"
-                        onClick={() => setLinking(org)}
-                        title="Link to another organisation"
-                      >
-                        <Link2 size={12} /> Link
-                      </button>
-                      <button
-                        className="btn btn-xs btn-danger"
-                        onClick={() => { if (confirm(`Delete organisation "${org.name}"?`)) remove.mutate(org.name); }}
-                        title="Delete organisation"
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          className="thehive-btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
+                          onClick={() => { setEditing(org); setCreating(false); }}
+                          title="Edit organisation"
+                        >
+                          <Edit2 size={12} /> Edit
+                        </button>
+                        <button
+                          className="thehive-btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
+                          onClick={() => setLinking(org)}
+                          title="Link to another organisation"
+                        >
+                          <Link2 size={12} /> Link
+                        </button>
+                        <button
+                          className="py-1 px-2.5 text-xs flex items-center gap-1 text-red-400 bg-red-900/10 hover:bg-red-900/30 border border-red-900/30 hover:border-red-500/50 rounded transition-colors"
+                          onClick={() => { if (confirm(`Delete organisation "${org.name}"?`)) remove.mutate(org.name); }}
+                          title="Delete organisation"
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -235,30 +237,28 @@ function OrgModal({ org, onClose, onSave, saving }: {
     onSave({ name: fd.get('name'), description: fd.get('description') });
   }
   return (
-    <div className="modal-backdrop-inline">
-      <div className="modal-dialog-inline">
-        <div className="box box-primary">
-          <div className="box-header with-border">
-            <h3 className="box-title">{org ? 'Edit organisation' : 'Create organisation'}</h3>
-            <button className="close pull-right" onClick={onClose}>×</button>
-          </div>
-          <form onSubmit={submit}>
-            <div className="box-body">
-              <div className="form-group">
-                <label>Name</label>
-                <input name="name" className="form-control" defaultValue={org?.name ?? ''} required placeholder="Organisation name" />
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea name="description" className="form-control" defaultValue={org?.description ?? ''} rows={3} placeholder="Description (optional)" />
-              </div>
-            </div>
-            <div className="box-footer">
-              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-              <button type="button" className="btn btn-default ml-xs" onClick={onClose}>Cancel</button>
-            </div>
-          </form>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-md flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+          <h3 className="text-blue-500 font-medium text-lg">{org ? 'Edit organisation' : 'Create organisation'}</h3>
+          <button className="text-slate-400 hover:text-slate-200 transition-colors" onClick={onClose}>×</button>
         </div>
+        <form onSubmit={submit} className="flex flex-col">
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Name</label>
+              <input name="name" className="thehive-input" defaultValue={org?.name ?? ''} required placeholder="Organisation name" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Description</label>
+              <textarea name="description" className="thehive-input" defaultValue={org?.description ?? ''} rows={3} placeholder="Description (optional)" />
+            </div>
+          </div>
+          <div className="px-6 py-4 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-2">
+            <button type="button" className="thehive-btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="thehive-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -274,26 +274,22 @@ function LinkModal({ org, allOrgs, onClose, onSave, saving }: {
   const [target, setTarget] = useState('');
   const options = allOrgs.filter((o) => o.name !== org.name && !(org.links ?? []).includes(o.name));
   return (
-    <div className="modal-backdrop-inline">
-      <div className="modal-dialog-inline">
-        <div className="box box-primary">
-          <div className="box-header with-border">
-            <h3 className="box-title"><Link2 size={14} /> Link organisation: {org.name}</h3>
-            <button className="close pull-right" onClick={onClose}>×</button>
-          </div>
-          <div className="box-body">
-            <div className="form-group">
-              <label>Target organisation</label>
-              <select className="form-control" value={target} onChange={(e) => setTarget(e.target.value)}>
-                <option value="">Select organisation…</option>
-                {options.map((o) => <option key={o.name} value={o.name}>{o.name}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="box-footer">
-            <button className="btn btn-primary" disabled={saving || !target} onClick={() => onSave(target)}>{saving ? 'Saving…' : 'Link'}</button>
-            <button className="btn btn-default ml-xs" onClick={onClose}>Cancel</button>
-          </div>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-md flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+          <h3 className="text-blue-500 font-medium text-lg flex items-center gap-2"><Link2 size={16} /> Link organisation: {org.name}</h3>
+          <button className="text-slate-400 hover:text-slate-200 transition-colors" onClick={onClose}>×</button>
+        </div>
+        <div className="p-6">
+          <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Target organisation</label>
+          <select className="thehive-input" value={target} onChange={(e) => setTarget(e.target.value)}>
+            <option value="">Select organisation…</option>
+            {options.map((o) => <option key={o.name} value={o.name}>{o.name}</option>)}
+          </select>
+        </div>
+        <div className="px-6 py-4 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-2">
+          <button className="thehive-btn-secondary" onClick={onClose}>Cancel</button>
+          <button className="thehive-btn-primary" disabled={saving || !target} onClick={() => onSave(target)}>{saving ? 'Saving…' : 'Link'}</button>
         </div>
       </div>
     </div>

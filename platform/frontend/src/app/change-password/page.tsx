@@ -53,55 +53,59 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <main className="thehive-login-shell">
-      <div className="thehive-login-card change-password-card">
-        <div className="thehive-login-header">
-          <div className="flex items-center justify-center mb-3">
-            <Image src="/logo-white.svg" alt="TheHive" width={140} height={48} priority />
+    <main className="ncs-login-shell">
+      <div className="ncs-login-card">
+        <div className="ncs-login-header">
+          <div className="ncs-login-logo">
+            <Image src="/logo-login.jpg" alt="NCS Fusion Center" width={100} height={100} priority className="ncs-login-logo-img" />
           </div>
-          <p className="text-white/85 text-sm">First login password change</p>
-          <p className="text-white/60 text-xs mt-1">Required before entering the TheHive workspace</p>
+          <h1 className="ncs-login-title">First login password change</h1>
+          <p className="ncs-login-subtitle">Required before entering the Fusion Center workspace</p>
         </div>
-        <div className="thehive-login-body">
-          <div className="first-login-banner">
-            <KeyRound size={18} />
-            <div>
-              <strong>Change password required</strong>
-              <p>Your account is marked with must_change_password. Choose a production-strength password to continue.</p>
+        <div className="ncs-login-body">
+          <div className="ncs-alert ncs-alert-danger" style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <div style={{ marginTop: '2px' }}>
+              <KeyRound size={16} />
+            </div>
+            <div style={{ fontSize: '0.82rem' }}>
+              <strong style={{ display: 'block', marginBottom: '4px' }}>Change password required</strong>
+              <p style={{ margin: 0 }}>Your account is marked with must_change_password. Choose a production-strength password to continue.</p>
             </div>
           </div>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="current_password">Current password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                <input id="current_password" type="password" autoComplete="current-password" disabled={submitting} className="thehive-input pl-9" {...register('current_password')} />
+          <form onSubmit={handleSubmit(onSubmit)} className="ncs-login-form">
+            <div className="ncs-form-group">
+              <label htmlFor="current_password">Current password</label>
+              <div className="ncs-input-wrap">
+                <Lock className="ncs-input-icon" size={16} />
+                <input id="current_password" type="password" autoComplete="current-password" disabled={submitting} placeholder="••••••••" {...register('current_password')} />
               </div>
-              {errors.current_password && <p className="text-red-600 text-xs mt-1.5">{errors.current_password.message}</p>}
+              {errors.current_password && <p className="ncs-field-error">{errors.current_password.message}</p>}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="new_password">New password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                <input id="new_password" type="password" autoComplete="new-password" disabled={submitting} className="thehive-input pl-9" {...register('new_password')} />
+            <div className="ncs-form-group">
+              <label htmlFor="new_password">New password</label>
+              <div className="ncs-input-wrap">
+                <Lock className="ncs-input-icon" size={16} />
+                <input id="new_password" type="password" autoComplete="new-password" disabled={submitting} placeholder="••••••••" {...register('new_password')} />
               </div>
-              {errors.new_password && <p className="text-red-600 text-xs mt-1.5">{errors.new_password.message}</p>}
+              {errors.new_password && <p className="ncs-field-error">{errors.new_password.message}</p>}
             </div>
-            <div>
-              <label className="block text-xs font-medium text-thehive-text uppercase tracking-wide mb-1.5" htmlFor="confirm_password">Confirm new password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-thehive-muted" size={16} />
-                <input id="confirm_password" type="password" autoComplete="new-password" disabled={submitting} className="thehive-input pl-9" {...register('confirm_password')} />
+            <div className="ncs-form-group">
+              <label htmlFor="confirm_password">Confirm new password</label>
+              <div className="ncs-input-wrap">
+                <Lock className="ncs-input-icon" size={16} />
+                <input id="confirm_password" type="password" autoComplete="new-password" disabled={submitting} placeholder="••••••••" {...register('confirm_password')} />
               </div>
-              {errors.confirm_password && <p className="text-red-600 text-xs mt-1.5">{errors.confirm_password.message}</p>}
+              {errors.confirm_password && <p className="ncs-field-error">{errors.confirm_password.message}</p>}
             </div>
-            {serverError && <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-2 rounded-sm">{serverError}</div>}
-            <button type="submit" disabled={submitting} className="thehive-btn-primary w-full flex items-center justify-center gap-2">
+            {serverError && <div className="ncs-alert ncs-alert-danger">{serverError}</div>}
+            <button type="submit" disabled={submitting} className="ncs-btn-primary ncs-btn-block">
               <KeyRound size={16} /> {submitting ? 'Changing password…' : 'Change password'}
             </button>
-            <button type="button" disabled={submitting} className="thehive-btn-secondary w-full flex items-center justify-center gap-2" onClick={logout}>
-              <LogOut size={16} /> Sign out
-            </button>
+            <div className="ncs-forgot-row" style={{ justifyContent: 'center' }}>
+              <button type="button" disabled={submitting} onClick={logout}>
+                Sign out
+              </button>
+            </div>
           </form>
         </div>
       </div>

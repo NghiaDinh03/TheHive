@@ -42,9 +42,16 @@ export default function TaskTimelinePage() {
   const [assignee, setAssignee] = useState('');
   const [title, setTitle] = useState('');
   const [logMessage, setLogMessage] = useState('');
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [userSuggestions, setUserSuggestions] = useState<{login: string; name: string}[]>([]);
+
+  const searchUsers = async (q: string) => {
+    const data = await apiFetch<{login: string; name: string}[]>(`/api/v1/users/search?query=${encodeURIComponent(q)}`);
+    return data;
+  };
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -90,100 +97,118 @@ export default function TaskTimelinePage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar user={me.data ?? { login: authedLogin }} />
-        <main className="content-wrapper flex-1">
-          <section className="content-header">
-            <h1>Task <small>{current?.case_number ? `Case #${current.case_number}` : 'analyst workbench'}</small></h1>
-            <ol className="breadcrumb">
-              <li>Home</li>
-              <li><a href="/tasks">Tasks</a></li>
-              <li className="active">{current?.title ?? params.id}</li>
-            </ol>
-          </section>
-          <section className="content task-detail-page">
-            <div className="case-detail-layout">
-              {/* Main panel */}
-              <section className="box box-primary task-detail-main">
-                <div className="box-header with-border task-detail-heading">
-                  <h3 className="box-title text-primary">
-                    {current?.flag && <Flag size={13} className="inline text-red-600 mr-1" />}
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-100 mb-2">Task <span className="text-slate-400 font-normal text-lg">{current?.case_number ? `Case #${current.case_number}` : 'analyst workbench'}</span></h1>
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <span>Home</span>
+                <span className="text-slate-600">/</span>
+                <a href="/tasks" className="hover:text-blue-400 transition-colors">Tasks</a>
+                <span className="text-slate-600">/</span>
+                <span className="text-blue-400 truncate max-w-[200px]">{current?.title ?? params.id}</span>
+              </div>
+            </div>
+            <div className="mt-4 md:mt-0 flex gap-2">
+              <TaskStatusBadge status={current?.status} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Main panel */}
+            <div className="lg:col-span-3 flex flex-col gap-6">
+              <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl overflow-hidden shadow-lg flex flex-col">
+                <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+                  <h3 className="font-semibold text-slate-100 flex items-center gap-2">
+                    {current?.flag && <Flag size={14} className="text-red-500" />}
                     {current?.title ?? `Task ${params.id}`}
                   </h3>
-                  <div className="box-tools pull-right">
-                    <TaskStatusBadge status={current?.status} />
-                  </div>
                 </div>
-                <div className="box-body">
-                  {error && <div className="admin-alert error">{error}</div>}
+                <div className="p-6">
+                  {error && <div className="mb-6 p-4 bg-red-900/30 border border-red-700/50 text-red-400 rounded-lg text-sm">{error}</div>}
 
                   {/* Tab strip */}
-                  <ul className="nav nav-tabs detail-tab-strip">
+                  <div className="flex overflow-x-auto border-b border-slate-700 mb-6 custom-scrollbar">
                     {TABS.map((tab) => (
-                      <li key={tab} className={activeTab === tab ? 'active' : ''}>
-                        <button type="button" onClick={() => setActiveTab(tab)}>
-                          {tab}
-                          {tab === 'Logs' && <span className="badge ml-xs">{detail.data?.logs.length ?? 0}</span>}
-                          {tab === 'Attachments' && <span className="badge ml-xs">{detail.data?.attachments.length ?? 0}</span>}
-                          {tab === 'Audit' && <span className="badge ml-xs">{detail.data?.history.length ?? 0}</span>}
-                        </button>
-                      </li>
+                      <button
+                        key={tab}
+                        type="button"
+                        className={`px-5 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex items-center gap-2 ${
+                          activeTab === tab
+                            ? 'border-blue-500 text-blue-400'
+                            : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600'
+                        }`}
+                        onClick={() => setActiveTab(tab)}
+                      >
+                        {tab}
+                        {tab === 'Logs' && <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px]">{detail.data?.logs.length ?? 0}</span>}
+                        {tab === 'Attachments' && <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px]">{detail.data?.attachments.length ?? 0}</span>}
+                        {tab === 'Audit' && <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px]">{detail.data?.history.length ?? 0}</span>}
+                      </button>
                     ))}
-                  </ul>
+                  </div>
 
                   {/* Timeline tab — combined logs + audit */}
                   {activeTab === 'Timeline' && (
-                    <div className="tab-content">
-                      <h4 className="vpad10 text-primary">Basic Information</h4>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Title</dt>
-                        <dd>{current?.title ?? '…'}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Case</dt>
-                        <dd>
-                          {current?.case_number
-                            ? <a href={`/cases/${current.case_id}`}>#{current.case_number} {current.case_title}</a>
-                            : current?.case_id ?? '—'
-                          }
-                        </dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Status</dt>
-                        <dd><TaskStatusBadge status={current?.status} /></dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Assignee</dt>
-                        <dd>{current?.assignee || <em className="text-muted">Not assigned</em>}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Group</dt>
-                        <dd>{current?.group_name || 'default'}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Due date</dt>
-                        <dd>{current?.due_date ? <span className="text-warning"><Clock size={12} /> {fmt(current.due_date)}</span> : <em className="text-muted">None</em>}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Start date</dt>
-                        <dd>{fmt(current?.start_date)}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">End date</dt>
-                        <dd>{fmt(current?.end_date)}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Created</dt>
-                        <dd>{fmt(current?.created_at)}</dd>
-                      </dl>
-                      <dl className="dl-horizontal clear">
-                        <dt className="pull-left">Updated</dt>
-                        <dd>{fmt(current?.updated_at)}</dd>
-                      </dl>
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <h4 className="text-blue-500 font-medium text-lg mb-6">Basic Information</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Title</span>
+                          <span className="text-slate-200">{current?.title ?? '…'}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Case</span>
+                          <span className="text-slate-200">
+                            {current?.case_number
+                              ? <a href={`/cases/${current.case_id}`} className="text-blue-400 hover:text-blue-300 hover:underline">#{String(current.case_number).padStart(7, '0')} {current.case_title}</a>
+                              : current?.case_id ?? '—'
+                            }
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Status</span>
+                          <span><TaskStatusBadge status={current?.status} /></span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Assignee</span>
+                          <span className="text-slate-200">{current?.assignee || <em className="text-slate-500 not-italic">Not assigned</em>}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Group</span>
+                          <span className="text-slate-200">{current?.group_name || 'default'}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Due date</span>
+                          <span className="text-slate-200">{current?.due_date ? <span className="text-yellow-500 flex items-center gap-1.5"><Clock size={14} /> {fmt(current.due_date)}</span> : <em className="text-slate-500 not-italic">None</em>}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Start date</span>
+                          <span className="text-slate-200">{fmt(current?.start_date)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">End date</span>
+                          <span className="text-slate-200">{fmt(current?.end_date)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Created</span>
+                          <span className="text-slate-200">{fmt(current?.created_at)}</span>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Updated</span>
+                          <span className="text-slate-200">{fmt(current?.updated_at)}</span>
+                        </div>
+                      </div>
 
                       {/* Task progress bar */}
-                      <div className="task-progress mt-s">
-                        <div className="progress">
+                      <div className="mt-10">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-slate-400 text-sm">Progress</span>
+                          <span className="text-slate-300 text-sm font-medium">{current?.status === 'Completed' ? '100%' : current?.status === 'InProgress' ? '50%' : '0%'}</span>
+                        </div>
+                        <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden">
                           <div
-                            className={`progress-bar ${current?.status === 'Completed' ? 'progress-bar-success' : current?.status === 'InProgress' ? 'progress-bar-info' : current?.status === 'Cancel' ? 'progress-bar-danger' : ''}`}
+                            className={`h-2.5 rounded-full transition-all duration-500 ${current?.status === 'Completed' ? 'bg-green-500' : current?.status === 'InProgress' ? 'bg-blue-500' : current?.status === 'Cancel' ? 'bg-red-500' : 'bg-slate-700'}`}
                             style={{ width: current?.status === 'Completed' ? '100%' : current?.status === 'InProgress' ? '50%' : '0%' }}
                           ></div>
                         </div>
@@ -193,47 +218,50 @@ export default function TaskTimelinePage() {
 
                   {/* Logs tab — append-only log entries */}
                   {activeTab === 'Logs' && (
-                    <div className="tab-content">
-                      {/* Add log form — mirrors add-task-log.modal.html */}
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      {/* Add log form */}
                       {canTask && (
-                        <form className="log-entry-form mb-s" onSubmit={submitLog}>
-                          <div className="input-group">
+                        <form className="mb-8 bg-slate-900/50 p-4 rounded-lg border border-slate-700" onSubmit={submitLog}>
+                          <div className="flex flex-col md:flex-row gap-3">
                             <textarea
-                              className="form-control"
+                              className="flex-1 bg-slate-800 border border-slate-700 rounded-md p-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none"
                               rows={3}
                               placeholder="Add a log entry (markdown supported)…"
                               value={logMessage}
                               onChange={(e) => setLogMessage(e.target.value)}
                             />
-                            <span className="input-group-btn">
+                            <div className="flex md:flex-col justify-end">
                               <button
                                 type="submit"
-                                className="btn btn-primary"
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 h-full md:w-16 md:h-auto"
                                 disabled={!logMessage.trim() || addLog.isPending}
                                 title="Add log"
                               >
-                                <Send size={14} />
+                                <Send size={16} />
+                                <span className="md:hidden">Send</span>
                               </button>
-                            </span>
+                            </div>
                           </div>
                         </form>
                       )}
 
-                      {/* Log entries — mirrors log-entry.html */}
-                      <div className="timeline">
+                      {/* Log entries */}
+                      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-700 before:to-transparent">
                         {(detail.data?.logs ?? []).length === 0 && (
-                          <div className="empty-message">No task logs yet.</div>
+                          <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg bg-slate-800/50 relative z-10 mx-8">No task logs yet.</div>
                         )}
-                        {(detail.data?.logs ?? []).map((log) => (
-                          <div className="timeline-item" key={log.id}>
-                            <span className="timeline-dot" />
-                            <div className="timeline-content">
-                              <div className="timeline-header">
-                                <strong>{log.created_by || 'system'}</strong>
-                                <span className="timeline-time text-muted ml-xs">{fmt(log.created_at)}</span>
+                        {(detail.data?.logs ?? []).map((log, i) => (
+                          <div className="relative flex items-start justify-between md:justify-normal md:odd:flex-row-reverse group is-active" key={log.id}>
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-slate-900 bg-blue-900/50 text-blue-400 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                              <i className="fa fa-comment"></i>
+                            </div>
+                            <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-md">
+                              <div className="flex justify-between items-start mb-2 pb-2 border-b border-slate-700/50">
+                                <strong className="text-slate-200">{log.created_by || 'system'}</strong>
+                                <span className="text-slate-500 text-xs">{fmt(log.created_at)}</span>
                               </div>
-                              <div className="timeline-body">
-                                <pre className="log-message">{log.message}</pre>
+                              <div className="prose prose-invert max-w-none text-slate-300 text-sm whitespace-pre-wrap">
+                                {log.message}
                               </div>
                             </div>
                           </div>
@@ -244,7 +272,7 @@ export default function TaskTimelinePage() {
 
                   {/* Attachments tab */}
                   {activeTab === 'Attachments' && (
-                    <div className="tab-content">
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                       <AttachmentPanel
                         user={me.data}
                         logId={detail.data?.logs?.[0]?.id}
@@ -256,20 +284,22 @@ export default function TaskTimelinePage() {
 
                   {/* Audit tab */}
                   {activeTab === 'Audit' && (
-                    <div className="tab-content">
-                      <div className="timeline">
+                    <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-700 before:to-transparent">
                         {(detail.data?.history ?? []).length === 0 && (
-                          <div className="empty-message">No audit events yet.</div>
+                          <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg bg-slate-800/50 relative z-10 mx-8">No audit events yet.</div>
                         )}
                         {(detail.data?.history ?? []).map((h, i) => (
-                          <div className="timeline-item" key={`${h.action}-${h.created_at}-${i}`}>
-                            <span className="timeline-dot" />
-                            <div className="timeline-content">
-                              <div className="timeline-header">
-                                <strong>{h.action}</strong>
-                                <span className="timeline-time text-muted ml-xs">{fmt(h.created_at)}</span>
+                          <div className="relative flex items-start justify-between md:justify-normal md:odd:flex-row-reverse group is-active" key={`${h.action}-${h.created_at}-${i}`}>
+                            <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-slate-900 bg-slate-700 text-slate-400 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                              <i className="fa fa-history"></i>
+                            </div>
+                            <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-md">
+                              <div className="flex justify-between items-start mb-1">
+                                <strong className="text-slate-200">{h.action}</strong>
+                                <span className="text-slate-500 text-xs">{fmt(h.created_at)}</span>
                               </div>
-                              <div className="timeline-body text-muted">{h.actor_id || 'system'}</div>
+                              <div className="text-slate-400 text-sm">{h.actor_id || 'system'}</div>
                             </div>
                           </div>
                         ))}
@@ -277,77 +307,108 @@ export default function TaskTimelinePage() {
                     </div>
                   )}
                 </div>
-              </section>
+              </div>
+            </div>
 
-              {/* Action sidebar */}
-              <aside className="box box-primary case-action-box task-action-box">
-                <div className="box-header with-border"><h3 className="box-title">Task actions</h3></div>
-                <div className="box-body detail-tabs">
+            {/* Action sidebar */}
+            <div className="lg:col-span-1">
+              <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-lg sticky top-6">
+                <h3 className="text-slate-100 font-semibold mb-5 pb-2 border-b border-slate-700 flex items-center gap-2">
+                  <i className="fa fa-bolt text-blue-500"></i> Task Actions
+                </h3>
+                
+                <div className="flex flex-col gap-5">
                   {/* Lifecycle actions */}
-                  <div className="btn-group-vertical w-full mb-s">
+                  <div className="flex flex-col gap-2">
                     {current?.status === 'Waiting' && (
-                      <button className="btn btn-success" disabled={!canTask || start.isPending} onClick={() => start.mutate()}>
-                        <Play size={13} /> Start task
+                      <button className="px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full" disabled={!canTask || start.isPending} onClick={() => start.mutate()}>
+                        <Play size={14} /> Start task
                       </button>
                     )}
                     {current?.status === 'InProgress' && (
-                      <button className="btn btn-primary" disabled={!canTask || close.isPending} onClick={() => close.mutate()}>
-                        <CheckCircle size={13} /> Close task
+                      <button className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full" disabled={!canTask || close.isPending} onClick={() => close.mutate()}>
+                        <CheckCircle size={14} /> Close task
                       </button>
                     )}
                     {(current?.status === 'Completed' || current?.status === 'Cancel') && (
-                      <button className="btn btn-default" disabled={!canTask || reopen.isPending} onClick={() => reopen.mutate()}>
-                        <RotateCcw size={13} /> Reopen task
+                      <button className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white border border-slate-600 rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full" disabled={!canTask || reopen.isPending} onClick={() => reopen.mutate()}>
+                        <RotateCcw size={14} /> Reopen task
                       </button>
                     )}
                     {current?.status !== 'Cancel' && current?.status !== 'Completed' && (
-                      <button className="btn btn-danger" disabled={!canTask || cancel.isPending} onClick={() => cancel.mutate()}>
-                        <XCircle size={13} /> Cancel task
+                      <button className="px-4 py-2.5 bg-red-900/40 hover:bg-red-900/60 text-red-400 border border-red-700/50 rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full mt-1" disabled={!canTask || cancel.isPending} onClick={() => cancel.mutate()}>
+                        <XCircle size={14} /> Cancel task
                       </button>
                     )}
                   </div>
 
-                  <hr />
+                  <div className="h-px bg-slate-700 w-full" />
 
                   {/* Update title */}
-                  <div className="form-group">
-                    <label className="control-label">Update title</label>
-                    <input
-                      className="form-control input-sm"
-                      placeholder="New task title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                    />
-                    <button
-                      className="btn btn-sm btn-default mt-xs w-full"
-                      disabled={!canTask || patch.isPending || !title.trim()}
-                      onClick={() => patch.mutate()}
-                    >
-                      Update title
-                    </button>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-slate-400 text-sm font-medium">Update Title</label>
+                    <div className="flex gap-2">
+                      <input
+                        className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full"
+                        placeholder="New task title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                      />
+                      <button
+                        className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        disabled={!canTask || patch.isPending || !title.trim()}
+                        onClick={() => patch.mutate()}
+                      >
+                        Save
+                      </button>
+                    </div>
                   </div>
 
                   {/* Assign */}
-                  <div className="form-group">
-                    <label className="control-label">Assign to</label>
-                    <input
-                      className="form-control input-sm"
-                      placeholder="Assignee login"
-                      value={assignee}
-                      onChange={(e) => setAssignee(e.target.value)}
-                    />
-                    <button
-                      className="btn btn-sm btn-default mt-xs w-full"
-                      disabled={!canTask || assign.isPending || !assignee.trim()}
-                      onClick={() => assign.mutate()}
-                    >
-                      Assign
-                    </button>
+                  <div className="flex flex-col gap-2 relative">
+                    <label className="text-slate-400 text-sm font-medium">Reassign Task</label>
+                    <div className="flex gap-2">
+                      <input
+                        className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full"
+                        placeholder="Search user login..."
+                        value={assignee}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setAssignee(val);
+                          if (val.length >= 2) {
+                            searchUsers(val).then(res => { setUserSuggestions(res); setShowUserDropdown(true); });
+                          } else {
+                            setShowUserDropdown(false);
+                          }
+                        }}
+                        onFocus={() => { if (userSuggestions.length > 0) setShowUserDropdown(true); }}
+                        onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
+                      />
+                      <button
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                        disabled={!canTask || assign.isPending || !assignee.trim()}
+                        onClick={() => assign.mutate()}
+                      >
+                        Assign
+                      </button>
+                    </div>
+                    {showUserDropdown && userSuggestions.length > 0 && (
+                      <ul className="absolute top-[68px] left-0 mt-1 w-[calc(100%-80px)] bg-slate-800 border border-slate-700 rounded-md shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
+                        {userSuggestions.map(u => (
+                          <li key={u.login}>
+                            <button type="button" className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors flex flex-col" onClick={() => { setAssignee(u.login); setShowUserDropdown(false); }}>
+                              <span className="font-medium text-slate-200">{u.login}</span>
+                              {u.name && <span className="text-slate-500 text-[11px]">{u.name}</span>}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
-              </aside>
+              </div>
             </div>
-          </section>
+          </div>
         </main>
       </div>
     </div>
@@ -355,10 +416,10 @@ export default function TaskTimelinePage() {
 }
 
 function TaskStatusBadge({ status }: { status?: string }) {
-  if (!status) return <span className="label label-default">Loading</span>;
-  if (status === 'Waiting') return <span className="label label-default"><Clock size={11} /> Waiting</span>;
-  if (status === 'InProgress') return <span className="label label-primary"><Play size={11} /> In Progress</span>;
-  if (status === 'Completed') return <span className="label label-success"><CheckCircle size={11} /> Completed</span>;
-  if (status === 'Cancel') return <span className="label label-danger"><XCircle size={11} /> Cancelled</span>;
-  return <span className="label label-default">{status}</span>;
+  if (!status) return <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 uppercase tracking-wider border border-slate-600">Loading</span>;
+  if (status === 'Waiting') return <span className="px-2 py-0.5 rounded text-[10px] bg-blue-900/50 text-blue-400 uppercase tracking-wider border border-blue-700/50 inline-flex items-center gap-1"><Clock size={11} /> Waiting</span>;
+  if (status === 'InProgress') return <span className="px-2 py-0.5 rounded text-[10px] bg-yellow-900/50 text-yellow-400 uppercase tracking-wider border border-yellow-700/50 inline-flex items-center gap-1"><Play size={11} /> In Progress</span>;
+  if (status === 'Completed') return <span className="px-2 py-0.5 rounded text-[10px] bg-green-900/50 text-green-400 uppercase tracking-wider border border-green-700/50 inline-flex items-center gap-1"><CheckCircle size={11} /> Completed</span>;
+  if (status === 'Cancel') return <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 uppercase tracking-wider border border-slate-600 inline-flex items-center gap-1"><XCircle size={11} /> Cancelled</span>;
+  return <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 uppercase tracking-wider border border-slate-600">{status}</span>;
 }

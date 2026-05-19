@@ -21,7 +21,7 @@ type EntityType = 'case' | 'alert' | 'observable' | 'task' | 'log';
 
 type FilterField = { field: string; value: string };
 
-type CaseResult = { id: string; number: number; title: string; severity: number; status: string; assignee: string; tags: string[]; tlp: number; pap: number; created_at: string };
+type CaseResult = { id: string; number: number; title: string; severity: number; status: string; assignee: string; tags: string[]; tlp: number; pap: number; created_at: string; organisation?: string };
 type AlertResult = { id: string; title: string; source: string; source_ref: string; severity: number; status: string; tags: string[]; tlp: number; pap: number; created_at: string };
 type ObservableResult = { id: string; data_type: string; data: string; ioc: boolean; sighted: boolean; case_number?: number; case_title?: string; tags: string[]; tlp: number; created_at: string };
 type TaskResult = { id: string; title: string; status: string; assignee: string; case_number?: number; case_title?: string; created_at: string };
@@ -75,7 +75,7 @@ function SearchWorkspace() {
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -128,126 +128,114 @@ function SearchWorkspace() {
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar user={me.data ? { login: me.data.login, name: me.data.name } : { login: authedLogin }} />
         <main className="content-wrapper flex-1">
-          <section className="content-header">
-            <h1>Search <small>cases, alerts, observables, tasks, logs</small></h1>
-            <ol className="breadcrumb"><li>Home</li><li className="active">Search</li></ol>
-          </section>
-          <section className="content">
-            <div className="box search-list">
+          <section className="content p-6">
+            <div className="flex flex-col">
               {/* Entity bar */}
-              <div className="box-body" style={{ paddingBottom: 0 }}>
-                <h4 className="text-primary" style={{ marginTop: 0 }}>Search scope</h4>
-                <div className="entity-bar">
+              <div className="p-6 border-b border-slate-700 bg-slate-900/50">
+                <h4 className="text-blue-500 font-medium text-lg mb-4">Search scope</h4>
+                <div className="flex gap-2 flex-wrap">
                   {ENTITIES.map((e) => (
                     <button
                       key={e.name}
                       type="button"
-                      className={`entity-item${entity === e.name ? ' active' : ''}`}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${entity === e.name ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700'}`}
                       onClick={() => switchEntity(e.name)}
                     >
-                      <div className="entity-item-icon">{e.icon}</div>
-                      <div className="entity-item-text">{e.label}</div>
+                      {e.icon}
+                      <span className="font-medium text-sm">{e.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Filters */}
-              <div className="box-body">
-                <h4 className="text-primary">
-                  Search filters{' '}
-                  {filters.length > 0 && <small>{filters.length} filter(s) applied</small>}
+              <div className="p-6 border-b border-slate-700 bg-slate-900/30">
+                <h4 className="text-blue-500 font-medium text-lg mb-4 flex items-center gap-2">
+                  Search filters
+                  {filters.length > 0 && <span className="px-2 py-0.5 bg-blue-900/50 text-blue-400 text-xs rounded-full">{filters.length} applied</span>}
                 </h4>
-                <form onSubmit={doSearch}>
+                <form onSubmit={doSearch} className="space-y-4">
                   {/* Free text */}
-                  <div className="row mb-2">
-                    <div className="col-sm-12 col-md-8">
-                      <div className="input-group">
-                        <span className="input-group-addon"><Search size={14} /></span>
-                        <input
-                          type="text"
-                          className="form-control input-sm"
-                          placeholder="Free text search…"
-                          value={freeText}
-                          onChange={(e) => setFreeText(e.target.value)}
-                        />
-                        {freeText && (
-                          <span className="input-group-btn">
-                            <button type="button" className="btn btn-default btn-sm" onClick={() => setFreeText('')}>
-                              <Times size={12} />
-                            </button>
-                          </span>
-                        )}
+                  <div className="w-full md:w-2/3 lg:w-1/2">
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search size={16} className="text-slate-400" />
                       </div>
+                      <input
+                        type="text"
+                        className="w-full pl-10 pr-10 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                        placeholder="Free text search…"
+                        value={freeText}
+                        onChange={(e) => setFreeText(e.target.value)}
+                      />
+                      {freeText && (
+                        <button type="button" className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-200" onClick={() => setFreeText('')}>
+                          <Times size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {/* Field filters */}
-                  {filters.map((f, i) => (
-                    <div key={i} className="row mb-1">
-                      <div className="col-sm-4 col-md-3">
-                        <div className="input-group">
-                          <span className="input-group-btn">
-                            <button type="button" className="btn btn-default btn-sm" onClick={() => removeFilter(i)}>
-                              <Times size={12} className="text-danger" />
-                            </button>
-                          </span>
+                  <div className="space-y-2">
+                    {filters.map((f, i) => (
+                      <div key={i} className="flex flex-wrap md:flex-nowrap items-center gap-2">
+                        <div className="flex bg-slate-900 border border-slate-700 rounded-md overflow-hidden">
+                          <button type="button" className="px-3 py-2 bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 transition-colors border-r border-slate-700" onClick={() => removeFilter(i)}>
+                            <Times size={14} />
+                          </button>
                           <select
-                            className="form-control input-sm"
+                            className="px-3 py-2 bg-transparent text-sm text-slate-200 focus:outline-none w-32 md:w-40 cursor-pointer"
                             value={f.field}
                             onChange={(e) => updateFilter(i, 'field', e.target.value)}
                           >
                             {FILTER_FIELDS[entity].map((field) => (
-                              <option key={field} value={field}>{field}</option>
+                              <option key={field} value={field} className="bg-slate-800">{field}</option>
                             ))}
                           </select>
                         </div>
-                      </div>
-                      <div className="col-sm-8 col-md-5">
                         <input
                           type="text"
-                          className="form-control input-sm"
+                          className="flex-1 md:flex-none md:w-64 px-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-sm text-slate-200 focus:outline-none focus:border-blue-500 transition-colors"
                           placeholder={`Value for ${f.field}…`}
                           value={f.value}
                           onChange={(e) => updateFilter(i, 'value', e.target.value)}
                         />
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
 
-                  <div className="row mt-2">
-                    <div className="col-sm-12 col-md-8 flex gap-2 flex-wrap">
-                      <button type="button" className="btn btn-default btn-sm" onClick={addFilter}>
-                        <Plus size={13} className="mr-1" /> Add filter
+                  <div className="flex gap-2 pt-2 items-center flex-wrap">
+                    <button type="button" className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md text-slate-300 text-sm font-medium transition-colors flex items-center gap-1.5" onClick={addFilter}>
+                      <Plus size={14} /> Add filter
+                    </button>
+                    {(filters.length > 0 || freeText) && (
+                      <button type="button" className="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 border border-red-700/50 text-red-400 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5" onClick={clearFilters}>
+                        <XCircle size={14} /> Clear filters
                       </button>
-                      {(filters.length > 0 || freeText) && (
-                        <button type="button" className="btn btn-danger btn-sm" onClick={clearFilters}>
-                          <Times size={13} className="mr-1" /> Clear filters
-                        </button>
-                      )}
-                      <button type="submit" className="btn btn-primary btn-sm ml-auto">
-                        <Search size={13} className="mr-1" /> Search
-                      </button>
-                    </div>
+                    )}
+                    <button type="submit" className="ml-auto px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 shadow-sm">
+                      <Search size={14} /> Search
+                    </button>
                   </div>
                 </form>
               </div>
 
               {/* Results */}
               {submitted && (
-                <div className="box-body" style={{ paddingTop: 0 }}>
-                  <h4 className="text-primary">
-                    Search Result{' '}
-                    {results.isLoading ? <small>loading…</small> : <small>{total} record(s) found</small>}
+                <div className="p-6 bg-slate-800">
+                  <h4 className="text-blue-500 font-medium text-lg mb-4 flex items-center gap-2">
+                    Search Result
+                    {results.isLoading ? <span className="text-slate-400 text-sm font-normal">loading…</span> : <span className="text-slate-400 text-sm font-normal">{total} record(s) found</span>}
                   </h4>
 
-                  {results.isLoading && <div className="thehive-empty">Searching…</div>}
+                  {results.isLoading && <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">Searching…</div>}
                   {!results.isLoading && values.length === 0 && (
-                    <div className="thehive-empty">No results found.</div>
+                    <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No results found.</div>
                   )}
 
                   {!results.isLoading && values.length > 0 && (
-                    <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-4">
                       {values.map((item, idx) => (
                         <SearchResultCard key={idx} entity={entity} item={item} router={router} />
                       ))}
@@ -264,8 +252,10 @@ function SearchWorkspace() {
 }
 
 function SearchResultCard({ entity, item, router }: { entity: EntityType; item: Record<string, unknown>; router: ReturnType<typeof useRouter> }) {
-  const baseCardClass = "block bg-[#1D1E24] border border-[#2b2d35] rounded-lg p-4 shadow-sm hover:shadow-md hover:border-[#0077CC] transition-all duration-200 cursor-pointer relative overflow-hidden";
+  const baseCardClass = "block bg-slate-900 border border-slate-700 rounded-lg p-5 shadow-sm hover:shadow-md hover:border-slate-500 transition-all duration-200 cursor-pointer relative overflow-hidden group";
   
+  const badgeClass = "px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider";
+
   if (entity === 'case') {
     const c = item as CaseResult;
     return (
@@ -274,23 +264,24 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
         className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/cases/${c.id}`); }}
       >
-        <div className="absolute top-0 left-0 w-1 h-full bg-[#0077CC]"></div>
-        <div className="flex items-start gap-3">
-          <Briefcase size={20} className="mt-1 text-[#0077CC] flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 group-hover:w-1.5 transition-all"></div>
+        <div className="flex items-start gap-4">
+          <Briefcase size={22} className="mt-0.5 text-blue-500 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="font-semibold text-lg text-white">#{c.number} {c.title}</span>
-              <span className={`label ${severityClass[c.severity] ?? 'label-default'}`}>{severityLabels[c.severity] ?? c.severity}</span>
-              <span className="label label-info">{c.status}</span>
-              {c.tlp !== undefined && <span className={`label label-default tlp-${c.tlp}`}>TLP:{c.tlp}</span>}
+              <span className="font-semibold text-lg text-slate-200">#{String(c.number).padStart(7, '0')} {c.title}</span>
+              <span className={`${badgeClass} bg-slate-700 text-slate-300`}>{severityLabels[c.severity] ?? c.severity}</span>
+              <span className={`${badgeClass} bg-blue-900/50 text-blue-400 border border-blue-700/50`}>{c.status}</span>
+              {c.tlp !== undefined && <span className={`${badgeClass} bg-slate-700 text-slate-300`}>TLP:{c.tlp}</span>}
             </div>
             {c.tags && c.tags.length > 0 && (
-              <div className="flex gap-1 flex-wrap mb-2">
-                {c.tags.map(t => <span key={t} className="label label-default bg-[#2b2d35] border-none">{t}</span>)}
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {c.tags.map(t => <span key={t} className="px-2 py-0.5 bg-slate-800 border border-slate-600 text-slate-300 rounded text-xs">{t}</span>)}
               </div>
             )}
-            <div className="text-gray-400 text-sm mt-1 flex items-center gap-4">
-              <span>Assignee: <strong className="text-gray-300">{c.assignee || 'Unassigned'}</strong></span>
+            <div className="text-slate-500 text-sm mt-2 flex items-center gap-4">
+              <span>Tenant: <strong className="text-slate-300">{c.organisation || 'Default Tenant'}</strong></span>
+              <span>Assignee: <strong className="text-slate-300">{c.assignee || 'Unassigned'}</strong></span>
               <span>Created: {fmt(c.created_at)}</span>
             </div>
           </div>
@@ -306,23 +297,23 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
         className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/alerts/${a.id}`); }}
       >
-        <div className="absolute top-0 left-0 w-1 h-full bg-[#FF4500]"></div>
-        <div className="flex items-start gap-3">
-          <AlertTriangle size={20} className="mt-1 text-[#FF4500] flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-orange-500 group-hover:w-1.5 transition-all"></div>
+        <div className="flex items-start gap-4">
+          <AlertTriangle size={22} className="mt-0.5 text-orange-500 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="font-semibold text-lg text-white">{a.title}</span>
-              <span className={`label ${severityClass[a.severity] ?? 'label-default'}`}>{severityLabels[a.severity] ?? a.severity}</span>
-              <span className="label label-info bg-[#2b2d35]">{a.source}</span>
-              <span className="label label-primary">{a.status}</span>
+              <span className="font-semibold text-lg text-slate-200">{a.title}</span>
+              <span className={`${badgeClass} bg-slate-700 text-slate-300`}>{severityLabels[a.severity] ?? a.severity}</span>
+              <span className={`${badgeClass} bg-slate-800 text-slate-400 border border-slate-600`}>{a.source}</span>
+              <span className={`${badgeClass} bg-blue-900/50 text-blue-400 border border-blue-700/50`}>{a.status}</span>
             </div>
             {a.tags && a.tags.length > 0 && (
-              <div className="flex gap-1 flex-wrap mb-2">
-                {a.tags.map(t => <span key={t} className="label label-default bg-[#2b2d35] border-none">{t}</span>)}
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {a.tags.map(t => <span key={t} className="px-2 py-0.5 bg-slate-800 border border-slate-600 text-slate-300 rounded text-xs">{t}</span>)}
               </div>
             )}
-            <div className="text-gray-400 text-sm mt-1 flex items-center gap-4">
-              <span>Ref: <strong className="text-gray-300">{a.source_ref || '-'}</strong></span>
+            <div className="text-slate-500 text-sm mt-2 flex items-center gap-4">
+              <span>Ref: <strong className="text-slate-300">{a.source_ref || '-'}</strong></span>
               <span>Created: {fmt(a.created_at)}</span>
             </div>
           </div>
@@ -338,22 +329,22 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
         className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/observables/${o.id}`); }}
       >
-        <div className="absolute top-0 left-0 w-1 h-full bg-[#00BFB3]"></div>
-        <div className="flex items-start gap-3">
-          <Eye size={20} className="mt-1 text-[#00BFB3] flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-teal-500 group-hover:w-1.5 transition-all"></div>
+        <div className="flex items-start gap-4">
+          <Eye size={22} className="mt-0.5 text-teal-500 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="label label-default bg-[#2b2d35] uppercase tracking-wider">{o.data_type}</span>
-              <span className="font-mono text-base text-white">{o.data}</span>
-              {o.ioc && <span className="label label-danger">IOC</span>}
-              {o.sighted && <span className="label label-warning">Sighted</span>}
+              <span className={`${badgeClass} bg-slate-800 text-slate-400 border border-slate-600`}>{o.data_type}</span>
+              <span className="font-mono text-base text-slate-200">{o.data}</span>
+              {o.ioc && <span className={`${badgeClass} bg-red-900/50 text-red-400 border border-red-700/50`}>IOC</span>}
+              {o.sighted && <span className={`${badgeClass} bg-yellow-900/50 text-yellow-400 border border-yellow-700/50`}>Sighted</span>}
             </div>
             {o.tags && o.tags.length > 0 && (
-              <div className="flex gap-1 flex-wrap mb-2">
-                {o.tags.map(t => <span key={t} className="label label-default bg-[#2b2d35] border-none">{t}</span>)}
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {o.tags.map(t => <span key={t} className="px-2 py-0.5 bg-slate-800 border border-slate-600 text-slate-300 rounded text-xs">{t}</span>)}
               </div>
             )}
-            <div className="text-gray-400 text-sm mt-1">
+            <div className="text-slate-500 text-sm mt-2">
               {o.case_number ? `Linked to Case #${o.case_number} ${o.case_title ?? ''}` : 'Unlinked'} · {fmt(o.created_at)}
             </div>
           </div>
@@ -369,17 +360,17 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
         className={baseCardClass}
         onClick={(e) => { e.preventDefault(); router.push(`/tasks/${t.id}`); }}
       >
-        <div className="absolute top-0 left-0 w-1 h-full bg-[#8A2BE2]"></div>
-        <div className="flex items-start gap-3">
-          <CheckSquare size={20} className="mt-1 text-[#8A2BE2] flex-shrink-0" />
+        <div className="absolute top-0 left-0 w-1 h-full bg-purple-500 group-hover:w-1.5 transition-all"></div>
+        <div className="flex items-start gap-4">
+          <CheckSquare size={22} className="mt-0.5 text-purple-500 flex-shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-2">
-              <span className="font-semibold text-lg text-white">{t.title}</span>
-              <span className="label label-info">{t.status}</span>
+              <span className="font-semibold text-lg text-slate-200">{t.title}</span>
+              <span className={`${badgeClass} bg-blue-900/50 text-blue-400 border border-blue-700/50`}>{t.status}</span>
             </div>
-            <div className="text-gray-400 text-sm mt-1 flex items-center gap-4">
-              <span>Assignee: <strong className="text-gray-300">{t.assignee || 'Unassigned'}</strong></span>
-              {t.case_number && <span>Case #{t.case_number}</span>}
+            <div className="text-slate-500 text-sm mt-2 flex items-center gap-4">
+              <span>Assignee: <strong className="text-slate-300">{t.assignee || 'Unassigned'}</strong></span>
+              {t.case_number && <span>Case #{String(t.case_number).padStart(7, '0')}</span>}
               <span>Created: {fmt(t.created_at)}</span>
             </div>
           </div>
@@ -390,14 +381,14 @@ function SearchResultCard({ entity, item, router }: { entity: EntityType; item: 
   // log
   const l = item as LogResult;
   return (
-    <div className={`${baseCardClass} cursor-default hover:border-[#2b2d35] hover:shadow-sm`}>
-      <div className="absolute top-0 left-0 w-1 h-full bg-gray-500"></div>
-      <div className="flex items-start gap-3">
-        <FileText size={20} className="mt-1 text-gray-400 flex-shrink-0" />
+    <div className="block bg-slate-900 border border-slate-700 rounded-lg p-5 shadow-sm relative overflow-hidden">
+      <div className="absolute top-0 left-0 w-1 h-full bg-slate-500"></div>
+      <div className="flex items-start gap-4">
+        <FileText size={22} className="mt-0.5 text-slate-500 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="mb-2 text-base text-gray-200 whitespace-pre-wrap">{l.message}</p>
-          <div className="text-gray-400 text-sm mt-2 pt-2 border-t border-[#2b2d35]">
-            By <strong className="text-gray-300">{l.created_by}</strong> · {fmt(l.created_at)}
+          <p className="mb-3 text-base text-slate-300 whitespace-pre-wrap">{l.message}</p>
+          <div className="text-slate-500 text-sm mt-2 pt-3 border-t border-slate-700/50">
+            By <strong className="text-slate-300">{l.created_by}</strong> · {fmt(l.created_at)}
           </div>
         </div>
       </div>

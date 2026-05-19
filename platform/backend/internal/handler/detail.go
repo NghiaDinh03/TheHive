@@ -225,10 +225,6 @@ type detailCustom struct {
 	Value string `db:"value" json:"value"`
 }
 
-type detailStub struct {
-	Name   string `json:"name"`
-	Status string `json:"status"`
-}
 
 type detailProcedure struct {
 	ID          string     `db:"id" json:"id"`
@@ -256,9 +252,12 @@ type detailShare struct {
 }
 
 type detailHistory struct {
-	Action    string    `db:"action" json:"action"`
-	ActorID   string    `db:"actor_id" json:"actor_id"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	Action     string    `db:"action" json:"action"`
+	ActorID    string    `db:"actor_id" json:"actor_id"`
+	EntityType string    `db:"entity_type" json:"entity_type"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	BeforeJSON *string   `db:"before_json" json:"before_json,omitempty"`
+	AfterJSON  *string   `db:"after_json" json:"after_json,omitempty"`
 }
 
 func (h *DetailHandler) GetCase(c echo.Context) error {
@@ -563,7 +562,25 @@ func (h *DetailHandler) similarAlerts(c echo.Context, alert detailAlert) ([]deta
 
 func (h *DetailHandler) entityHistory(c echo.Context, entityType string, entityID string) ([]detailHistory, error) {
 	rows := []detailHistory{}
-	err := h.db.SelectContext(c.Request().Context(), &rows, `SELECT action, COALESCE(actor_id::text, '') AS actor_id, created_at FROM audit_logs WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC LIMIT 100`, entityType, entityID)
+	query := `SELECT a.action, COALESCE(u.login, a.actor_id::text, '') AS actor_id, a.entity_type, a.created_at, a.before_json::text, a.after_json::text 
+	          FROM audit_logs a LEFT JOIN users u ON a.actor_id = u.id 
+	          WHERE a.entity_type = $1 AND a.entity_id = $2 
+	          ORDER BY a.created_at DESC LIMIT 100`
+
+	if entityType == "case" {
+		query = `
+			SELECT a.action, COALESCE(u.login, a.actor_id::text, '') AS actor_id, a.entity_type, a.created_at, a.before_json::text, a.after_json::text
+			FROM audit_logs a
+			LEFT JOIN users u ON a.actor_id = u.id
+			WHERE 
+				(a.entity_type = 'case' AND a.entity_id = $2)
+				OR (a.entity_type = 'task' AND a.entity_id IN (SELECT id::text FROM task_items WHERE case_id = $2::uuid))
+				OR (a.entity_type = 'observable' AND a.entity_id IN (SELECT id::text FROM observables WHERE case_id = $2::uuid))
+				OR (a.entity_type = 'attachment' AND a.entity_id IN (SELECT id::text FROM attachments WHERE case_id = $2::uuid))
+			ORDER BY a.created_at DESC LIMIT 200
+		`
+	}
+	err := h.db.SelectContext(c.Request().Context(), &rows, query, entityType, entityID)
 	return rows, err
 }
 

@@ -63,7 +63,7 @@ export default function LivePage() {
   const [limit, setLimit] = useState(50);
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -153,47 +153,58 @@ export default function LivePage() {
                 </div>
               </div>
               <div className="box-body p-0">
-                {events.isLoading && <div className="thehive-empty">Loading events…</div>}
+                {events.isLoading && (
+                  <div className="flex flex-col items-center justify-center py-16 px-4">
+                    <Activity className="text-gray-600 animate-pulse mb-3" size={32} />
+                    <p className="text-gray-400">Loading audit events...</p>
+                  </div>
+                )}
                 {!events.isLoading && items.length === 0 && (
-                  <div className="thehive-empty">No audit events found.</div>
+                  <div className="flex flex-col items-center justify-center py-16 px-4 m-4 border border-dashed border-gray-700 bg-gray-900/50 rounded-xl">
+                    <Activity className="text-gray-600 mb-3" size={32} />
+                    <h4 className="text-gray-300 font-medium mb-1">No Events Found</h4>
+                    <p className="text-gray-500 text-sm">System audit events will appear here in real-time.</p>
+                  </div>
                 )}
                 {items.length > 0 && (
-                  <table className="thehive-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 160 }}>Time</th>
-                        <th style={{ width: 120 }}>Actor</th>
-                        <th style={{ width: 90 }}>Action</th>
-                        <th style={{ width: 110 }}>Entity type</th>
-                        <th>Entity ID</th>
-                        <th style={{ width: 120 }}>Request ID</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.map((ev) => (
-                        <tr key={ev.id}>
-                          <td className="text-xs text-muted">{fmt(ev.created_at)}</td>
-                          <td>
-                            <span className="flex items-center gap-1">
-                              <User size={12} className="text-muted" />
-                              <span className="text-sm">{ev.actor_id}</span>
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`label ${actionClass(ev.action)}`}>{ev.action}</span>
-                          </td>
-                          <td>
-                            <span className="flex items-center gap-1 text-sm">
-                              {entityIcon(ev.entity_type)}
-                              {ev.entity_type}
-                            </span>
-                          </td>
-                          <td className="font-mono text-xs">{ev.entity_id}</td>
-                          <td className="font-mono text-xs text-muted">{ev.request_id ?? '-'}</td>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-gray-300">
+                      <thead className="text-xs uppercase bg-gray-800 text-gray-400 border-b border-gray-700">
+                        <tr>
+                          <th className="px-4 py-3 font-medium" style={{ width: 160 }}>Time</th>
+                          <th className="px-4 py-3 font-medium" style={{ width: 120 }}>Actor</th>
+                          <th className="px-4 py-3 font-medium" style={{ width: 90 }}>Action</th>
+                          <th className="px-4 py-3 font-medium" style={{ width: 110 }}>Entity type</th>
+                          <th className="px-4 py-3 font-medium">Entity ID</th>
+                          <th className="px-4 py-3 font-medium" style={{ width: 120 }}>Request ID</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {items.map((ev) => (
+                          <tr key={ev.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors bg-gray-900">
+                            <td className="px-4 py-3 text-xs text-gray-500">{fmt(ev.created_at)}</td>
+                            <td className="px-4 py-3">
+                              <span className="flex items-center gap-1">
+                                <User size={12} className="text-gray-500" />
+                                <span className="text-sm font-medium text-white">{ev.actor_id}</span>
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${actionClass(ev.action)}`}>{ev.action}</span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="flex items-center gap-1.5 text-sm">
+                                <span className="text-blue-400">{entityIcon(ev.entity_type)}</span>
+                                {ev.entity_type}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-xs text-cyan-400">{ev.entity_id}</td>
+                            <td className="px-4 py-3 font-mono text-xs text-gray-500">{ev.request_id ?? '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
               {total > limit && (

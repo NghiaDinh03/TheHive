@@ -120,54 +120,69 @@ export function AttachmentPanel({ user, initialAttachments = [], caseId = '', ob
   const rows = attachments.data?.values ?? initialAttachments;
 
   return (
-    <div className="attachment-panel">
-      <div className="attachment-panel-header">
+    <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden">
+      <div className="px-6 py-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
         <div>
-          <h3 className="detail-section-title">{title}</h3>
-          <p>MinIO/S3 evidence storage · scan status · TheHive-style attachment list.</p>
+          <h3 className="text-blue-500 font-medium text-sm flex items-center gap-2"><i className="fa fa-paperclip"></i> {title}</h3>
+          <p className="text-xs text-slate-400 mt-1">MinIO/S3 evidence storage · scan status · TheHive-style attachment list.</p>
         </div>
-        <span className="label label-default">{rows.length} files</span>
+        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 font-bold">{rows.length} files</span>
       </div>
-      {error && <div className="admin-alert error">{error}</div>}
-      {message && <div className="admin-alert success">{message}</div>}
-      <div className="attachment-dropzone">
-        <strong>Upload evidence</strong>
-        <span>Presigned upload URL, metadata in PostgreSQL, manual scan-clean placeholder until async scanner lands.</span>
-        <input type="file" className="thehive-input" disabled={!canUpload || upload.isPending} onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
-        <button className="thehive-btn-primary" disabled={!canUpload || !selectedFile || upload.isPending} onClick={() => upload.mutate()}>{upload.isPending ? 'Uploading…' : 'Upload + mark clean'}</button>
+      <div className="p-6">
+        {error && <div className="p-3 mb-4 text-sm text-red-400 bg-red-900/20 border border-red-900/50 rounded">{error}</div>}
+        {message && <div className="p-3 mb-4 text-sm text-green-400 bg-green-900/20 border border-green-900/50 rounded">{message}</div>}
+        
+        <div className="bg-orange-900/10 border border-orange-700/50 p-4 rounded-lg mb-6 flex flex-col gap-3">
+          <div className="flex items-start gap-3 text-orange-400 text-sm">
+            <i className="fa fa-exclamation-triangle mt-1"></i>
+            <div>
+              <strong className="block mb-1">Malware Analysis Zone</strong>
+              <p className="text-orange-200/80">All malicious samples MUST be uploaded within a password-protected ZIP archive (default password: <code>malware</code>). Direct upload of executable binaries or scripts outside an archive violates operational security policy.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-2">
+            <input type="file" className="text-sm text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-medium file:bg-slate-700 file:text-blue-400 hover:file:bg-slate-600 focus:outline-none" disabled={!canUpload || upload.isPending} onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
+            <button className={`px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed`} disabled={!canUpload || !selectedFile || upload.isPending} onClick={() => upload.mutate()}>{upload.isPending ? 'Uploading…' : 'Upload Securely'}</button>
+          </div>
+        </div>
+
+        <table className="w-full text-left border-collapse whitespace-nowrap">
+          <thead><tr className="bg-slate-900 border-b border-slate-700 text-slate-400 text-sm">
+            <th className="px-4 py-3">Name</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Size</th><th className="px-4 py-3">Scan</th><th className="px-4 py-3">Uploaded by</th><th className="px-4 py-3">Created</th><th className="px-4 py-3 text-right">Action</th>
+          </tr></thead>
+          <tbody className="text-sm divide-y divide-slate-800 text-slate-300">
+            {rows.map((attachment) => <tr key={attachment.id} className="hover:bg-slate-800/50 transition-colors">
+              <td className="px-4 py-3 font-medium text-slate-200">{attachment.file_name}</td>
+              <td className="px-4 py-3 text-slate-400">{attachment.content_type || 'application/octet-stream'}</td>
+              <td className="px-4 py-3">{formatBytes(attachment.size_bytes)}</td>
+              <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${attachment.scan_status === 'clean' ? 'bg-green-900/50 text-green-400 border border-green-700/50' : 'bg-orange-900/50 text-orange-400 border border-orange-700/50'}`}>{attachment.scan_status}</span></td>
+              <td className="px-4 py-3">{attachment.uploaded_by || 'system'}</td>
+              <td className="px-4 py-3 text-slate-400">{attachment.created_at ? new Date(attachment.created_at).toLocaleString() : '—'}</td>
+              <td className="px-4 py-3 text-right">
+                <div className="flex gap-2 justify-end">
+                  <button
+                    className={`px-3 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-600 rounded text-xs transition-colors disabled:opacity-50`}
+                    disabled={!canDownload}
+                    onClick={() => void downloadAttachment(attachment.id)}
+                    title="Direct presigned download from MinIO/S3"
+                  >
+                    {attachment.scan_status === 'clean' ? 'Download' : 'Check policy'}
+                  </button>
+                  <button
+                    className={`px-3 py-1 bg-slate-800 hover:bg-slate-700 text-orange-400 border border-slate-600 rounded text-xs transition-colors disabled:opacity-50`}
+                    disabled={!canDownload}
+                    onClick={() => void downloadZip(attachment.id)}
+                    title="Download as TheHive 4 password-protected ZIP (default password: malware)"
+                  >
+                    ZIP
+                  </button>
+                </div>
+              </td>
+            </tr>)}
+            {!rows.length && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No attachments yet.</td></tr>}
+          </tbody>
+        </table>
       </div>
-      <table className="thehive-table mt-3">
-        <thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Scan</th><th>Uploaded by</th><th>Created</th><th>Action</th></tr></thead>
-        <tbody>
-          {rows.map((attachment) => <tr key={attachment.id}>
-            <td>{attachment.file_name}</td>
-            <td>{attachment.content_type || 'application/octet-stream'}</td>
-            <td>{formatBytes(attachment.size_bytes)}</td>
-            <td><span className={attachment.scan_status === 'clean' ? 'label label-success' : 'label label-warning'}>{attachment.scan_status}</span></td>
-            <td>{attachment.uploaded_by || 'system'}</td>
-            <td>{attachment.created_at ? new Date(attachment.created_at).toLocaleString() : '—'}</td>
-            <td>
-              <button
-                className="thehive-btn-secondary"
-                disabled={!canDownload}
-                onClick={() => void downloadAttachment(attachment.id)}
-                title="Direct presigned download from MinIO/S3"
-              >
-                {attachment.scan_status === 'clean' ? 'Download' : 'Check policy'}
-              </button>
-              <button
-                className="thehive-btn-secondary attachment-zip-btn"
-                disabled={!canDownload}
-                onClick={() => void downloadZip(attachment.id)}
-                title="Download as TheHive 4 password-protected ZIP (default password: malware)"
-              >
-                ZIP
-              </button>
-            </td>
-          </tr>)}
-          {!rows.length && <tr><td colSpan={7} className="thehive-empty">No attachments yet.</td></tr>}
-        </tbody>
-      </table>
     </div>
   );
 }

@@ -122,65 +122,73 @@ export default function UsersAdminPage() {
       {message && <div className="admin-alert success">{message}</div>}
       {error && <div className="admin-alert error">{error}</div>}
 
-      {/* Online status summary — mirrors TheHive 4 user panel */}
-      <div className="row mb-s">
-        <div className="col-md-4">
-          <div className="info-box bg-green">
-            <span className="info-box-icon"><Wifi size={24} /></span>
-            <div className="info-box-content">
-              <span className="info-box-text">Online Now</span>
-              <span className="info-box-number">{onlineCount}</span>
-              <div className="progress"><div className="progress-bar" style={{ width: `${users.data?.length ? (onlineCount / users.data.length * 100) : 0}%` }} /></div>
-              <span className="progress-description">{onlineCount} of {users.data?.length ?? 0} users active</span>
+      {/* Online status summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 flex items-start gap-4">
+          <div className="w-12 h-12 rounded bg-green-900/50 text-green-500 flex items-center justify-center shrink-0">
+            <Wifi size={24} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Online Now</div>
+            <div className="text-2xl font-semibold text-slate-200 mb-2">{onlineCount}</div>
+            <div className="w-full h-1.5 bg-slate-700 rounded overflow-hidden mb-1">
+              <div className="h-full bg-green-500" style={{ width: `${users.data?.length ? (onlineCount / users.data.length * 100) : 0}%` }} />
             </div>
+            <div className="text-xs text-slate-500 truncate">{onlineCount} of {users.data?.length ?? 0} users active</div>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="info-box bg-yellow">
-            <span className="info-box-icon"><Clock size={24} /></span>
-            <div className="info-box-content">
-              <span className="info-box-text">Recently Active</span>
-              <span className="info-box-number">{recentCount}</span>
-              <div className="progress"><div className="progress-bar" style={{ width: `${users.data?.length ? (recentCount / users.data.length * 100) : 0}%` }} /></div>
-              <span className="progress-description">Active within last hour</span>
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 flex items-start gap-4">
+          <div className="w-12 h-12 rounded bg-yellow-900/50 text-yellow-500 flex items-center justify-center shrink-0">
+            <Clock size={24} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Recently Active</div>
+            <div className="text-2xl font-semibold text-slate-200 mb-2">{recentCount}</div>
+            <div className="w-full h-1.5 bg-slate-700 rounded overflow-hidden mb-1">
+              <div className="h-full bg-yellow-500" style={{ width: `${users.data?.length ? (recentCount / users.data.length * 100) : 0}%` }} />
             </div>
+            <div className="text-xs text-slate-500 truncate">Active within last hour</div>
           </div>
         </div>
-        <div className="col-md-4">
-          <div className="info-box bg-gray">
-            <span className="info-box-icon"><WifiOff size={24} /></span>
-            <div className="info-box-content">
-              <span className="info-box-text">Offline</span>
-              <span className="info-box-number">{(users.data?.length ?? 0) - onlineCount - recentCount}</span>
-              <div className="progress"><div className="progress-bar" style={{ width: `${users.data?.length ? (((users.data.length - onlineCount - recentCount) / users.data.length) * 100) : 0}%` }} /></div>
-              <span className="progress-description">Not recently active</span>
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 flex items-start gap-4">
+          <div className="w-12 h-12 rounded bg-slate-900 text-slate-500 flex items-center justify-center shrink-0">
+            <WifiOff size={24} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-slate-400 text-sm font-medium uppercase tracking-wider mb-1">Offline</div>
+            <div className="text-2xl font-semibold text-slate-200 mb-2">{(users.data?.length ?? 0) - onlineCount - recentCount}</div>
+            <div className="w-full h-1.5 bg-slate-700 rounded overflow-hidden mb-1">
+              <div className="h-full bg-slate-500" style={{ width: `${users.data?.length ? (((users.data.length - onlineCount - recentCount) / users.data.length) * 100) : 0}%` }} />
             </div>
+            <div className="text-xs text-slate-500 truncate">Not recently active</div>
           </div>
         </div>
       </div>
 
-      <div className="box box-primary">
-        <div className="box-header with-border">
-          <h3 className="box-title"><Users size={14} /> List of users ({filtered.length} of {users.data?.length ?? 0})</h3>
-          <div className="box-tools pull-right">
-            <button className="btn btn-sm btn-primary" onClick={() => { setCreating(true); setEditing(null); }}>
-              <Plus size={13} /> Add user
+      <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
+        <div className="px-6 py-4 border-b border-slate-700 bg-slate-900/50 flex flex-wrap gap-4 justify-between items-center">
+          <h3 className="text-blue-500 font-medium text-lg flex items-center gap-2">
+            <Users size={16} /> List of users ({filtered.length} of {users.data?.length ?? 0})
+          </h3>
+          <div className="flex items-center gap-2">
+            <button className="thehive-btn-primary flex items-center gap-2" onClick={() => { setCreating(true); setEditing(null); }}>
+              <Plus size={14} /> Add user
             </button>
-            <button className={`btn btn-sm btn-default ml-xs ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters((v) => !v)}>
-              <Filter size={13} /> Filters
+            <button className={`thehive-btn-secondary flex items-center gap-2 ${showFilters ? 'bg-slate-700 text-slate-200 border-slate-600' : ''}`} onClick={() => setShowFilters((v) => !v)}>
+              <Filter size={14} /> Filters
             </button>
           </div>
         </div>
 
         {showFilters && (
-          <div className="box-body filter-panel">
-            <div className="filter-grid">
-              <label className="filter-control">
-                <span>Search</span>
-                <div className="relative">
-                  <Search size={13} className="thehive-input-icon" />
+          <div className="bg-slate-900/50 p-6 border-b border-slate-700">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Search</span>
+                <div className="relative flex items-center">
+                  <Search size={14} className="absolute left-3 text-slate-500" />
                   <input
-                    className="thehive-input thehive-input-with-icon py-1.5"
+                    className="thehive-input pl-9 py-1.5"
                     placeholder="Login, name or email"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
@@ -191,93 +199,92 @@ export default function UsersAdminPage() {
           </div>
         )}
 
-        <div className="box-body no-padding">
-          {users.isLoading && <div className="empty-message">Loading users…</div>}
-          {!users.isLoading && filtered.length === 0 && <div className="empty-message">No users found.</div>}
+        <div className="overflow-x-auto">
+          {users.isLoading && <div className="text-center py-10 text-slate-500">Loading users…</div>}
+          {!users.isLoading && filtered.length === 0 && <div className="text-center py-10 text-slate-500">No users found.</div>}
           {filtered.length > 0 && (
-            <table className="table table-striped case-list">
+            <table className="w-full text-left text-sm whitespace-nowrap">
               <thead>
-                <tr>
-                  <th style={{ width: 30 }}></th>
-                  <th>Login</th>
-                  <th>Name</th>
-                  <th style={{ width: 200 }}>Organisation</th>
-                  <th style={{ width: 150 }}>Profile</th>
-                  <th style={{ width: 80 }}>Status</th>
-                  <th style={{ width: 160 }}>Last Login</th>
-                  <th style={{ width: 160 }}>Dates C. / U.</th>
-                  <th style={{ width: 200 }}></th>
+                <tr className="bg-slate-900 border-b border-slate-700 text-slate-400">
+                  <th className="px-4 py-3 w-10"></th>
+                  <th className="px-4 py-3 font-medium">Login</th>
+                  <th className="px-4 py-3 font-medium">Name</th>
+                  <th className="px-4 py-3 font-medium">Organisation</th>
+                  <th className="px-4 py-3 font-medium">Profile</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Last Login</th>
+                  <th className="px-4 py-3 font-medium">Dates C. / U.</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800">
                 {filtered.map((user) => {
                   const onlineStatus = getOnlineStatus(user.last_login_at);
                   return (
-                    <tr key={user.id ?? user.login}>
-                      <td>
+                    <tr key={user.id ?? user.login} className="hover:bg-slate-800/50 transition-colors">
+                      <td className="px-4 py-3 text-center">
                         <span
                           title={onlineStatus.label}
+                          className="inline-block w-2.5 h-2.5 rounded-full shadow-sm"
                           style={{
-                            display: 'inline-block',
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
                             backgroundColor: onlineStatus.color,
                             boxShadow: onlineStatus.icon === 'online' ? `0 0 6px ${onlineStatus.color}` : 'none',
                           }}
                         />
                       </td>
-                      <td>
-                        <strong>{user.login}</strong>
-                        {user.email && <div className="text-muted">{user.email}</div>}
+                      <td className="px-4 py-3">
+                        <strong className="text-slate-200">{user.login}</strong>
+                        {user.email && <div className="text-slate-500 text-xs mt-0.5">{user.email}</div>}
                       </td>
-                      <td>{user.name}</td>
-                      <td>{user.organisation ?? <em className="text-muted">None</em>}</td>
-                      <td>
+                      <td className="px-4 py-3 text-slate-300">{user.name}</td>
+                      <td className="px-4 py-3 text-slate-400">{user.organisation ?? <em className="text-slate-500">None</em>}</td>
+                      <td className="px-4 py-3">
                         {user.profile
-                          ? <span className="label label-default">{user.profile}</span>
-                          : <em className="text-muted">None</em>
+                          ? <span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs">{user.profile}</span>
+                          : <em className="text-slate-500">None</em>
                         }
                       </td>
-                      <td>
-                        <span className={user.status === 'Locked' || user.locked ? 'label label-danger' : 'label label-success'}>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${user.locked || user.status === 'Locked' ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
                           {user.locked ? 'Locked' : (user.status ?? 'Ok')}
                         </span>
                       </td>
-                      <td>
-                        <span style={{ color: onlineStatus.color, fontSize: '0.85rem' }}>
-                          {onlineStatus.icon === 'online' && <Wifi size={11} style={{ marginRight: 4 }} />}
-                          {onlineStatus.icon === 'offline' && <WifiOff size={11} style={{ marginRight: 4 }} />}
-                          {onlineStatus.icon === 'recent' && <Clock size={11} style={{ marginRight: 4 }} />}
+                      <td className="px-4 py-3">
+                        <span className="flex items-center text-xs" style={{ color: onlineStatus.color }}>
+                          {onlineStatus.icon === 'online' && <Wifi size={12} className="mr-1.5" />}
+                          {onlineStatus.icon === 'offline' && <WifiOff size={12} className="mr-1.5" />}
+                          {onlineStatus.icon === 'recent' && <Clock size={12} className="mr-1.5" />}
                           {fmtDateTime(user.last_login_at)}
                         </span>
                       </td>
-                      <td className="date-stack">
+                      <td className="px-4 py-3 text-xs text-slate-400 flex flex-col gap-0.5">
                         <div>C. {fmt(user.created_at)}</div>
                         <div>U. {fmt(user.updated_at)}</div>
                       </td>
-                      <td className="text-right nowrap">
-                        <button
-                          className="btn btn-xs btn-default mr-xs"
-                          onClick={() => { setEditing(user); setCreating(false); }}
-                          title="Edit user"
-                        >
-                          <Edit2 size={12} /> Edit
-                        </button>
-                        <button
-                          className="btn btn-xs btn-default mr-xs"
-                          onClick={() => lock.mutate({ login: user.login, locked: !(user.locked || user.status === 'Locked') })}
-                          title={user.locked || user.status === 'Locked' ? 'Unlock user' : 'Lock user'}
-                        >
-                          {user.locked || user.status === 'Locked' ? 'Unlock' : 'Lock'}
-                        </button>
-                        <button
-                          className="btn btn-xs btn-danger"
-                          onClick={() => { if (confirm(`Delete user "${user.login}"?`)) remove.mutate(user.login); }}
-                          title="Delete user"
-                        >
-                          <Trash2 size={12} /> Delete
-                        </button>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            className="thehive-btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
+                            onClick={() => { setEditing(user); setCreating(false); }}
+                            title="Edit user"
+                          >
+                            <Edit2 size={12} /> Edit
+                          </button>
+                          <button
+                            className="thehive-btn-secondary py-1 px-2.5 text-xs flex items-center gap-1"
+                            onClick={() => lock.mutate({ login: user.login, locked: !(user.locked || user.status === 'Locked') })}
+                            title={user.locked || user.status === 'Locked' ? 'Unlock user' : 'Lock user'}
+                          >
+                            {user.locked || user.status === 'Locked' ? 'Unlock' : 'Lock'}
+                          </button>
+                          <button
+                            className="py-1 px-2.5 text-xs flex items-center gap-1 text-red-400 bg-red-900/10 hover:bg-red-900/30 border border-red-900/30 hover:border-red-500/50 rounded transition-colors"
+                            onClick={() => { if (confirm(`Delete user "${user.login}"?`)) remove.mutate(user.login); }}
+                            title="Delete user"
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -323,48 +330,46 @@ function UserModal({ user, onClose, onSave, saving }: {
   }
 
   return (
-    <div className="modal-backdrop-inline">
-      <div className="modal-dialog-inline">
-        <div className="box box-primary">
-          <div className="box-header with-border">
-            <h3 className="box-title">{user ? `Edit user: ${user.login}` : 'Create user'}</h3>
-            <button className="close pull-right" onClick={onClose}>×</button>
-          </div>
-          <form onSubmit={submit}>
-            <div className="box-body">
-              <div className="form-group">
-                <label>Login</label>
-                <input name="login" className="form-control" defaultValue={user?.login ?? ''} required placeholder="user@example.com" readOnly={!!user} />
-              </div>
-              <div className="form-group">
-                <label>Name</label>
-                <input name="name" className="form-control" defaultValue={user?.name ?? ''} required placeholder="Full name" />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                <input name="email" type="email" className="form-control" defaultValue={user?.email ?? ''} placeholder="Email address" />
-              </div>
-              <div className="form-group">
-                <label>Organisation</label>
-                <input name="organisation" className="form-control" defaultValue={user?.organisation ?? ''} placeholder="Organisation name" />
-              </div>
-              <div className="form-group">
-                <label>Profile</label>
-                <input name="profile" className="form-control" defaultValue={user?.profile ?? ''} placeholder="Profile name" />
-              </div>
-              {!user && (
-                <div className="form-group">
-                  <label>Password</label>
-                  <input name="password" type="password" className="form-control" required placeholder="Initial password" />
-                </div>
-              )}
-            </div>
-            <div className="box-footer">
-              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-              <button type="button" className="btn btn-default ml-xs" onClick={onClose}>Cancel</button>
-            </div>
-          </form>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 w-full max-w-md flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
+          <h3 className="text-blue-500 font-medium text-lg">{user ? `Edit user: ${user.login}` : 'Create user'}</h3>
+          <button className="text-slate-400 hover:text-slate-200 transition-colors" onClick={onClose}>×</button>
         </div>
+        <form onSubmit={submit} className="flex flex-col">
+          <div className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Login</label>
+              <input name="login" className="thehive-input" defaultValue={user?.login ?? ''} required placeholder="user@example.com" readOnly={!!user} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Name</label>
+              <input name="name" className="thehive-input" defaultValue={user?.name ?? ''} required placeholder="Full name" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Email</label>
+              <input name="email" type="email" className="thehive-input" defaultValue={user?.email ?? ''} placeholder="Email address" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Organisation</label>
+              <input name="organisation" className="thehive-input" defaultValue={user?.organisation ?? ''} placeholder="Organisation name" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Profile</label>
+              <input name="profile" className="thehive-input" defaultValue={user?.profile ?? ''} placeholder="Profile name" />
+            </div>
+            {!user && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Password</label>
+                <input name="password" type="password" className="thehive-input" required placeholder="Initial password" />
+              </div>
+            )}
+          </div>
+          <div className="px-6 py-4 border-t border-slate-700 bg-slate-900/50 flex justify-end gap-2">
+            <button type="button" className="thehive-btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="thehive-btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</button>
+          </div>
+        </form>
       </div>
     </div>
   );

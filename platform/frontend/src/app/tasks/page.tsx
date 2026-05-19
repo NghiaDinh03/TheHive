@@ -81,12 +81,13 @@ export default function TasksListPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
 
   const me = useQuery({ queryKey: ['me'], queryFn: () => apiFetch<UserInfo>('/api/v1/auth/me'), enabled: !!authedLogin });
+  const users = useQuery({ queryKey: ['admin-users'], queryFn: () => apiFetch<{ values: { login: string; name: string }[] }>('/api/v1/admin/users'), enabled: !!authedLogin });
 
   const params = useMemo(() => {
     const parts: string[] = [`range=${page * pageSize}:${(page + 1) * pageSize}`, 'sort=updated_at:DESC'];
@@ -242,7 +243,10 @@ export default function TasksListPage() {
                   <div className="col-sm-3">
                     <div className="form-group">
                       <label className="control-label">Assignee</label>
-                      <input type="text" className="form-control input-sm" placeholder="Filter by assignee…" value={assigneeFilter} onChange={(e) => { setAssigneeFilter(e.target.value); setPage(0); }} />
+                      <select className="form-control input-sm" value={assigneeFilter} onChange={(e) => { setAssigneeFilter(e.target.value); setPage(0); }}>
+                        <option value="">All assignees</option>
+                        {(users.data?.values ?? []).map((u) => <option key={u.login} value={u.login}>{u.name} ({u.login})</option>)}
+                      </select>
                     </div>
                   </div>
                   <div className="col-sm-3">
@@ -410,7 +414,7 @@ export default function TasksListPage() {
                                 className="text-sm"
                                 onClick={(e) => { e.stopPropagation(); router.push(`/cases/${task.case_id}`); e.preventDefault(); }}
                               >
-                                #{task.case_number}
+                                #{String(task.case_number).padStart(7, '0')}
                               </a>
                             ) : <span className="text-muted text-sm">—</span>}
                           </td>

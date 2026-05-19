@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -42,14 +42,30 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState<string | null>(null);
+  const [hasInvite, setHasInvite] = useState(false);
+
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
-    defaultValues: { login: '', password: '', name: '', organisation: 'admin', totpCode: '' },
+    defaultValues: { login: '', password: '', name: '', organisation: 'NCS', totpCode: '' },
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('invite')) {
+        setHasInvite(true);
+        setMode('register');
+        if (params.has('email')) setValue('login', params.get('email') || '');
+        if (params.has('name')) setValue('name', params.get('name') || '');
+        if (params.has('org')) setValue('organisation', params.get('org') || '');
+      }
+    }
+  }, [setValue]);
 
   const onSubmit = async (values: FormValues) => {
     setSubmitting(true);
@@ -71,6 +87,8 @@ export default function LoginPage() {
         const res = await apiFetch<LoginResponse>('/api/v1/auth/totp/login', { method: 'POST', json: { ...parsed, code: parsedTotp.totpCode } });
         sessionStorage.setItem('thehive.token', res.token);
         sessionStorage.setItem('thehive.login', res.login);
+        localStorage.setItem('thehive.token', res.token);
+        localStorage.setItem('thehive.login', res.login);
         router.push(res.must_change_password ? '/change-password' : '/dashboard');
         return;
       }
@@ -79,6 +97,8 @@ export default function LoginPage() {
       const res = await apiFetch<LoginResponse>('/api/v1/auth/login', { method: 'POST', json: parsed });
       sessionStorage.setItem('thehive.token', res.token);
       sessionStorage.setItem('thehive.login', res.login);
+      localStorage.setItem('thehive.token', res.token);
+      localStorage.setItem('thehive.login', res.login);
       router.push(res.must_change_password ? '/change-password' : '/dashboard');
     } catch (e: any) {
       if (e instanceof ApiError) {
@@ -108,14 +128,16 @@ export default function LoginPage() {
         </div>
 
         <div className="ncs-login-body">
-          <div className="ncs-auth-tabs">
-            <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setServerError(null); }} type="button">
-              <LogIn size={14} /> Sign in
-            </button>
-            <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setServerError(null); }} type="button">
-              <UserPlus size={14} /> Register
-            </button>
-          </div>
+          {hasInvite && (
+            <div className="ncs-auth-tabs">
+              <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setServerError(null); }} type="button">
+                <LogIn size={14} /> Sign in
+              </button>
+              <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setServerError(null); }} type="button">
+                <UserPlus size={14} /> Register
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="ncs-login-form">
 
@@ -124,7 +146,7 @@ export default function LoginPage() {
                 <label htmlFor="name">Name</label>
                 <div className="ncs-input-wrap">
                   <User className="ncs-input-icon" size={16} aria-hidden="true" />
-                  <input id="name" type="text" autoComplete="name" disabled={submitting} placeholder="SOC Analyst" {...register('name')} />
+                  <input id="name" type="text" autoComplete="name" disabled={submitting || hasInvite} placeholder="NCS User" {...register('name')} />
                 </div>
                 {errors.name && <p className="ncs-field-error">{errors.name.message}</p>}
               </div>
@@ -136,7 +158,7 @@ export default function LoginPage() {
                   <label htmlFor="login">Login</label>
                   <div className="ncs-input-wrap">
                     <User className="ncs-input-icon" size={16} aria-hidden="true" />
-                    <input id="login" type="text" autoComplete="username" disabled={submitting} placeholder="nghia.dinh@ncsgroup.vn" {...register('login')} />
+                    <input id="login" type="text" autoComplete="username" disabled={submitting || (mode === 'register' && hasInvite)} placeholder="nghia.dinh@ncsgroup.vn" {...register('login')} />
                   </div>
                   {errors.login && <p className="ncs-field-error">{errors.login.message}</p>}
                 </div>
@@ -146,7 +168,7 @@ export default function LoginPage() {
                     <label htmlFor="organisation">Organisation</label>
                     <div className="ncs-input-wrap">
                       <Building2 className="ncs-input-icon" size={16} aria-hidden="true" />
-                      <input id="organisation" type="text" disabled={submitting} placeholder="admin" {...register('organisation')} />
+                      <input id="organisation" type="text" disabled={submitting || hasInvite} placeholder="NCS" {...register('organisation')} />
                     </div>
                     {errors.organisation && <p className="ncs-field-error">{errors.organisation.message}</p>}
                   </div>

@@ -95,7 +95,7 @@ export default function AlertDetailPage() {
   });
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -197,211 +197,214 @@ export default function AlertDetailPage() {
 
           <section className="content case-page next-case-page alert-triage-page">
             {/* Alert preview banner */}
-            <div className="alert-preview-banner box box-primary">
-              <div className="box-header with-border case-panelinfo-header">
-                <h3 className="box-title text-primary">
-                  <ShieldAlert size={16} className="mr-1" />
+            <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden mb-6">
+              <div className="px-6 py-4 border-b border-slate-700 bg-slate-900/50 flex flex-wrap gap-4 justify-between items-center">
+                <h3 className="text-blue-500 font-medium text-lg flex items-center">
+                  <ShieldAlert size={16} className="mr-2" />
                   Alert Preview: {item?.title ?? 'Alert detail'}
                 </h3>
-                <div className="box-tools pull-right case-detail-status">
-                  {item?.follow && <span className="label label-info mr-1" title="Following">Follow</span>}
-                  {item?.flag && <span className="label label-warning mr-1" title="Flagged">Flagged</span>}
-                  {item?.read === false && <span className="label label-danger mr-1">Unread</span>}
+                <div className="flex items-center gap-2 text-sm">
+                  {item?.follow && <span className="px-2 py-0.5 rounded text-[10px] bg-blue-900 text-blue-300 font-bold uppercase tracking-wider" title="Following">Follow</span>}
+                  {item?.flag && <span className="px-2 py-0.5 rounded text-[10px] bg-orange-900 text-orange-300 font-bold uppercase tracking-wider" title="Flagged">Flagged</span>}
+                  {item?.read === false && <span className="px-2 py-0.5 rounded text-[10px] bg-red-900 text-red-300 font-bold uppercase tracking-wider">Unread</span>}
                   <span className={alertStatusClass(item?.status)}>{item?.status ?? 'Loading'}</span>
                 </div>
               </div>
-              <div className="box-body case-panelinfo-body">
-                <span><strong>Severity</strong> <Severity value={item?.severity ?? 2} /></span>
-                <span><strong>TLP</strong> <Tlp value={item?.tlp ?? 2} /></span>
-                <span><strong>PAP</strong> <Pap value={item?.pap ?? 2} /></span>
-                <span><strong>Type</strong> {item?.type || '—'}</span>
-                <span><strong>Source</strong> {item?.source || '—'}</span>
-                <span><strong>Reference</strong> {item?.source_ref || '—'}</span>
-                <span><strong>Created</strong> {item?.created_at ? new Date(item.created_at).toLocaleString() : '—'}</span>
+              <div className="px-6 py-4 flex flex-wrap gap-6 text-sm">
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">Severity</span> <Severity value={item?.severity ?? 2} /></div>
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">TLP</span> <Tlp value={item?.tlp ?? 2} /></div>
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">PAP</span> <Pap value={item?.pap ?? 2} /></div>
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">Type</span> <span className="font-medium text-slate-200">{item?.type || '—'}</span></div>
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">Source</span> <span className="font-medium text-slate-200">{item?.source || '—'}</span></div>
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">Reference</span> <span className="font-medium text-slate-200">{item?.source_ref || '—'}</span></div>
+                <div className="flex flex-col"><span className="text-slate-400 text-xs mb-1">Created</span> <span className="font-medium text-slate-200">{item?.created_at ? new Date(item.created_at).toLocaleString() : '—'}</span></div>
               </div>
             </div>
 
-            <div className="case-detail-layout">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
               {/* Main tabset */}
-              <section className="nav-tabs-custom case-main-tabset">
-                <ul className="nav nav-tabs detail-tab-strip">
+              <section className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden flex flex-col">
+                <ul className="flex bg-slate-900 border-b border-slate-700">
                   {TABS.map(tab => (
-                    <li key={tab} className={activeTab === tab ? 'active' : ''}>
-                      <button type="button" onClick={() => setActiveTab(tab)}>
+                    <li key={tab} className="flex-1">
+                      <button 
+                        type="button" 
+                        onClick={() => setActiveTab(tab)}
+                        className={`w-full py-4 text-sm font-medium transition-colors border-b-2 flex items-center justify-center gap-2 ${activeTab === tab ? 'border-blue-500 text-blue-400 bg-slate-800' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'}`}
+                      >
                         <span>{tab}</span>
-                        {tab === 'Observables' && <span className="badge">{item?.observables?.length ?? 0}</span>}
-                        {tab === 'Similar' && <span className="badge">{item?.similar_alerts?.length ?? 0}</span>}
+                        {tab === 'Observables' && <span className="px-2 py-0.5 rounded-full text-xs bg-slate-700 text-slate-300">{item?.observables?.length ?? 0}</span>}
+                        {tab === 'Similar' && <span className="px-2 py-0.5 rounded-full text-xs bg-slate-700 text-slate-300">{item?.similar_alerts?.length ?? 0}</span>}
                       </button>
                     </li>
                   ))}
                 </ul>
 
-                <div className="tab-content case-page-content">
-                  {actionError && <div className="admin-alert error">{actionError}</div>}
+                <div className="p-6 overflow-hidden">
+                  {actionError && <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-md mb-6">{actionError}</div>}
 
                   {/* ── Overview tab ── */}
                   {activeTab === 'Overview' && item && (
                     <>
-                      <div className="alert-legacy-summary">
-                        <h4 className="text-primary">
+                      <div className="mb-8">
+                        <h4 className="text-xl font-semibold text-slate-200 flex items-center gap-3 mb-4">
                           <Severity value={item.severity} /> <span>{item.title}</span>
                         </h4>
-                        <div className="alert-meta-line">
-                          <span><FileText size={13} /> <strong>ID:</strong> <code>{item.id}</code></span>
-                          <span><Bell size={13} /> <strong>Date:</strong> {item.occurred_at ? new Date(item.occurred_at).toLocaleString() : new Date(item.created_at).toLocaleString()}</span>
-                          <span><Tag size={13} /> <strong>Type:</strong> {item.type}</span>
-                          <span><BarChart3 size={13} /> <strong>Reference:</strong> {item.source_ref}</span>
-                          <span><Search size={13} /> <strong>Source:</strong> {item.source}</span>
+                        <div className="flex flex-wrap gap-4 text-sm text-slate-400 bg-slate-900/50 p-4 rounded-md border border-slate-700 mb-6">
+                          <span className="flex items-center gap-1.5"><FileText size={14} className="text-slate-500" /> <strong className="text-slate-300">ID:</strong> <code className="bg-slate-950 px-1.5 py-0.5 rounded">{item.id}</code></span>
+                          <span className="flex items-center gap-1.5"><Bell size={14} className="text-slate-500" /> <strong className="text-slate-300">Date:</strong> {item.occurred_at ? new Date(item.occurred_at).toLocaleString() : new Date(item.created_at).toLocaleString()}</span>
+                          <span className="flex items-center gap-1.5"><Tag size={14} className="text-slate-500" /> <strong className="text-slate-300">Type:</strong> {item.type}</span>
+                          <span className="flex items-center gap-1.5"><BarChart3 size={14} className="text-slate-500" /> <strong className="text-slate-300">Reference:</strong> {item.source_ref}</span>
+                          <span className="flex items-center gap-1.5"><Search size={14} className="text-slate-500" /> <strong className="text-slate-300">Source:</strong> {item.source}</span>
                         </div>
 
-                        <dl className="dl-horizontal alert-basic-info">
-                          <dt>Tags</dt>
-                          <dd>
+                        <div className="grid grid-cols-[120px_1fr] gap-y-4 gap-x-4 text-sm">
+                          <div className="text-slate-400 font-medium pt-1">Tags</div>
+                          <div>
                             <TagList data={item.tags} />
-                          </dd>
-                          <dt>Description</dt>
-                          <dd>
-                            <div className="description-pane detail-markdown">
-                              {item.description || <em className="text-warning">Not specified</em>}
-                            </div>
-                          </dd>
-                          <dt>Case template</dt>
-                          <dd>{item.case_template || <em className="text-muted">Empty case</em>}</dd>
-                          <dt>Linked case</dt>
-                          <dd>
+                          </div>
+                          <div className="text-slate-400 font-medium pt-1">Description</div>
+                          <div className="bg-slate-900/50 p-4 rounded-md border border-slate-700 prose prose-invert max-w-none text-slate-300">
+                            {item.description || <em className="text-slate-500">Not specified</em>}
+                          </div>
+                          <div className="text-slate-400 font-medium pt-1">Case template</div>
+                          <div className="text-slate-300 pt-1">{item.case_template || <em className="text-slate-500">Empty case</em>}</div>
+                          <div className="text-slate-400 font-medium pt-1">Linked case</div>
+                          <div className="pt-1">
                             {item.case_number
-                              ? <a href={`/cases/${item.case_id}`}>#{item.case_number} {item.case_title}</a>
-                              : <em className="text-muted">Not imported</em>}
-                          </dd>
+                              ? <a href={`/cases/${item.case_id}`} className="text-blue-400 hover:text-blue-300">#{String(item.case_number).padStart(7, '0')} {item.case_title}</a>
+                              : <em className="text-slate-500">Not imported</em>}
+                          </div>
                           {item.external_link && (
                             <>
-                              <dt>External link</dt>
-                              <dd><a href={item.external_link} target="_blank" rel="noopener noreferrer">{item.external_link}</a></dd>
+                              <div className="text-slate-400 font-medium pt-1">External link</div>
+                              <div className="pt-1"><a href={item.external_link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300">{item.external_link}</a></div>
                             </>
                           )}
-                        </dl>
+                        </div>
 
-                        {/* Custom fields — mirrors legacy alert/custom.fields.html */}
+                        {/* Custom fields */}
                         {item.custom_fields && item.custom_fields.length > 0 && (
-                          <>
-                            <h4 className="text-primary" style={{ marginTop: 12 }}>Custom fields</h4>
-                            <table className="table table-striped table-condensed">
-                              <thead><tr><th>Name</th><th>Value</th><th>Type</th></tr></thead>
-                              <tbody>
+                          <div className="mt-8">
+                            <h4 className="text-blue-400 font-medium mb-4 pb-2 border-b border-slate-700">Custom fields</h4>
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                              <thead><tr className="text-slate-400 border-b border-slate-700"><th className="pb-2 font-medium">Name</th><th className="pb-2 font-medium">Value</th><th className="pb-2 font-medium">Type</th></tr></thead>
+                              <tbody className="divide-y divide-slate-800/50">
                                 {item.custom_fields.map((cf, i) => (
-                                  <tr key={cf.id || i}>
-                                    <td>{cf.name}</td>
-                                    <td>{cf.value || <em className="text-muted">—</em>}</td>
-                                    <td>{cf.field_type && <span className="label label-info">{cf.field_type}</span>}</td>
+                                  <tr key={cf.id || i} className="hover:bg-slate-800/30">
+                                    <td className="py-2 text-slate-300">{cf.name}</td>
+                                    <td className="py-2 text-slate-300">{cf.value || <em className="text-slate-500">—</em>}</td>
+                                    <td className="py-2">{cf.field_type && <span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-[10px] uppercase">{cf.field_type}</span>}</td>
                                   </tr>
                                 ))}
                               </tbody>
                             </table>
-                          </>
+                          </div>
                         )}
                       </div>
 
-                      {/* Edit form (inline, TheHive 4 style) */}
+                      {/* Edit form */}
                       {editing ? (
-                        <div className="box box-default alert-edit-box">
-                          <div className="box-header with-border">
-                            <h3 className="box-title">Edit alert</h3>
-                          </div>
-                          <div className="box-body">
-                            <div className="form-group">
-                              <label>Title</label>
-                              <input className="form-control" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
+                        <div className="bg-slate-900 border border-slate-700 rounded-md p-6 mb-8">
+                          <h3 className="text-blue-500 font-medium mb-4">Edit alert</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Title</label>
+                              <input className="thehive-input" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
                             </div>
-                            <div className="form-group">
-                              <label>Description</label>
-                              <textarea className="form-control" rows={4} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Description</label>
+                              <textarea className="thehive-input" rows={4} value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
                             </div>
-                            <div className="form-group">
-                              <label>Severity</label>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">Severity</label>
                               <Severity value={editForm.severity} active onUpdate={v => setEditForm(f => ({ ...f, severity: v }))} />
                             </div>
-                            <div className="form-group">
-                              <label>TLP</label>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">TLP</label>
                               <Tlp value={editForm.tlp} format="active" onUpdate={v => setEditForm(f => ({ ...f, tlp: v }))} />
                             </div>
-                            <div className="form-group">
-                              <label>PAP</label>
+                            <div>
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-2">PAP</label>
                               <Pap value={editForm.pap} format="active" onUpdate={v => setEditForm(f => ({ ...f, pap: v }))} />
                             </div>
-                            <div className="form-group">
-                              <label>Case template</label>
-                              <input className="form-control" value={editForm.case_template} onChange={e => setEditForm(f => ({ ...f, case_template: e.target.value }))} />
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Case template</label>
+                              <input className="thehive-input" value={editForm.case_template} onChange={e => setEditForm(f => ({ ...f, case_template: e.target.value }))} />
                             </div>
-                            <div className="form-group">
-                              <label>Tags <small className="text-muted">(comma-separated)</small></label>
-                              <input className="form-control" value={editForm.tags} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))} placeholder="tag1, tag2" />
+                            <div className="col-span-1 md:col-span-2">
+                              <label className="block text-xs font-semibold text-slate-400 uppercase mb-1">Tags <span className="text-slate-500 lowercase normal-case">(comma-separated)</span></label>
+                              <input className="thehive-input" value={editForm.tags} onChange={e => setEditForm(f => ({ ...f, tags: e.target.value }))} placeholder="tag1, tag2" />
                             </div>
-                            <div className="btn-toolbar">
-                              <button className="btn btn-primary" disabled={updateAlert.isPending} onClick={() => updateAlert.mutate()}>
-                                {updateAlert.isPending ? 'Saving…' : 'Save'}
-                              </button>
-                              <button className="btn btn-default ml-1" onClick={() => setEditing(false)}>Cancel</button>
-                            </div>
+                          </div>
+                          <div className="flex gap-2 mt-6">
+                            <button className="thehive-btn-primary" disabled={updateAlert.isPending} onClick={() => updateAlert.mutate()}>
+                              {updateAlert.isPending ? 'Saving…' : 'Save changes'}
+                            </button>
+                            <button className="thehive-btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
                           </div>
                         </div>
                       ) : null}
 
                       {/* Import / merge section */}
-                      <h3 className="detail-section-title">Import / merge</h3>
-                      <div className="alert-import-strip">
-                        <button
-                          className="btn btn-primary"
-                          disabled={!canWrite || importMutation.isPending || !!item.case_id}
-                          onClick={() => importMutation.mutate()}
-                        >
-                          <Download size={14} /> {importMutation.isPending ? 'Importing…' : 'Import as new case'}
-                        </button>
-                        <div className="alert-merge-inline">
-                          <input
-                            className="form-control input-sm"
-                            placeholder="Target case UUID"
-                            value={caseId}
-                            onChange={e => setCaseId(e.target.value)}
-                          />
-                          <input
-                            className="form-control input-sm"
-                            placeholder="Target alert UUID (optional)"
-                            value={targetAlertId}
-                            onChange={e => setTargetAlertId(e.target.value)}
-                          />
+                      <div className="mt-8 pt-6 border-t border-slate-700">
+                        <h3 className="text-blue-400 font-medium mb-4">Import / merge</h3>
+                        <div className="flex flex-wrap gap-4 items-center bg-slate-900/50 p-4 rounded-md border border-slate-700">
                           <button
-                            className="btn btn-sm btn-default"
-                            disabled={!canWrite || mergeMutation.isPending || (!caseId.trim() && !targetAlertId.trim())}
-                            onClick={() => mergeMutation.mutate()}
+                            className="thehive-btn-primary flex items-center gap-2"
+                            disabled={!canWrite || importMutation.isPending || !!item.case_id}
+                            onClick={() => importMutation.mutate()}
                           >
-                            <GitMerge size={14} /> Merge into case
+                            <Download size={14} /> {importMutation.isPending ? 'Importing…' : 'Import as new case'}
                           </button>
+                          <div className="w-px h-8 bg-slate-700 mx-2 hidden sm:block"></div>
+                          <div className="flex flex-wrap items-center gap-2 flex-1">
+                            <input
+                              className="thehive-input max-w-[200px]"
+                              placeholder="Target case UUID"
+                              value={caseId}
+                              onChange={e => setCaseId(e.target.value)}
+                            />
+                            <input
+                              className="thehive-input max-w-[200px]"
+                              placeholder="Target alert UUID (optional)"
+                              value={targetAlertId}
+                              onChange={e => setTargetAlertId(e.target.value)}
+                            />
+                            <button
+                              className="thehive-btn-secondary flex items-center gap-2"
+                              disabled={!canWrite || mergeMutation.isPending || (!caseId.trim() && !targetAlertId.trim())}
+                              onClick={() => mergeMutation.mutate()}
+                            >
+                              <GitMerge size={14} /> Merge into case
+                            </button>
+                          </div>
                         </div>
                       </div>
 
                       {/* Merge/import result */}
                       {lastResult && (
-                        <>
-                          <h3 className="detail-section-title">Import / merge result</h3>
-                          <div className="merge-report">
-                            <div className="detail-info"><span>Policy</span><strong>{report?.policy ?? 'n/a'}</strong></div>
-                            <div className="detail-info"><span>Copied</span><strong>{report?.copied_count ?? 0}</strong></div>
-                            <div className="detail-info"><span>Deduplicated</span><strong>{report?.deduplicated_count ?? 0}</strong></div>
-                            <div className="detail-info"><span>Target case</span><strong>{lastResult.case ? `#${lastResult.case.number} ${lastResult.case.title}` : lastResult.target_case ?? 'n/a'}</strong></div>
+                        <div className="mt-8 pt-6 border-t border-slate-700">
+                          <h3 className="text-blue-400 font-medium mb-4">Import / merge result</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div className="bg-slate-900/50 p-4 rounded border border-slate-700"><div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Policy</div><div className="font-medium text-slate-200">{report?.policy ?? 'n/a'}</div></div>
+                            <div className="bg-slate-900/50 p-4 rounded border border-slate-700"><div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Copied</div><div className="font-medium text-slate-200">{report?.copied_count ?? 0}</div></div>
+                            <div className="bg-slate-900/50 p-4 rounded border border-slate-700"><div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Deduplicated</div><div className="font-medium text-slate-200">{report?.deduplicated_count ?? 0}</div></div>
+                            <div className="bg-slate-900/50 p-4 rounded border border-slate-700"><div className="text-xs text-slate-500 uppercase tracking-wide mb-1">Target case</div><div className="font-medium text-slate-200">{lastResult.case ? `#${lastResult.case.number} ${lastResult.case.title}` : lastResult.target_case ?? 'n/a'}</div></div>
                           </div>
                           {observables.length > 0 && (
-                            <table className="thehive-table mt-3">
+                            <table className="w-full text-left text-sm whitespace-nowrap mb-6">
                               <thead>
-                                <tr><th>Action</th><th>Type</th><th>Data</th><th>Attachment</th><th>Observable ID</th></tr>
+                                <tr className="text-slate-400 border-b border-slate-700"><th className="pb-2 font-medium">Action</th><th className="pb-2 font-medium">Type</th><th className="pb-2 font-medium">Data</th><th className="pb-2 font-medium">Attachment</th><th className="pb-2 font-medium">Observable ID</th></tr>
                               </thead>
-                              <tbody>
+                              <tbody className="divide-y divide-slate-800">
                                 {observables.map(o => (
-                                  <tr key={`${o.source_observable_id}-${o.observable_id}`}>
-                                    <td><span className={o.action === 'copied' ? 'label label-success' : 'label label-default'}>{o.action}</span></td>
-                                    <td>{o.data_type}</td>
-                                    <td className="mono">{o.data}</td>
-                                    <td>{o.attachment_id ? <span className="label label-default">📎 {o.attachment_id.split('-')[0]}</span> : '—'}</td>
-                                    <td className="mono">{o.observable_id}</td>
+                                  <tr key={`${o.source_observable_id}-${o.observable_id}`} className="hover:bg-slate-800/30">
+                                    <td className="py-2"><span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider ${o.action === 'copied' ? 'bg-green-900 text-green-300' : 'bg-slate-700 text-slate-300'}`}>{o.action}</span></td>
+                                    <td className="py-2 text-slate-300">{o.data_type}</td>
+                                    <td className="py-2 font-mono text-slate-400">{o.data}</td>
+                                    <td className="py-2">{o.attachment_id ? <span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-[10px]">📎 {o.attachment_id.split('-')[0]}</span> : <span className="text-slate-500">—</span>}</td>
+                                    <td className="py-2 font-mono text-slate-500 text-xs">{o.observable_id}</td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -409,23 +412,23 @@ export default function AlertDetailPage() {
                           )}
                           {report?.similar_alerts?.length ? (
                             <>
-                              <h4 className="mt-3">Similar scoring details</h4>
-                              <table className="thehive-table">
-                                <thead><tr><th>Alert</th><th>Score</th><th>Overlap</th><th>Reason</th></tr></thead>
-                                <tbody>
+                              <h4 className="text-slate-300 font-medium mb-3">Similar scoring details</h4>
+                              <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead><tr className="text-slate-400 border-b border-slate-700"><th className="pb-2 font-medium">Alert</th><th className="pb-2 font-medium">Score</th><th className="pb-2 font-medium">Overlap</th><th className="pb-2 font-medium">Reason</th></tr></thead>
+                                <tbody className="divide-y divide-slate-800">
                                   {report.similar_alerts.map(s => (
-                                    <tr key={s.id}>
-                                      <td><a href={`/alerts/${s.id}`}>{s.title}</a></td>
-                                      <td>{formatScore(s.score)}</td>
-                                      <td>obs {s.observable_overlap ?? 0} · IOC {s.ioc_overlap ?? 0} · tags {s.tag_overlap ?? 0}</td>
-                                      <td>{s.reason || '—'}</td>
+                                    <tr key={s.id} className="hover:bg-slate-800/30">
+                                      <td className="py-2"><a href={`/alerts/${s.id}`} className="text-blue-400 hover:text-blue-300">{s.title}</a></td>
+                                      <td className="py-2 text-slate-300">{formatScore(s.score)}</td>
+                                      <td className="py-2 text-slate-400">obs {s.observable_overlap ?? 0} · IOC {s.ioc_overlap ?? 0} · tags {s.tag_overlap ?? 0}</td>
+                                      <td className="py-2 text-slate-500">{s.reason || '—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>
                               </table>
                             </>
                           ) : null}
-                        </>
+                        </div>
                       )}
                     </>
                   )}
@@ -433,36 +436,36 @@ export default function AlertDetailPage() {
                   {/* ── Observables tab ── */}
                   {activeTab === 'Observables' && (
                     <>
-                      <h3 className="detail-section-title">Alert observables</h3>
-                      <table className="thehive-table adminlte-table">
+                      <h3 className="text-xl font-semibold text-slate-200 mb-4">Alert observables</h3>
+                      <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead>
-                          <tr>
-                            <th>TLP</th>
-                            <th>Flags</th>
-                            <th>Type</th>
-                            <th>Data</th>
-                            <th>Tags</th>
-                            <th>Created by</th>
+                          <tr className="text-slate-400 border-b border-slate-700 bg-slate-900/50">
+                            <th className="px-4 py-3 font-medium">TLP</th>
+                            <th className="px-4 py-3 font-medium">Flags</th>
+                            <th className="px-4 py-3 font-medium">Type</th>
+                            <th className="px-4 py-3 font-medium">Data</th>
+                            <th className="px-4 py-3 font-medium">Tags</th>
+                            <th className="px-4 py-3 font-medium">Created by</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-800">
                           {(item?.observables ?? []).map(o => (
-                            <tr key={o.id}>
-                              <td><Tlp value={o.tlp} format="icon" /></td>
-                              <td><ObservableFlags observable={{ ioc: o.ioc, sighted: o.sighted }} /></td>
-                              <td><span className="label label-primary">{o.data_type}</span></td>
-                              <td className="mono wrap">
+                            <tr key={o.id} className="hover:bg-slate-800/30">
+                              <td className="px-4 py-3"><Tlp value={o.tlp} format="icon" /></td>
+                              <td className="px-4 py-3"><ObservableFlags observable={{ ioc: o.ioc, sighted: o.sighted }} /></td>
+                              <td className="px-4 py-3"><span className="px-2 py-0.5 bg-blue-900 text-blue-300 rounded text-[10px] tracking-wider uppercase">{o.data_type}</span></td>
+                              <td className="px-4 py-3 font-mono text-slate-300 whitespace-normal break-all">
                                 {o.data}
                                 {o.attachment_id && (
-                                  <div><span className="label label-default">📎 {o.attachment_id.split('-')[0]}</span></div>
+                                  <div className="mt-1"><span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-[10px]">📎 {o.attachment_id.split('-')[0]}</span></div>
                                 )}
                               </td>
-                              <td><TagList data={o.tags} /></td>
-                              <td>{o.created_by}</td>
+                              <td className="px-4 py-3"><TagList data={o.tags} /></td>
+                              <td className="px-4 py-3 text-slate-400">{o.created_by}</td>
                             </tr>
                           ))}
                           {!item?.observables?.length && (
-                            <tr><td colSpan={6} className="empty-message">No observables.</td></tr>
+                            <tr><td colSpan={6} className="px-4 py-10 text-center text-slate-500">No observables.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -472,39 +475,45 @@ export default function AlertDetailPage() {
                   {/* ── Similar tab ── */}
                   {activeTab === 'Similar' && (
                     <>
-                      <h3 className="detail-section-title">Similar cases</h3>
-                      <div className="similar-filter-strip">
-                        <span className="label label-lg label-primary">All ({item?.similar_alerts?.length ?? 0})</span>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-xl font-semibold text-slate-200">Similar cases</h3>
+                        <span className="px-3 py-1 bg-blue-900/40 text-blue-300 border border-blue-700/50 rounded-full text-xs font-bold uppercase tracking-wider">All ({item?.similar_alerts?.length ?? 0})</span>
                       </div>
-                      <table className="thehive-table alert-similar-table">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead>
-                          <tr><th>Title</th><th>Source</th><th>Observables</th><th>IOCs</th><th>Action</th></tr>
+                          <tr className="text-slate-400 border-b border-slate-700 bg-slate-900/50">
+                            <th className="px-4 py-3 font-medium">Title</th><th className="px-4 py-3 font-medium">Source</th><th className="px-4 py-3 font-medium">Observables</th><th className="px-4 py-3 font-medium">IOCs</th><th className="px-4 py-3 font-medium">Action</th>
+                          </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-slate-800">
                           {(item?.similar_alerts ?? []).map(s => (
-                            <tr key={s.id}>
-                              <td>
-                                <a href={`/alerts/${s.id}`}>{s.title}</a>
-                                <div className="text-muted small">{s.reason ?? s.status ?? '—'}</div>
+                            <tr key={s.id} className="hover:bg-slate-800/30">
+                              <td className="px-4 py-3 whitespace-normal">
+                                <a href={`/alerts/${s.id}`} className="text-blue-400 hover:text-blue-300 font-medium">{s.title}</a>
+                                <div className="text-slate-500 text-xs mt-1">{s.reason ?? s.status ?? '—'}</div>
                               </td>
-                              <td>{s.source}/{s.source_ref}</td>
-                              <td>
-                                <strong>{formatScore(s.score)}</strong>
-                                <div className="progress progress-sm">
-                                  <div className="progress-bar" style={{ width: formatScore(s.score) }} />
+                              <td className="px-4 py-3 text-slate-300">{s.source}/{s.source_ref}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-slate-200">{formatScore(s.score)}</strong>
+                                  <div className="w-16 h-1.5 bg-slate-700 rounded overflow-hidden">
+                                    <div className="h-full bg-blue-500" style={{ width: formatScore(s.score) }} />
+                                  </div>
                                 </div>
-                                <small>{s.observable_overlap ?? 0} observables</small>
+                                <div className="text-slate-500 text-xs mt-1">{s.observable_overlap ?? 0} observables</div>
                               </td>
-                              <td>
-                                <strong>{s.ioc_overlap ?? 0}</strong>
-                                <div className="progress progress-sm">
-                                  <div className="progress-bar progress-bar-danger" style={{ width: `${Math.min(100, (s.ioc_overlap ?? 0) * 20)}%` }} />
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <strong className="text-slate-200">{s.ioc_overlap ?? 0}</strong>
+                                  <div className="w-16 h-1.5 bg-slate-700 rounded overflow-hidden">
+                                    <div className="h-full bg-red-500" style={{ width: `${Math.min(100, (s.ioc_overlap ?? 0) * 20)}%` }} />
+                                  </div>
                                 </div>
-                                <small>{s.tag_overlap ?? 0} tag overlap</small>
+                                <div className="text-slate-500 text-xs mt-1">{s.tag_overlap ?? 0} tag overlap</div>
                               </td>
-                              <td>
+                              <td className="px-4 py-3">
                                 <button
-                                  className="btn btn-sm btn-primary"
+                                  className="thehive-btn-primary py-1 px-3 text-xs"
                                   disabled={!canWrite}
                                   onClick={() => { setTargetAlertId(s.id); setActiveTab('Overview'); }}
                                 >
@@ -514,7 +523,7 @@ export default function AlertDetailPage() {
                             </tr>
                           ))}
                           {!item?.similar_alerts?.length && (
-                            <tr><td colSpan={5} className="empty-message">No similar alerts found.</td></tr>
+                            <tr><td colSpan={5} className="px-4 py-10 text-center text-slate-500">No similar alerts found.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -524,18 +533,24 @@ export default function AlertDetailPage() {
                   {/* ── Audit tab ── */}
                   {activeTab === 'Audit' && (
                     <>
-                      <h3 className="detail-section-title">History</h3>
-                      <div className="timeline">
+                      <h3 className="text-xl font-semibold text-slate-200 mb-6">History</h3>
+                      <div className="space-y-6 relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-700 before:to-transparent">
                         {(item?.history ?? []).map((h, i) => (
-                          <div className="timeline-item" key={`${h.action}-${i}`}>
-                            <span className="timeline-dot" />
-                            <strong>{h.action}</strong>
-                            <p>{h.actor_id || 'system'}</p>
-                            <small>{new Date(h.created_at).toLocaleString()}</small>
+                          <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active" key={`${h.action}-${i}`}>
+                            <div className="flex items-center justify-center w-5 h-5 rounded-full border border-slate-700 bg-slate-900 text-slate-500 group-[.is-active]:text-blue-500 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                            </div>
+                            <div className="w-[calc(100%-2.5rem)] md:w-[calc(50%-1.25rem)] bg-slate-900/50 p-4 rounded border border-slate-700 shadow">
+                              <div className="flex items-center justify-between space-x-2 mb-1">
+                                <div className="font-bold text-slate-200">{h.action}</div>
+                                <time className="text-xs text-slate-500">{new Date(h.created_at).toLocaleString()}</time>
+                              </div>
+                              <div className="text-slate-400 text-sm">{h.actor_id || 'system'}</div>
+                            </div>
                           </div>
                         ))}
                         {!item?.history?.length && (
-                          <div className="empty-message">No history yet.</div>
+                          <div className="text-center py-10 text-slate-500 relative z-10">No history yet.</div>
                         )}
                       </div>
                     </>
@@ -544,60 +559,65 @@ export default function AlertDetailPage() {
               </section>
 
               {/* Side action box */}
-              <aside className="box box-primary case-action-box">
-                <div className="box-header with-border">
-                  <h3 className="box-title">Actions</h3>
+              <aside className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden sticky top-6">
+                <div className="px-4 py-3 border-b border-slate-700 bg-slate-900/50">
+                  <h3 className="text-slate-200 font-medium text-sm uppercase tracking-wider">Actions</h3>
                 </div>
-                <div className="box-body detail-side-list">
+                <div className="p-4 space-y-2">
                   <button
-                    className="btn btn-default btn-block"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 bg-slate-900/50 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!canWrite}
                     onClick={() => toggleFollow.mutate()}
                   >
-                    {item?.follow ? <EyeOff size={14} /> : <Eye size={14} />}
-                    {' '}{item?.follow ? 'Ignore new updates' : 'Track new updates'}
+                    {item?.follow ? <EyeOff size={14} className="text-blue-400" /> : <Eye size={14} />}
+                    <span className="flex-1 text-left">{item?.follow ? 'Ignore new updates' : 'Track new updates'}</span>
                   </button>
                   <button
-                    className="btn btn-default btn-block"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 bg-slate-900/50 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!canWrite}
                     onClick={() => toggleRead.mutate()}
                   >
-                    {item?.read ? <MailOpen size={14} /> : <Mail size={14} />}
-                    {' '}{item?.read ? 'Mark as unread' : 'Mark as read'}
+                    {item?.read ? <MailOpen size={14} className="text-blue-400" /> : <Mail size={14} />}
+                    <span className="flex-1 text-left">{item?.read ? 'Mark as unread' : 'Mark as read'}</span>
                   </button>
                   <button
-                    className="btn btn-default btn-block"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 bg-slate-900/50 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!canWrite}
                     onClick={() => toggleFlag.mutate()}
                   >
-                    <Flag size={14} /> {item?.flag ? 'Unflag' : 'Flag'}
+                    <Flag size={14} className={item?.flag ? 'text-red-500' : ''} /> 
+                    <span className="flex-1 text-left">{item?.flag ? 'Unflag' : 'Flag'}</span>
                   </button>
-                  <hr />
+                  
+                  <hr className="border-slate-700 my-4" />
+                  
                   {!editing ? (
                     <button
-                      className="btn btn-default btn-block"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 bg-slate-900/50 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!canWrite}
                       onClick={() => setEditing(true)}
                     >
-                      ✏️ Edit alert
+                      <FileText size={14} /> <span className="flex-1 text-left">Edit alert</span>
                     </button>
                   ) : (
-                    <button className="btn btn-default btn-block" onClick={() => setEditing(false)}>
+                    <button className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 bg-slate-900/50 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded transition-colors" onClick={() => setEditing(false)}>
                       Cancel edit
                     </button>
                   )}
-                  <hr />
+                  
+                  <hr className="border-slate-700 my-4" />
+                  
                   {item?.case_id && (
-                    <a href={`/cases/${item.case_id}`} className="btn btn-default btn-block">
-                      <Link2 size={14} /> View case #{item.case_number}
+                    <a href={`/cases/${item.case_id}`} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-300 bg-slate-900/50 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 rounded transition-colors">
+                      <Link2 size={14} /> <span className="flex-1 text-left">View case #{String(item.case_number).padStart(7, '0')}</span>
                     </a>
                   )}
                   <button
-                    className="btn btn-danger btn-block"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 bg-red-900/10 hover:bg-red-900/30 border border-red-900/30 hover:border-red-500/50 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={!canWrite || deleteAlert.isPending}
                     onClick={() => setShowDeleteDialog(true)}
                   >
-                    <Trash2 size={14} /> Delete
+                    <Trash2 size={14} /> <span className="flex-1 text-left">Delete</span>
                   </button>
                 </div>
               </aside>

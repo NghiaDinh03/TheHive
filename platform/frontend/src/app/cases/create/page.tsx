@@ -80,7 +80,7 @@ export default function CaseCreatePage() {
   });
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -201,28 +201,27 @@ export default function CaseCreatePage() {
             </ol>
           </section>
           <section className="content">
-            <div className="row">
-              <div className="col-md-10 col-md-offset-1">
-                {error && (
-                  <div className="alert alert-danger alert-dismissible">
-                    <button type="button" className="close" onClick={() => setError(null)}>×</button>
-                    {error}
-                  </div>
-                )}
+            <div className="max-w-5xl mx-auto">
+              {error && (
+                <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-3 rounded-md mb-6 flex justify-between items-center">
+                  <span>{error}</span>
+                  <button type="button" onClick={() => setError(null)} className="text-red-400 hover:text-red-200">×</button>
+                </div>
+              )}
 
-                <form className="form-horizontal" onSubmit={handleSubmit}>
-                  <div className="box">
-                    <div className="box-header with-border">
-                      <h3 className="box-title"><Briefcase size={15} className="mr-1" /> Case details</h3>
-                    </div>
-                    <div className="box-body">
+              <form onSubmit={handleSubmit} className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-700 bg-slate-900/50 flex items-center">
+                  <Briefcase size={16} className="mr-2 text-blue-500" />
+                  <h3 className="text-blue-500 font-medium text-lg">Case details</h3>
+                </div>
+                <div className="p-6 space-y-6">
 
-                      {/* Case template */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Case template</label>
-                        <div className="col-md-9">
+                  {/* Case template */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                    <label className="text-slate-400 text-sm font-medium mt-2">Case template</label>
+                    <div className="md:col-span-3">
                           <select
-                            className="form-control input-sm"
+                            className="thehive-input"
                             value={form.case_template}
                             onChange={(e) => {
                               const val = e.target.value;
@@ -239,34 +238,28 @@ export default function CaseCreatePage() {
                               <option key={t.id} value={t.name}>{t.display_name || t.name}</option>
                             ))}
                           </select>
-                          <p className="help-block">Select a template to auto-fill severity, TLP, PAP, tags, and preview tasks/custom fields.</p>
+                          <p className="text-xs text-slate-500 mt-2">Select a template to auto-fill severity, TLP, PAP, tags, and preview tasks/custom fields.</p>
                         </div>
                       </div>
 
                       {/* Template preview — tasks and custom fields from template */}
                       {selectedTemplate && (templateTasks.length > 0 || templateCustomFields.length > 0) && (
-                        <div className="form-group">
-                          <div className="col-md-offset-3 col-md-9">
-                            <div className="box box-default collapsed-box" style={{ marginBottom: 0, boxShadow: 'none', border: '1px solid #d2d6de' }}>
-                              <div className="box-header with-border" style={{ cursor: 'pointer', padding: '6px 12px' }}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                          <div className="md:col-start-2 md:col-span-3">
+                            <div className="bg-slate-900 border border-slate-700 rounded-md overflow-hidden">
+                              <div className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-slate-800 transition-colors"
                                 onClick={(e) => {
-                                  const box = (e.currentTarget as HTMLElement).closest('.box');
-                                  box?.classList.toggle('collapsed-box');
-                                  const body = box?.querySelector('.box-body');
-                                  if (body) (body as HTMLElement).style.display = (body as HTMLElement).style.display === 'none' ? '' : 'none';
-                                  const btn = box?.querySelector('.btn-box-tool i');
-                                  if (btn) btn.className = btn.className.includes('plus') ? 'fa fa-minus' : 'fa fa-plus';
+                                  const body = e.currentTarget.nextElementSibling as HTMLElement;
+                                  body.style.display = body.style.display === 'none' ? 'block' : 'none';
                                 }}
                               >
-                                <h3 className="box-title" style={{ fontSize: '0.88rem' }}>
-                                  <ClipboardList size={13} className="mr-1" />
+                                <h3 className="text-blue-500 font-medium text-sm flex items-center">
+                                  <ClipboardList size={14} className="mr-2" />
                                   Template preview: {selectedTemplate.display_name || selectedTemplate.name}
                                 </h3>
-                                <div className="box-tools pull-right">
-                                  <button type="button" className="btn btn-box-tool"><i className="fa fa-plus" /></button>
-                                </div>
+                                <i className="fa fa-chevron-down text-slate-500" />
                               </div>
-                              <div className="box-body" style={{ display: 'none', padding: '8px 12px' }}>
+                              <div style={{ display: 'none' }} className="p-4 border-t border-slate-700 bg-slate-800/50">
                                 {templateTasks.length > 0 && (
                                   <div className="mb-2">
                                     <strong className="text-sm">Tasks ({templateTasks.length}):</strong>
@@ -303,14 +296,14 @@ export default function CaseCreatePage() {
                       )}
 
                       {/* Title */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">
-                          Title <span className="text-danger">*</span>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">
+                          Title <span className="text-red-500">*</span>
                         </label>
-                        <div className="col-md-9">
+                        <div className="md:col-span-3">
                           <input
                             type="text"
-                            className="form-control input-sm"
+                            className="thehive-input"
                             placeholder="Case title"
                             value={form.title}
                             onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -321,11 +314,11 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* Description */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Description</label>
-                        <div className="col-md-9">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">Description</label>
+                        <div className="md:col-span-3">
                           <textarea
-                            className="form-control"
+                            className="thehive-input"
                             rows={5}
                             placeholder="Case description (Markdown supported)"
                             value={form.description}
@@ -335,11 +328,11 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* Severity */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Severity</label>
-                        <div className="col-md-9">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">Severity</label>
+                        <div className="md:col-span-3">
                           <select
-                            className="form-control input-sm"
+                            className="thehive-input"
                             value={form.severity}
                             onChange={(e) => setForm((f) => ({ ...f, severity: Number(e.target.value) }))}
                           >
@@ -356,11 +349,11 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* TLP */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">TLP</label>
-                        <div className="col-md-9">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">TLP</label>
+                        <div className="md:col-span-3">
                           <select
-                            className="form-control input-sm"
+                            className="thehive-input"
                             value={form.tlp}
                             onChange={(e) => setForm((f) => ({ ...f, tlp: Number(e.target.value) }))}
                           >
@@ -377,11 +370,11 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* PAP */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">PAP</label>
-                        <div className="col-md-9">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">PAP</label>
+                        <div className="md:col-span-3">
                           <select
-                            className="form-control input-sm"
+                            className="thehive-input"
                             value={form.pap}
                             onChange={(e) => setForm((f) => ({ ...f, pap: Number(e.target.value) }))}
                           >
@@ -398,22 +391,20 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* Tags */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Tags</label>
-                        <div className="col-md-9">
-                          <div className="input-group">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">Tags</label>
+                        <div className="md:col-span-3 relative">
+                          <div className="flex w-full">
                             <input
                               type="text"
-                              className="form-control input-sm"
+                              className="thehive-input rounded-r-none border-r-0"
                               placeholder="Comma-separated tags, e.g. phishing, malware"
                               value={form.tags}
                               onChange={(e) => setForm((f) => ({ ...f, tags: e.target.value }))}
                             />
-                            <span className="input-group-btn vtop">
-                              <button type="button" className="btn btn-block btn-sm btn-primary" onClick={() => setShowTagLibrary(!showTagLibrary)} title="Add tag from library">
-                                <span className="fa fa-plus" />
-                              </button>
-                            </span>
+                            <button type="button" className="thehive-btn-primary rounded-l-none" onClick={() => setShowTagLibrary(!showTagLibrary)} title="Add tag from library">
+                              <span className="fa fa-plus" />
+                            </button>
                           </div>
                           {selectedTemplate?.tags && selectedTemplate.tags.length > 0 && (
                             <p className="help-block text-info" style={{ fontSize: '0.78rem' }}>
@@ -421,22 +412,20 @@ export default function CaseCreatePage() {
                             </p>
                           )}
                           {showTagLibrary && (
-                            <div className="tag-library-dropdown" style={{ position: 'absolute', zIndex: 100, background: '#fff', border: '1px solid #d2d6de', borderRadius: 4, maxHeight: 200, overflowY: 'auto', width: 'calc(100% - 30px)', boxShadow: '0 2px 6px rgba(0,0,0,0.15)', marginTop: 4 }}>
-                              <div style={{ padding: '6px 8px', borderBottom: '1px solid #eee' }}>
-                                <input type="text" className="form-control input-sm" placeholder="Search tags..." value={tagLibrarySearch} onChange={e => setTagLibrarySearch(e.target.value)} autoFocus />
+                            <div className="absolute z-50 bg-slate-800 border border-slate-700 rounded-md max-h-48 overflow-y-auto w-[calc(100%-48px)] shadow-xl mt-1">
+                              <div className="p-2 border-b border-slate-700 sticky top-0 bg-slate-800">
+                                <input type="text" className="thehive-input py-1.5" placeholder="Search tags..." value={tagLibrarySearch} onChange={e => setTagLibrarySearch(e.target.value)} autoFocus />
                               </div>
                               {(tagLibrary.data?.values ?? [])
                                 .filter(t => !tagLibrarySearch || t.name.toLowerCase().includes(tagLibrarySearch.toLowerCase()))
                                 .filter(t => !(form.tags || '').split(',').map(s => s.trim()).includes(t.name))
                                 .slice(0, 50)
                                 .map(t => (
-                                  <div key={t.name} style={{ padding: '4px 8px', cursor: 'pointer', fontSize: '0.85rem' }}
+                                  <div key={t.name} className="px-3 py-2 cursor-pointer text-sm text-slate-300 hover:bg-slate-700 flex items-center"
                                     onClick={() => {
                                       const existing = form.tags ? form.tags.split(',').map(s => s.trim()).filter(Boolean) : [];
                                       setForm(f => ({ ...f, tags: [...existing, t.name].join(', ') }));
                                     }}
-                                    onMouseEnter={e => (e.currentTarget.style.background = '#f0f0f0')}
-                                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                                   >
                                     <Tag size={11} className="mr-1" />{t.name}
                                   </div>
@@ -449,12 +438,12 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* Assignee */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Assignee</label>
-                        <div className="col-md-9">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">Assignee</label>
+                        <div className="md:col-span-3">
                           <input
                             type="text"
-                            className="form-control input-sm"
+                            className="thehive-input"
                             placeholder="Login of assignee (optional)"
                             value={form.assignee}
                             onChange={(e) => setForm((f) => ({ ...f, assignee: e.target.value }))}
@@ -463,12 +452,12 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* Start date */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Start date</label>
-                        <div className="col-md-9">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">Start date</label>
+                        <div className="md:col-span-3">
                           <input
                             type="datetime-local"
-                            className="form-control input-sm"
+                            className="thehive-input"
                             value={form.start_date}
                             onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
                           />
@@ -476,34 +465,35 @@ export default function CaseCreatePage() {
                       </div>
 
                       {/* Flag */}
-                      <div className="form-group">
-                        <div className="col-md-offset-3 col-md-9">
-                          <div className="checkbox">
-                            <label>
-                              <input
-                                type="checkbox"
-                                checked={form.flag}
-                                onChange={(e) => setForm((f) => ({ ...f, flag: e.target.checked }))}
-                              />
-                              {' '}Flag this case (mark as important)
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <div className="md:col-start-2 md:col-span-3">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 bg-slate-900 border-slate-700 rounded text-blue-600 focus:ring-blue-500"
+                              checked={form.flag}
+                              onChange={(e) => setForm((f) => ({ ...f, flag: e.target.checked }))}
+                            />
+                            <label className="text-sm text-slate-300">
+                              Flag this case (mark as important)
                             </label>
                           </div>
                         </div>
                       </div>
 
-                      {/* Case tasks — mirrors legacy case.tasks in creation */}
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Case tasks</label>
-                        <div className="col-md-9">
+                      {/* Case tasks */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-start">
+                        <label className="text-slate-400 text-sm font-medium mt-2">Case tasks</label>
+                        <div className="md:col-span-3">
                           {selectedTemplate && templateTasks.length > 0 && (
-                            <p className="help-block text-info" style={{ fontSize: '0.78rem', marginBottom: 8 }}>
+                            <p className="text-xs text-blue-400 mb-2">
                               Template tasks will be created automatically. Add additional tasks below.
                             </p>
                           )}
-                          <div className="input-group input-group-sm">
+                          <div className="flex w-full">
                             <input
                               type="text"
-                              className="form-control"
+                              className="thehive-input rounded-r-none border-r-0"
                               placeholder="Task title"
                               value={newTaskInput}
                               onChange={e => setNewTaskInput(e.target.value)}
@@ -515,12 +505,10 @@ export default function CaseCreatePage() {
                                 }
                               }}
                             />
-                            <span className="input-group-btn">
-                              <button type="button" className="btn btn-primary" disabled={!newTaskInput.trim()}
-                                onClick={() => { setCustomTasks(prev => [...prev, newTaskInput.trim()]); setNewTaskInput(''); }}>
-                                Add task
-                              </button>
-                            </span>
+                            <button type="button" className="thehive-btn-primary rounded-l-none" disabled={!newTaskInput.trim()}
+                              onClick={() => { setCustomTasks(prev => [...prev, newTaskInput.trim()]); setNewTaskInput(''); }}>
+                              Add task
+                            </button>
                           </div>
                           {customTasks.length === 0 && !selectedTemplate && (
                             <div className="empty-message" style={{ marginTop: 8 }}>No tasks have been specified</div>
@@ -541,27 +529,25 @@ export default function CaseCreatePage() {
                       </div>
 
                     </div>
-                    <div className="box-footer">
+                    <div className="px-6 py-4 border-t border-slate-700 bg-slate-900/50 flex items-center justify-between">
                       <button
                         type="button"
-                        className="btn btn-default"
+                        className="thehive-btn-secondary"
                         onClick={() => router.back()}
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
-                        className="btn btn-primary pull-right"
+                        className="thehive-btn-primary flex items-center"
                         disabled={createCase.isPending}
                       >
-                        <Save size={14} className="mr-1" />
+                        <Save size={14} className="mr-2" />
                         {createCase.isPending ? 'Creating…' : 'Create case'}
                       </button>
                     </div>
-                  </div>
                 </form>
               </div>
-            </div>
           </section>
         </main>
       </div>

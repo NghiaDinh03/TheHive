@@ -24,6 +24,7 @@ type UserProfile = {
   must_change_password?: boolean;
   avatar?: string;
   totp_enabled?: boolean;
+  session_duration_hours?: number;
 };
 
 type ApiKeyResponse = { api_key?: string; expires_at?: string };
@@ -42,6 +43,7 @@ export default function PersonalSettingsPage() {
   const [nameEdited, setNameEdited] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarB64, setAvatarB64] = useState<string | null>(null);
+  const [sessionDurationHours, setSessionDurationHours] = useState<number>(4);
 
   // Password form
   const [changePass, setChangePass] = useState(false);
@@ -57,7 +59,7 @@ export default function PersonalSettingsPage() {
   const [totpVerifyCode, setTotpVerifyCode] = useState('');
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -78,6 +80,9 @@ export default function PersonalSettingsPage() {
         setAvatarB64(null);
         setAvatarPreview(null);
       }
+      if (me.data.session_duration_hours) {
+        setSessionDurationHours(me.data.session_duration_hours);
+      }
     }
   }, [me.data, nameEdited]);
 
@@ -85,7 +90,7 @@ export default function PersonalSettingsPage() {
   function reportErr(e: unknown) { setMessage(null); setError(e instanceof ApiError ? (e.problem.detail || e.problem.title) : String(e)); }
 
   const updateName = useMutation({
-    mutationFn: () => apiFetch('/api/v1/auth/me', { method: 'PATCH', json: { name: name.trim(), avatar: avatarB64 !== null ? avatarB64 : undefined } }),
+    mutationFn: () => apiFetch('/api/v1/auth/me', { method: 'PATCH', json: { name: name.trim(), avatar: avatarB64, session_duration_hours: sessionDurationHours } }),
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['me'] }); report('Profile updated successfully.'); setNameEdited(false); },
     onError: reportErr,
   });
@@ -110,7 +115,7 @@ export default function PersonalSettingsPage() {
 
   function clearAvatar() {
     setAvatarPreview(null);
-    setAvatarB64(''); // Empty string means delete in backend
+    setAvatarB64('');
     setNameEdited(true);
   }
 
@@ -188,18 +193,18 @@ export default function PersonalSettingsPage() {
                       <h3 className="box-title"><UserCircle2 size={16} className="mr-1" /> Update basic information</h3>
                     </div>
                     <div className="box-body">
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Username</label>
-                        <div className="col-md-9">
-                          <input type="text" className="form-control input-sm" value={user?.login ?? ''} readOnly />
+                      <div className="form-group flex flex-col md:flex-row gap-4 items-start md:items-center">
+                        <label className="md:w-1/4 control-label text-right">Username</label>
+                        <div className="md:w-3/4">
+                          <input type="text" className="form-control" value={user?.login ?? ''} readOnly disabled />
                         </div>
                       </div>
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Full name <i className="fa fa-asterisk text-danger" style={{ fontSize: '0.6rem' }} /></label>
-                        <div className="col-md-9">
+                      <div className="form-group flex flex-col md:flex-row gap-4 items-start md:items-center">
+                        <label className="md:w-1/4 control-label text-right">Full name <i className="fa fa-asterisk text-danger" style={{ fontSize: '0.6rem' }} /></label>
+                        <div className="md:w-3/4">
                           <input
                             type="text"
-                            className="form-control input-sm"
+                            className="form-control"
                             placeholder="Full name"
                             value={name}
                             onChange={(e) => { setName(e.target.value); setNameEdited(true); }}
@@ -207,13 +212,15 @@ export default function PersonalSettingsPage() {
                           />
                         </div>
                       </div>
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Avatar</label>
-                        <div className="col-md-9">
+                      <div className="form-group flex flex-col md:flex-row gap-4 items-start">
+                        <label className="md:w-1/4 control-label text-right pt-2">Avatar</label>
+                        <div className="md:w-3/4">
                           {!avatarPreview ? (
-                            <div>
-                              <div style={{ width: '100px' }}>
-                                <img alt="User avatar" src="/images/no-avatar.png" className="img-responsive" onError={(e) => e.currentTarget.style.display = 'none'} />
+                            <div className="flex items-center gap-4">
+                              <div className="w-16 h-16 rounded-full bg-ncs-surface border border-ncs-divider flex items-center justify-center overflow-hidden">
+                                <User size={24} className="text-ncs-muted" />
+                              </div>
+                              <div>
                                 <input
                                   type="file"
                                   id="avatar-input"
@@ -221,38 +228,52 @@ export default function PersonalSettingsPage() {
                                   className="hidden"
                                   onChange={handleAvatarChange}
                                 />
-                                <label htmlFor="avatar-input" className="btn btn-block btn-sm btn-primary mt-2">
-                                  Choose File
+                                <label htmlFor="avatar-input" className="btn btn-primary cursor-pointer mb-1">
+                                  Upload Avatar
                                 </label>
-                              </div>
-                              <div className="help-block text-muted" style={{ fontSize: '0.8rem' }}>
-                                Images must not exceed 500 KB. Recommended dimensions are 100x100px
+                                <div className="text-ncs-muted text-xs">
+                                  Images must not exceed 500 KB. 100x100px recommended.
+                                </div>
                               </div>
                             </div>
                           ) : (
-                            <div style={{ width: '100px' }}>
-                              <img alt="User avatar" src={avatarPreview} className="img-responsive" />
-                              <button
-                                type="button"
-                                className="btn btn-block btn-sm btn-danger mt-2"
-                                onClick={clearAvatar}
-                              >
-                                Clear
+                            <div className="flex items-center gap-4">
+                              <div className="w-16 h-16 rounded-full overflow-hidden border border-ncs-divider">
+                                <img alt="User avatar" src={avatarPreview} className="w-full h-full object-cover" />
+                              </div>
+                              <button type="button" className="btn btn-default" onClick={clearAvatar}>
+                                Remove
                               </button>
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Organisation</label>
-                        <div className="col-md-9">
-                          <p className="form-control-static">{user?.organisation ?? '-'}</p>
+                      <div className="form-group flex flex-col md:flex-row gap-4 items-start md:items-center">
+                        <label className="md:w-1/4 control-label text-right">Organisation</label>
+                        <div className="md:w-3/4">
+                          <p className="text-ncs-text font-medium">{user?.organisation ?? '-'}</p>
                         </div>
                       </div>
-                      <div className="form-group">
-                        <label className="col-md-3 control-label">Profile</label>
-                        <div className="col-md-9">
-                          <p className="form-control-static">{user?.profile ?? '-'}</p>
+                      <div className="form-group flex flex-col md:flex-row gap-4 items-start md:items-center">
+                        <label className="md:w-1/4 control-label text-right">Profile</label>
+                        <div className="md:w-3/4">
+                          <p className="text-ncs-text font-medium">{user?.profile ?? '-'}</p>
+                        </div>
+                      </div>
+                      <div className="form-group flex flex-col md:flex-row gap-4 items-start md:items-center">
+                        <label className="md:w-1/4 control-label text-right">Session Duration</label>
+                        <div className="md:w-3/4">
+                          <select 
+                            className="form-control" 
+                            style={{ width: '120px', display: 'inline-block' }}
+                            value={sessionDurationHours} 
+                            onChange={(e) => { setSessionDurationHours(Number(e.target.value)); setNameEdited(true); }}
+                          >
+                            <option value={4}>4 Hours</option>
+                            <option value={8}>8 Hours</option>
+                            <option value={10}>10 Hours</option>
+                          </select>
+                          <span className="text-ncs-muted text-xs ml-2">Time before automatic logout.</span>
                         </div>
                       </div>
                     </div>

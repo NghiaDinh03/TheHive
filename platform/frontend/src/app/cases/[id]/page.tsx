@@ -7,6 +7,7 @@ import { AttachmentPanel, type AttachmentItem } from '@/components/AttachmentPan
 import { ObservableFlags, Pap, Severity, TagList, TaskFlags, Tlp } from '@/components/Badges';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CustomFieldEditor, type CustomFieldDef } from '@/components/CustomFieldEditor';
+import { InfoTooltip } from '@/components/ui/TooltipHelper';
 import { Dropzone } from '@/components/Dropzone';
 import { FlowPanel, type FlowItem } from '@/components/FlowPanel';
 import { MarkdownEditor } from '@/components/MarkdownEditor';
@@ -37,7 +38,7 @@ type Task = {
   created_at: string; updated_at: string;
 };
 type CaseLog = { id: string; message: string; attachment_id?: string; created_by: string; created_at: string };
-type History = { action: string; actor_id: string; created_at: string };
+type History = { action: string; actor_id: string; entity_type: string; created_at: string; before_json?: string; after_json?: string };
 type Observable = {
   id: string; data_type: string; data: string; full_data?: string; data_hash?: string; message: string;
   tlp: number; ioc: boolean; sighted: boolean; ignore_similarity?: boolean;
@@ -79,7 +80,7 @@ type CaseDetail = {
   alerts?: CaseAlert[];
 };
 
-const TABS = ['Details', 'Tasks', 'Observables', 'Alerts', 'Logs', 'Attachments', 'Procedures', 'Shares', 'Audit'] as const;
+const TABS = ['Details', 'Tasks', 'Observables', 'Live Chat'] as const;
 type TabName = typeof TABS[number];
 
 export default function CaseDetailPage() {
@@ -105,11 +106,22 @@ export default function CaseDetailPage() {
   const [mergeResults, setMergeResults] = useState<CaseCore[]>([]);
   const [selectedMergeCase, setSelectedMergeCase] = useState<CaseCore | null>(null);
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showAuditPopup, setShowAuditPopup] = useState(false);
   const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('json');
   const [relatedFilter, setRelatedFilter] = useState('');
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
+  const [reassignForm, setReassignForm] = useState({ assignee: '', reason: '' });
+
+  const searchUsers = async (q: string) => {
+    try {
+      const data = await apiFetch<{login: string; name: string}[]>(`/api/v1/users/search?query=${encodeURIComponent(q)}`);
+      return data;
+    } catch { return []; }
+  };
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -214,149 +226,224 @@ export default function CaseDetailPage() {
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar user={me.data ?? { login: authedLogin }} />
         <main className="content-wrapper flex-1">
-          <section className="content-header">
-            <h1>Case <small>#{item?.number ?? '...'} investigation workspace</small></h1>
-            <ol className="breadcrumb"><li>Home</li><li>Cases</li><li className="active">#{item?.number ?? '...'}</li></ol>
-          </section>
-          <section className="content case-page next-case-page">
-            <div className="case-panelinfo box box-primary">
-              <div className="box-header with-border case-panelinfo-header">
-                <h3 className="box-title text-primary">#{item?.number ?? '...'} - {item?.title ?? 'Case detail'}</h3>
-                <div className="box-tools pull-right case-detail-status">
-                  <span className={statusLabelClass(item?.status)}>{item?.status ?? 'Loading'}</span>
-                  {item?.flag && <span className="label label-warning" title="Flagged">Flagged</span>}
+          <section className="p-6">
+            <div className="glass-panel shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-xl bg-slate-800/50 mb-6 relative z-20">
+              <div className="px-6 py-5 flex justify-between items-center">
+                <h3 className="text-blue-400 font-semibold text-lg flex items-center gap-2">#{item?.number ? String(item.number).padStart(7, '0') : '...'} - <span className="text-slate-200">{item?.title ?? 'Case detail'}</span></h3>
+                <div className="flex bg-slate-900/50 border border-slate-700/50 rounded-lg p-1 items-stretch shadow-inner">
+                  <div className="flex items-center px-3">
+                    <span className={statusLabelClass(item?.status)}>{item?.status ?? 'Loading'}</span>
+                  </div>
+                  {item?.flag && (
+                    <div className="flex items-center px-2">
+                      <span className="px-2 py-1.5 rounded-md text-[10px] bg-yellow-900/40 text-yellow-400/90 uppercase font-bold tracking-wider" title="Case is flagged for attention">Flagged</span>
+                    </div>
+                  )}
+                  <div className="w-px bg-slate-700/80 mx-1 my-1"></div>
+                  {item?.status === 'Open' ? (
+                    <button className={`px-4 py-1.5 mx-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center ${!canWrite || closeCase.isPending ? 'opacity-30 cursor-not-allowed ncs-disabled' : ''}`} disabled={!canWrite || closeCase.isPending} onClick={() => setShowCloseDialog(true)} title="Close this case with a resolution">Close Case</button>
+                  ) : (
+                    <button className={`px-4 py-1.5 mx-1 bg-yellow-600/20 hover:bg-yellow-600/40 text-yellow-400 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center ${!canWrite || reopenCase.isPending ? 'opacity-30 cursor-not-allowed ncs-disabled' : ''}`} disabled={!canWrite || reopenCase.isPending} onClick={() => reopenCase.mutate()} title="Reopen this closed case">Reopen</button>
+                  )}
+                  <div className="w-px bg-slate-700/80 mx-1 my-1"></div>
+                  <div className="relative flex">
+                    <button className="px-4 py-1.5 bg-slate-700/50 hover:bg-slate-600/60 text-slate-300 rounded-md text-sm font-medium transition-colors flex items-center gap-2 shadow-sm" onClick={() => setShowActionsDropdown(!showActionsDropdown)} title="More actions">
+                      Actions <span className="text-[10px]">▼</span>
+                    </button>
+                    {showActionsDropdown && (
+                      <div className="absolute right-0 top-full mt-2 w-44 bg-slate-800 rounded-lg shadow-xl z-50 overflow-hidden text-left border border-slate-700/50">
+                        <button className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700/80 hover:text-white transition-colors" disabled={!canWrite} onClick={() => { setShowActionsDropdown(false); toggleFlag.mutate(); }} title="Toggle flag status">{item?.flag ? 'Unflag case' : 'Flag case'}</button>
+                        <button className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700/80 hover:text-white transition-colors" disabled={!canWrite} onClick={() => { setShowActionsDropdown(false); setShowMergeDialog(true); }} title="Merge into another case">Merge case</button>
+                        <button className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700/80 hover:text-white transition-colors" onClick={() => { setShowActionsDropdown(false); setShowExportDialog(true); }} title="Export case data">Export case</button>
+                        <div className="border-t border-slate-700/50 my-1"></div>
+                        <button className="w-full text-left px-4 py-2.5 text-sm text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors" disabled={!canWrite || deleteCase.isPending} onClick={() => { setShowActionsDropdown(false); setShowDeleteDialog(true); }} title="Permanently delete this case">Delete case</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="box-body case-panelinfo-body">
-                <span><strong>Severity</strong> <Severity value={item?.severity ?? 2} /></span>
-                <span><strong>TLP</strong> <Tlp value={item?.tlp ?? 2} /></span>
-                <span><strong>PAP</strong> <Pap value={item?.pap ?? 2} /></span>
-                <span><strong>Assignee</strong> {item?.assignee || 'None'}</span>
-                <span><strong>Owner</strong> {item?.owner || item?.owning_organisation || 'None'}</span>
-                {item?.organisation_ids && item.organisation_ids.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <strong>Tenant:</strong>
-                    {item.organisation_ids.map(org => (
-                      <span key={org} className="label bg-[#1d4ed8] uppercase tracking-wider text-[10px]">{org}</span>
-                    ))}
-                  </span>
-                )}
-                <span><strong>Updated</strong> {item?.updated_at ? new Date(item.updated_at).toLocaleString() : '-'}</span>
-              </div>
             </div>
-            <div className="case-detail-layout">
-              <section className="nav-tabs-custom case-main-tabset">
-                <ul className="nav nav-tabs detail-tab-strip">
-                  {TABS.map(tab => (
-                    <li key={tab} className={activeTab === tab ? 'active' : ''}>
-                      <button type="button" onClick={() => setActiveTab(tab)}>
-                        <span>{tab}</span>
-                        {tab === 'Tasks' && <span className="badge">{detail.data?.tasks.length ?? 0}</span>}
-                        {tab === 'Observables' && <span className="badge badge-primary">{detail.data?.observables.length ?? 0}</span>}
-                        {tab === 'Attachments' && <span className="badge">{detail.data?.attachments.length ?? 0}</span>}
-                        {tab === 'Procedures' && <span className="badge">{detail.data?.procedures.length ?? 0}</span>}
-                        {tab === 'Alerts' && <span className="badge">{detail.data?.alerts?.length ?? 0}</span>}
-                        {tab === 'Shares' && <span className="badge">{detail.data?.shares.length ?? 0}</span>}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              <div className="tab-content case-page-content">
-                {error && <div className="admin-alert error">{error}</div>}
+            <div className="flex gap-6 items-stretch">
+              <section className="flex-1 flex flex-col min-w-0">
+                <div className="glass-panel shadow-[0_8px_30px_rgba(0,0,0,0.6)] rounded-xl bg-slate-800/60 px-6 py-1 mb-6 flex items-center">
+                  <ul className="flex flex-wrap text-sm font-semibold text-slate-500 w-full gap-8">
+                    {TABS.map(tab => (
+                      <li key={tab} className="mr-5">
+                        <button 
+                          type="button" 
+                          onClick={() => setActiveTab(tab)}
+                          className={`inline-block py-2.5 border-b-2 transition-colors ${activeTab === tab ? 'text-blue-400 border-blue-500 font-bold' : 'border-transparent hover:text-slate-300 hover:border-slate-600'}`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            {tab}
+                            {tab === 'Tasks' && <span className="px-1.5 py-0.5 rounded text-[9px] bg-slate-800/80 text-slate-400 border border-slate-700/30">{detail.data?.tasks.length ?? 0}</span>}
+                            {tab === 'Observables' && <span className="px-1.5 py-0.5 rounded text-[9px] bg-blue-900/20 text-blue-400/80 border border-blue-800/30">{detail.data?.observables.length ?? 0}</span>}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              <div className="flex flex-col gap-6">
+                {error && <div className="p-3 mb-3 text-xs text-red-400 rounded bg-red-900/15 border border-red-900/30">{error}</div>}
                 {detail.isLoading && <div className="thehive-empty">Loading…</div>}
-                {item && activeTab === 'Details' && <DetailsTab item={item} customFields={detail.data?.custom_fields ?? []} cfForm={cfForm} setCfForm={setCfForm} addCF={addCF} updateCF={updateCF} deleteCF={deleteCF} updateCase={updateCase} canWrite={canWrite} relatedCases={detail.data?.related_cases ?? []} responderActions={detail.data?.responder_actions ?? []} relatedFilter={relatedFilter} setRelatedFilter={setRelatedFilter} />}
-                {item && activeTab === 'Tasks' && <TasksTab tasks={detail.data?.tasks ?? []} caseId={params.id} canWrite={canWrite} showTaskForm={showTaskForm} setShowTaskForm={setShowTaskForm} taskForm={taskForm} setTaskForm={setTaskForm} createTask={createTask} closeTask={closeTask} assignTask={assignTask} />}
+                {item && activeTab === 'Details' && <DetailsTab item={item} customFields={detail.data?.custom_fields ?? []} cfForm={cfForm} setCfForm={setCfForm} addCF={addCF} updateCF={updateCF} deleteCF={deleteCF} updateCase={updateCase} canWrite={canWrite} relatedCases={detail.data?.related_cases ?? []} responderActions={detail.data?.responder_actions ?? []} relatedFilter={relatedFilter} setRelatedFilter={setRelatedFilter} searchUsers={searchUsers} meLogin={me.data?.login} triggerReassign={(newAssignee) => { setReassignForm({ assignee: newAssignee, reason: '' }); setShowReassignDialog(true); }} />}
+                {item && activeTab === 'Tasks' && <TasksTab tasks={detail.data?.tasks ?? []} attachments={detail.data?.attachments ?? []} user={me.data} caseId={params.id} canWrite={canWrite} showTaskForm={showTaskForm} setShowTaskForm={setShowTaskForm} taskForm={taskForm} setTaskForm={setTaskForm} createTask={createTask} closeTask={closeTask} assignTask={assignTask} searchUsers={searchUsers} />}
                 {item && activeTab === 'Observables' && <ObservablesTab observables={detail.data?.observables ?? []} canWrite={canWrite} obsForm={obsForm} setObsForm={setObsForm} createObs={createObs} patchObs={patchObs} deleteObs={deleteObs} />}
-                {item && activeTab === 'Logs' && <LogsTab logs={detail.data?.logs ?? []} history={detail.data?.history ?? []} logMessage={logMessage} setLogMessage={setLogMessage} appendLog={appendLog} canWrite={canWrite} />}
-                {item && activeTab === 'Attachments' && <AttachmentPanel user={me.data} caseId={params.id} initialAttachments={detail.data?.attachments ?? []} title="Case attachments" />}
-                {item && activeTab === 'Procedures' && <ProceduresTab procedures={detail.data?.procedures ?? []} procForm={procForm} setProcForm={setProcForm} addProc={addProc} deleteProc={deleteProc} canWrite={canWrite} />}
-                {item && activeTab === 'Shares' && <SharesTab shares={detail.data?.shares ?? []} shareForm={shareForm} setShareForm={setShareForm} addShare={addShare} deleteShare={deleteShare} canWrite={canWrite} />}
-                {item && activeTab === 'Alerts' && <CaseAlertsTab alerts={detail.data?.alerts ?? []} />}
-                {item && activeTab === 'Audit' && <AuditTab history={detail.data?.history ?? []} />}
+                {item && activeTab === 'Live Chat' && <LogsTab logs={detail.data?.logs ?? []} history={detail.data?.history ?? []} logMessage={logMessage} setLogMessage={setLogMessage} appendLog={appendLog} canWrite={canWrite} me={me.data?.login} />}
+
               </div>
             </section>
-            <aside className="box box-primary case-action-box">
-              {/* Flow panel — mirrors legacy flow sidebar */}
-              {detail.data?.history && detail.data.history.length > 0 && (
-                <div className="box-header with-border" style={{ padding: 0 }}>
-                  <div style={{ padding: '8px 12px', borderBottom: '1px solid #f4f4f4' }}>
-                    <h3 className="box-title" style={{ fontSize: '0.88rem' }}>Activity Flow</h3>
-                  </div>
-                  <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+            <aside className="w-[320px] shrink-0 flex flex-col gap-6">
+              {/* Case Context — Quick Control Panel */}
+              <div className="glass-panel flex-none flex flex-col min-h-0 shadow-[0_8px_30px_rgba(0,0,0,0.6)] rounded-xl bg-slate-800/60 overflow-hidden">
+                <div className="px-5 py-3.5 bg-slate-800/60 border-b border-slate-700/30 shrink-0">
+                  <h3 className="text-blue-400 font-semibold text-sm flex items-center gap-2"><i className="fa fa-info-circle"></i> Case Context</h3>
+                </div>
+                <div className="px-5 py-4 flex-1 flex flex-col gap-3.5 text-sm overflow-y-auto">
+                  <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">ID</span><span className="text-slate-200 font-semibold">#{item?.number ? String(item.number).padStart(7, '0') : '...'}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Status</span><span className={statusLabelClass(item?.status)}>{item?.status}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-500 font-medium" title="Impact severity rating">Severity</span><Severity value={item?.severity ?? 2} /></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Assignee</span><span className="text-slate-300">{item?.assignee || <em className="text-slate-600">None</em>}</span></div>
+                  {item?.status !== 'Open' && <div className="flex justify-between items-center"><span className="text-slate-500 font-medium" title="Case resolution status">Resolution</span><span className="text-slate-300">{item?.resolution_status || <em className="text-slate-600">-</em>}</span></div>}
+                  <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Created</span><span className="text-slate-400 text-xs">{item?.created_at ? new Date(item.created_at).toLocaleString() : '-'}</span></div>
+                  <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Updated</span><span className="text-slate-400 text-xs">{item?.updated_at ? new Date(item.updated_at).toLocaleString() : '-'}</span></div>
+                  {item?.start_date && <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">Start</span><span className="text-slate-400 text-xs">{new Date(item.start_date).toLocaleString()}</span></div>}
+                  {item?.end_date && <div className="flex justify-between items-center"><span className="text-slate-500 font-medium">End</span><span className="text-slate-400 text-xs">{new Date(item.end_date).toLocaleString()}</span></div>}
+                  
+                  <button className="w-full mt-auto shrink-0 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 shadow-sm" onClick={() => {
+                    const sevMap = {1:'Low', 2:'Medium', 3:'High', 4:'Critical'};
+                    const copyText = `Case ID: #${item?.number ? String(item.number).padStart(7, '0') : 'Unknown'}\nTitle: ${item?.title}\nSeverity: ${sevMap[item?.severity as keyof typeof sevMap] || 'Unknown'}\nStatus: ${item?.status}\nAssignee: ${item?.assignee || 'None'}`;
+                    navigator.clipboard.writeText(copyText);
+                  }} title="Copy case details for reporting">
+                    <i className="fa fa-copy"></i> Copy Details
+                  </button>
+                </div>
+              </div>
+
+              {/* Audit History */}
+              <div className="glass-panel flex-1 flex flex-col min-h-0 shadow-[0_8px_30px_rgba(0,0,0,0.6)] rounded-xl bg-slate-800/60 overflow-hidden mt-6">
+                <div className="px-5 py-3.5 bg-slate-800/60 border-b border-slate-700/30 flex justify-between items-center shrink-0">
+                  <h3 className="text-blue-400 font-semibold text-sm flex items-center gap-2"><i className="fa fa-history"></i> Audit History</h3>
+                  {detail.data?.history && detail.data.history.length > 0 && (
+                    <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors" onClick={() => setShowAuditPopup(true)}>View All</button>
+                  )}
+                </div>
+                <div className="px-5 py-4 flex-1 overflow-y-auto">
+                  {detail.data?.history && detail.data.history.length > 0 ? (
                     <FlowPanel
-                      items={detail.data.history.map((h, i) => ({
+                      items={detail.data.history.slice(0, 4).map((h, i) => ({
                         id: `${h.action}-${i}`,
-                        objectType: 'case',
+                        objectType: h.entity_type || 'case',
                         action: h.action,
                         objectId: item?.id ?? '',
                         objectTitle: item?.title,
                         actorId: h.actor_id,
                         createdAt: h.created_at,
+                        beforeJson: h.before_json,
+                        afterJson: h.after_json,
                       }))}
                       showActor={false}
                     />
+                  ) : (
+                    <div className="text-slate-500 text-sm text-center py-4 italic">No history recorded yet.</div>
+                  )}
+                </div>
+              </div>
+            </aside>
+
+            {/* Reassign Dialog */}
+            {showReassignDialog && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-md p-6 border-t-2 border-orange-500 bg-slate-900 rounded-md shadow-2xl">
+                  <h4 className="mb-3 text-base text-orange-400/80 font-medium">Re-assign case</h4>
+                  <p className="text-slate-400 text-sm mb-4">You are re-assigning this case to <strong className="text-orange-400">{reassignForm.assignee}</strong>. Please provide a reason for this change.</p>
+                  <label className="block text-sm text-slate-400 mb-1">Reason for Re-assignment</label>
+                  <textarea autoFocus className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-orange-500 focus:ring-1 focus:ring-orange-500" rows={3} value={reassignForm.reason} onChange={e => setReassignForm(f => ({ ...f, reason: e.target.value }))} placeholder="E.g., Escalation, Shift handover..." />
+                  <div className="flex gap-3 mt-6">
+                    <button className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-sm transition-colors" disabled={updateCase.isPending || !reassignForm.reason.trim()} onClick={async () => {
+                      if (!reassignForm.reason.trim()) return;
+                      setShowReassignDialog(false);
+                      try {
+                        await apiFetch(`/api/v1/cases/${item?.id}/logs`, { method: 'POST', json: { message: `Re-assigned from **${item?.assignee}** to **${reassignForm.assignee}**.\n\n**Reason:** ${reassignForm.reason}` } });
+                        updateCase.mutate({ assignee: reassignForm.assignee });
+                      } catch { updateCase.mutate({ assignee: reassignForm.assignee }); }
+                    }}>Confirm Re-assign</button>
+                    <button className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors" onClick={() => setShowReassignDialog(false)}>Cancel</button>
                   </div>
                 </div>
-              )}
-              <div className="box-header with-border"><h3 className="box-title">Actions</h3></div>
-              <div className="box-body detail-side-list">
-                <p className="text-muted text-sm">Core fields are edited inline in the Details tab, matching TheHive 4 updatable directives.</p>
-                <button className="thehive-btn-secondary" disabled={!canWrite} onClick={() => toggleFlag.mutate()}>{item?.flag ? 'Unflag case' : 'Flag case'}</button>
-                <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '8px 0' }} />
-                {item?.status === 'Open' && <button className="thehive-btn-secondary" disabled={!canWrite || closeCase.isPending} onClick={() => setShowCloseDialog(true)}>Close case (Resolve)</button>}
-                {(item?.status === 'Resolved' || item?.status === 'Duplicated') && <button className="thehive-btn-secondary" disabled={!canWrite || reopenCase.isPending} onClick={() => reopenCase.mutate()}>Reopen</button>}
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <input className="thehive-input" placeholder="Target case ID" value={dupCaseId} onChange={e => setDupCaseId(e.target.value)} style={{ flex: 1, fontSize: '0.8rem' }} />
-                  <button className="thehive-btn-sm" disabled={!canWrite || !dupCaseId.trim()} onClick={() => duplicateCase.mutate()}>Mark as duplicate</button>
-                </div>
-                <button className="thehive-btn-secondary" disabled={!canWrite} onClick={() => setShowMergeDialog(true)}>Merge case</button>
-                <button className="thehive-btn-secondary" onClick={() => setShowExportDialog(true)}>Export case</button>
-                <button className="thehive-btn-secondary danger" disabled={!canWrite || deleteCase.isPending} onClick={() => setShowDeleteDialog(true)}>Delete</button>
               </div>
-              {showCloseDialog && <div className="box-body" style={{ borderTop: '2px solid #3c8dbc', background: '#f8f9fa' }}>
-                <h4 style={{ marginBottom: 8, color: '#3c8dbc' }}>Close case</h4>
-                <label>Impact<select className="thehive-input" value={closeForm.impact_status} onChange={e => setCloseForm(f => ({ ...f, impact_status: e.target.value }))}>
-                  <option value="NoImpact">No Impact</option><option value="WithImpact">With Impact</option><option value="NotApplicable">Not Applicable</option>
-                </select></label>
-                <label>Resolution<select className="thehive-input" value={closeForm.resolution_status} onChange={e => setCloseForm(f => ({ ...f, resolution_status: e.target.value }))}>
-                  <option value="TruePositive">True Positive</option><option value="FalsePositive">False Positive</option>
-                  <option value="Indeterminate">Indeterminate</option><option value="Other">Other</option>
-                </select></label>
-                <label>Summary<textarea className="thehive-input" rows={3} value={closeForm.summary} onChange={e => setCloseForm(f => ({ ...f, summary: e.target.value }))} placeholder="Case closure summary..." /></label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="thehive-btn-primary" disabled={closeCase.isPending} onClick={() => closeCase.mutate()}>{closeCase.isPending ? 'Closing…' : 'Confirm close'}</button>
-                  <button className="thehive-btn-secondary" onClick={() => setShowCloseDialog(false)}>Cancel</button>
-                </div>
-              </div>}
-              {showMergeDialog && <div className="box-body" style={{ borderTop: '2px solid #f39c12', background: '#fef9e7' }}>
-                <h4 style={{ marginBottom: 8, color: '#f39c12' }}>Merge case</h4>
-                <p className="text-muted text-sm" style={{ marginBottom: 8 }}>Search for a case to merge this case into. All tasks, observables, logs, and attachments will be moved to the target case.</p>
-                <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-                  <select className="thehive-input" value={mergeSearchType} onChange={e => { setMergeSearchType(e.target.value as 'title' | 'number'); setMergeResults([]); }} style={{ width: 100 }}>
-                    <option value="title">By Title</option><option value="number">By Number</option>
+            )}
+
+            {/* Overlays */}
+            {showCloseDialog && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-md p-6 border-t-2 border-blue-500 bg-slate-900 rounded-md shadow-2xl">
+                  <h4 className="mb-3 text-base text-blue-400/80 font-medium">Close case</h4>
+                  <label className="block text-sm text-slate-400 mb-1 mt-2">Impact</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={closeForm.impact_status} onChange={e => setCloseForm(f => ({ ...f, impact_status: e.target.value }))}>
+                    <option value="NoImpact">No Impact</option><option value="WithImpact">With Impact</option><option value="NotApplicable">Not Applicable</option>
                   </select>
-                  <input className="thehive-input" placeholder={mergeSearchType === 'number' ? 'Case number...' : 'Search by title...'} value={mergeSearchInput} onChange={e => { setMergeSearchInput(e.target.value); searchMergeCases(mergeSearchType, e.target.value); }} style={{ flex: 1 }} />
+                  <label className="block text-sm text-slate-400 mb-1 mt-3">Resolution</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={closeForm.resolution_status} onChange={e => setCloseForm(f => ({ ...f, resolution_status: e.target.value }))}>
+                    <option value="TruePositive">True Positive</option><option value="FalsePositive">False Positive</option>
+                    <option value="Indeterminate">Indeterminate</option><option value="Other">Other</option>
+                  </select>
+                  <label className="block text-sm text-slate-400 mb-1 mt-3">Summary</label>
+                  <textarea className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" rows={3} value={closeForm.summary} onChange={e => setCloseForm(f => ({ ...f, summary: e.target.value }))} placeholder="Case closure summary..." />
+                  <div className="flex gap-3 mt-6">
+                    <button className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors" disabled={closeCase.isPending} onClick={() => closeCase.mutate()}>{closeCase.isPending ? 'Closing…' : 'Confirm close'}</button>
+                    <button className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors" onClick={() => setShowCloseDialog(false)}>Cancel</button>
+                  </div>
                 </div>
-                {mergeResults.length > 0 && <div style={{ maxHeight: 200, overflowY: 'auto', marginBottom: 8 }}>
-                  {mergeResults.map(c => <div key={c.id} className={`merge-result-item ${selectedMergeCase?.id === c.id ? 'selected' : ''}`} onClick={() => setSelectedMergeCase(c)} style={{ padding: '6px 8px', cursor: 'pointer', border: '1px solid #eee', marginBottom: 4, borderRadius: 4, background: selectedMergeCase?.id === c.id ? '#e8f4fd' : '#fff' }}>
-                    <strong>#{c.number}</strong> {c.title} <span className={`severity severity-${c.severity}`} style={{ marginLeft: 8 }}>{['Low','Medium','High','Critical'][c.severity] ?? 'Unknown'}</span>
-                    <div className="text-muted text-xs">{c.status} · {c.assignee || 'no assignee'} · {c.tags?.join(', ') || 'no tags'}</div>
-                  </div>)}
-                </div>}
-                {selectedMergeCase && <div className="alert alert-warning" style={{ marginBottom: 8 }}>Merging into <strong>#{selectedMergeCase.number} - {selectedMergeCase.title}</strong>. This action cannot be undone.</div>}
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="btn btn-warning" disabled={!selectedMergeCase || mergeCase.isPending} onClick={() => mergeCase.mutate()}>{mergeCase.isPending ? 'Merging…' : 'Confirm merge'}</button>
-                  <button className="btn btn-default" onClick={() => { setShowMergeDialog(false); setSelectedMergeCase(null); setMergeSearchInput(''); setMergeResults([]); }}>Cancel</button>
+              </div>
+            )}
+            
+            {showMergeDialog && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-lg p-6 border-t-2 border-orange-500 bg-slate-900 rounded-md shadow-2xl">
+                  <h4 className="mb-2 text-xl text-orange-500 font-medium">Merge case</h4>
+                  <p className="text-slate-400 text-sm mb-4">Search for a case to merge this case into. All tasks, observables, logs, and attachments will be moved to the target case.</p>
+                  <div className="flex gap-2 mb-4">
+                    <select className="w-32 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" value={mergeSearchType} onChange={e => { setMergeSearchType(e.target.value as 'title' | 'number'); setMergeResults([]); }}>
+                      <option value="title">By Title</option><option value="number">By Number</option>
+                    </select>
+                    <input className="flex-1 bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" placeholder={mergeSearchType === 'number' ? 'Case number...' : 'Search by title...'} value={mergeSearchInput} onChange={e => { setMergeSearchInput(e.target.value); searchMergeCases(mergeSearchType, e.target.value); }} />
+                  </div>
+                  {mergeResults.length > 0 && (
+                    <div className="max-h-60 overflow-y-auto mb-4 space-y-2 border border-slate-700 rounded-md p-2 bg-slate-900/50">
+                      {mergeResults.map(c => <div key={c.id} className={`p-3 cursor-pointer border rounded-md transition-colors ${selectedMergeCase?.id === c.id ? 'bg-orange-900/40 border-orange-500' : 'bg-slate-800 border-slate-700 hover:bg-slate-700'}`} onClick={() => setSelectedMergeCase(c)}>
+                        <div className="flex items-center gap-2">
+                          <strong className="text-slate-200">#{String(c.number).padStart(7, '0')}</strong>
+                          <span className="text-sm truncate flex-1 text-slate-300">{c.title}</span>
+                          <SeverityInline value={c.severity} />
+                        </div>
+                        <div className="text-slate-400 text-xs mt-1.5">{c.status} · {c.assignee || 'no assignee'} · {c.tags?.join(', ') || 'no tags'}</div>
+                      </div>)}
+                    </div>
+                  )}
+                  {selectedMergeCase && <div className="p-3 bg-orange-900/30 border border-orange-700/50 rounded-md text-orange-200 text-sm mb-4">Merging into <strong className="text-orange-400">#{String(selectedMergeCase.number).padStart(7, '0')} - {selectedMergeCase.title}</strong>. This action cannot be undone.</div>}
+                  <div className="flex gap-3 mt-2">
+                    <button className={`flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md text-sm transition-colors ${!selectedMergeCase || mergeCase.isPending ? 'opacity-50 cursor-not-allowed' : ''}`} disabled={!selectedMergeCase || mergeCase.isPending} onClick={() => mergeCase.mutate()}>{mergeCase.isPending ? 'Merging…' : 'Confirm merge'}</button>
+                    <button className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors" onClick={() => { setShowMergeDialog(false); setSelectedMergeCase(null); setMergeSearchInput(''); setMergeResults([]); }}>Cancel</button>
+                  </div>
                 </div>
-              </div>}
-              {showExportDialog && <div className="box-body" style={{ borderTop: '2px solid #3c8dbc', background: '#f8f9fa' }}>
-                <h4 style={{ marginBottom: 8, color: '#3c8dbc' }}>Export case</h4>
-                <label>Format<select className="thehive-input" value={exportFormat} onChange={e => setExportFormat(e.target.value as 'json' | 'csv')}><option value="json">JSON</option><option value="csv">CSV</option></select></label>
-                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button className="btn btn-primary" onClick={() => void exportCase()}>Download</button>
-                  <button className="btn btn-default" onClick={() => setShowExportDialog(false)}>Cancel</button>
+              </div>
+            )}
+            
+            {showExportDialog && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                <div className="w-full max-w-sm p-6 border-t-2 border-blue-500 bg-slate-900 rounded-md shadow-2xl">
+                  <h4 className="mb-3 text-base text-blue-400/80 font-medium">Export case</h4>
+                  <label className="block text-sm text-slate-400 mb-1 mt-2">Format</label>
+                  <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={exportFormat} onChange={e => setExportFormat(e.target.value as 'json' | 'csv')}><option value="json">JSON</option><option value="csv">CSV</option></select>
+                  <div className="flex gap-3 mt-6">
+                    <button className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors" onClick={() => { void exportCase(); setShowExportDialog(false); }}>Download</button>
+                    <button className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors" onClick={() => setShowExportDialog(false)}>Cancel</button>
+                  </div>
                 </div>
-              </div>}
+              </div>
+            )}
               <ConfirmDialog
                 open={showDeleteDialog}
                 title="Delete case"
@@ -368,7 +455,85 @@ export default function CaseDetailPage() {
                 onConfirm={() => { deleteCase.mutate(); setShowDeleteDialog(false); }}
                 onCancel={() => setShowDeleteDialog(false)}
               />
-            </aside>
+              
+              {showAuditPopup && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                  <div className="w-full max-w-4xl max-h-[85vh] flex flex-col border-t-2 border-blue-500 bg-slate-900 rounded-lg shadow-2xl overflow-hidden">
+                    <div className="flex justify-between items-center px-6 py-4 border-b border-slate-700/50 bg-slate-800/50 shrink-0">
+                      <h4 className="text-xl text-blue-400 font-semibold flex items-center gap-2"><i className="fa fa-history"></i> Full Audit History</h4>
+                      <button className="text-slate-400 hover:text-slate-200 transition-colors w-8 h-8 flex items-center justify-center rounded hover:bg-slate-700" onClick={() => setShowAuditPopup(false)}><i className="fa fa-times"></i></button>
+                    </div>
+                    <div className="p-0 overflow-y-auto flex-1 max-h-[320px]">
+                      {detail.data?.history && detail.data.history.length > 0 ? (
+                        <table className="w-full text-left text-sm whitespace-nowrap">
+                          <thead className="bg-slate-800/80 sticky top-0 z-10 shadow-sm">
+                            <tr className="border-b border-slate-700 text-slate-400">
+                              <th className="px-6 py-3 font-medium w-[180px]">Time</th>
+                              <th className="px-6 py-3 font-medium w-[200px]">User</th>
+                              <th className="px-6 py-3 font-medium w-[150px]">Action</th>
+                              <th className="px-6 py-3 font-medium">Details</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-800/50">
+                            {detail.data.history.map((h, i) => (
+                              <tr key={i} className="hover:bg-slate-800/30 transition-colors">
+                                <td className="px-6 py-3 text-slate-400 text-xs">{new Date(h.created_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
+                                <td className="px-6 py-3 text-slate-300 flex items-center gap-2"><i className="fa fa-user text-slate-500"></i> {h.actor_id || 'System'}</td>
+                                <td className="px-6 py-3">
+                                  <span className="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-slate-700/50 text-slate-300 border border-slate-600/50 mr-2">
+                                    {h.action}
+                                  </span>
+                                  <span className="text-slate-500 text-[10px] uppercase tracking-wider">{h.entity_type || 'case'}</span>
+                                </td>
+                                <td className="px-6 py-3 whitespace-normal">
+                                  {(() => {
+                                    if (h.action.toLowerCase() === 'create' || !h.before_json || h.before_json === h.after_json) {
+                                      if (!h.after_json) return <span className="text-slate-500 text-xs italic">No details</span>;
+                                      try {
+                                        const after = JSON.parse(h.after_json);
+                                        const keys = Object.keys(after).filter(k => !['id', 'created_at', 'updated_at'].includes(k));
+                                        if (keys.length === 0) return <span className="text-slate-500 text-xs italic">No details</span>;
+                                        return <div className="text-xs text-slate-300">Created with: {keys.map(k => <span key={k} className="mr-2"><strong className="text-slate-400">{k}:</strong> {String(after[k])}</span>)}</div>;
+                                      } catch { return <span className="text-slate-500 text-xs italic">No details</span>; }
+                                    }
+                                    try {
+                                      const before = JSON.parse(h.before_json);
+                                      const after = JSON.parse(h.after_json || '{}');
+                                      const changes: { field: string, old: any, new: any }[] = [];
+                                      const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
+                                      for (const key of allKeys) {
+                                        if (['id', 'created_at', 'updated_at'].includes(key)) continue;
+                                        if (JSON.stringify(before[key] ?? null) !== JSON.stringify(after[key] ?? null)) {
+                                          changes.push({ field: key, old: before[key], new: after[key] });
+                                        }
+                                      }
+                                      if (changes.length === 0) return <span className="text-slate-500 text-xs italic">No data changed</span>;
+                                      return (
+                                        <div className="flex flex-col gap-1 text-xs">
+                                          {changes.map(c => (
+                                            <div key={c.field} className="text-slate-300">
+                                              Changed <strong className="text-blue-400">{c.field}</strong> from <code className="bg-slate-900 px-1 rounded text-slate-400 line-through">{String(c.old ?? 'empty')}</code> to <code className="bg-slate-900 px-1 rounded text-orange-300">{String(c.new ?? 'empty')}</code>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      );
+                                    } catch { return <span className="text-slate-500 text-xs italic">Parse error</span>; }
+                                  })()}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div className="text-center text-slate-500 py-12 italic border-b border-slate-700/50">No history recorded yet.</div>
+                      )}
+                    </div>
+                    <div className="px-6 py-4 border-t border-slate-700/50 bg-slate-800/30 flex justify-end shrink-0">
+                      <button className="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm font-medium transition-colors shadow-sm" onClick={() => setShowAuditPopup(false)}>Close</button>
+                    </div>
+                  </div>
+                </div>
+              )}
           </div>
           </section>
         </main>
@@ -377,7 +542,7 @@ export default function CaseDetailPage() {
   );
 }
 
-function DetailsTab({ item, customFields, cfForm, setCfForm, addCF, updateCF, deleteCF, updateCase, canWrite, relatedCases, responderActions, relatedFilter, setRelatedFilter }: {
+function DetailsTab({ item, customFields, cfForm, setCfForm, addCF, updateCF, deleteCF, updateCase, canWrite, relatedCases, responderActions, relatedFilter, setRelatedFilter, searchUsers, meLogin, triggerReassign }: {
   item: CaseCore; customFields: CustomField[];
   cfForm: { name: string; value: string; field_type: string }; setCfForm: (v: typeof cfForm | ((p: typeof cfForm) => typeof cfForm)) => void;
   addCF: { mutate: (field: { name: string; value: string; field_type: string }) => void; isPending: boolean };
@@ -387,96 +552,120 @@ function DetailsTab({ item, customFields, cfForm, setCfForm, addCF, updateCF, de
   canWrite: boolean;
   relatedCases: RelatedCase[]; responderActions: ResponderAction[];
   relatedFilter: string; setRelatedFilter: (v: string) => void;
+  searchUsers: (q: string) => Promise<{login: string; name: string}[]>;
+  meLogin?: string;
+  triggerReassign: (newAssignee: string) => void;
 }) {
   const disabled = !canWrite || updateCase.isPending;
   return (<>
-    <div className="row case-details">
-      <div className="col-md-8">
-        <h4 className="vpad10 text-primary">Basic Information</h4>
-        <dl className="dl-horizontal clear">
-          <dt className="pull-left">Title</dt>
-          <dd>{canWrite ? <UpdatableSimpleText value={item.title} disabled={disabled} onUpdate={(title) => updateCase.mutate({ title })} /> : item.title}</dd>
-        </dl>
-        <dl className="dl-horizontal clear">
-          <dt className="pull-left">Severity</dt>
-          <dd>{canWrite ? <Severity value={item.severity} active onUpdate={(severity) => updateCase.mutate({ severity })} /> : <Severity value={item.severity} />}</dd>
-        </dl>
-        <dl className="dl-horizontal clear">
-          <dt className="pull-left">TLP</dt>
-          <dd>{canWrite ? <Tlp value={item.tlp} format="active" onUpdate={(tlp) => updateCase.mutate({ tlp })} /> : <Tlp value={item.tlp} />}</dd>
-        </dl>
-        <dl className="dl-horizontal clear">
-          <dt className="pull-left">PAP</dt>
-          <dd>{canWrite ? <Pap value={item.pap} format="active" onUpdate={(pap) => updateCase.mutate({ pap })} /> : <Pap value={item.pap} />}</dd>
-        </dl>
-        <dl className="dl-horizontal">
-          <dt className="pull-left">Assignee</dt>
-          <dd>{canWrite ? <UpdatableUser value={item.assignee || ''} disabled={disabled} blankText="Not Assigned" onUpdate={(assignee) => updateCase.mutate({ assignee })} /> : (item.assignee || <em className="text-warning">Not Assigned</em>)}</dd>
-        </dl>
-        <dl className="dl-horizontal clear">
-          <dt className="pull-left">Date</dt>
-          <dd>{canWrite ? <UpdatableDate value={item.start_date ?? null} disabled={disabled} onUpdate={(start_date) => updateCase.mutate({ start_date })} clearable /> : (item.start_date ? new Date(item.start_date).toLocaleString() : <em className="text-warning">Not Specified</em>)}</dd>
-        </dl>
-        <dl className="dl-horizontal">
-          <dt className="pull-left">Tags</dt>
-          <dd>{canWrite ? <UpdatableTags value={item.tags ?? []} disabled={disabled} onUpdate={(tags) => updateCase.mutate({ tags })} clearable /> : <TagList data={item.tags} />}</dd>
-        </dl>
-        {item.status !== 'Open' && <dl className="dl-horizontal clear">
-          <dt className="pull-left text-success">Close date</dt>
-          <dd className="text-success">{item.end_date ? new Date(item.end_date).toLocaleString() : <em>Not Specified</em>}</dd>
-        </dl>}
+    <div className="glass-panel flex flex-col xl:flex-row shadow-[0_8px_30px_rgba(0,0,0,0.6)] rounded-xl bg-slate-800/60 overflow-hidden case-details">
+      {/* Left Column: Basic Information */}
+      <div className="flex-1 flex flex-col">
+        <div className="px-8 py-5 border-b border-slate-700/30 bg-slate-800/30">
+          <h4 className="text-slate-100 font-semibold text-lg flex items-center gap-2"><i className="fa fa-id-card-o text-blue-500"></i> Basic Information</h4>
+        </div>
+        <div className="p-8 flex-1">
+            <div className="grid grid-cols-[160px_1fr] gap-x-8 gap-y-5 items-center">
+              <InfoTooltip content="Title of the incident"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">Title</div></InfoTooltip>
+              <div className="text-base">{canWrite ? <UpdatableSimpleText value={item.title} disabled={disabled} onUpdate={(title) => updateCase.mutate({ title })} /> : <span className="text-slate-200">{item.title}</span>}</div>
+              
+              <InfoTooltip content="Incident severity level"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">Severity</div></InfoTooltip>
+              <div>{canWrite ? <Severity value={item.severity} active onUpdate={(severity) => updateCase.mutate({ severity })} /> : <Severity value={item.severity} />}</div>
+              
+              <InfoTooltip content="Traffic Light Protocol"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">TLP</div></InfoTooltip>
+              <div>{canWrite ? <Tlp value={item.tlp} format="active" onUpdate={(tlp) => updateCase.mutate({ tlp })} /> : <Tlp value={item.tlp} />}</div>
+              
+              <InfoTooltip content="Permissible Actions Protocol"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">PAP</div></InfoTooltip>
+              <div>{canWrite ? <Pap value={item.pap} format="active" onUpdate={(pap) => updateCase.mutate({ pap })} /> : <Pap value={item.pap} />}</div>
+              
+              <InfoTooltip content="User assigned to investigate"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">Assignee</div></InfoTooltip>
+              <div>{canWrite ? <UpdatableUser value={item.assignee || ''} disabled={disabled} blankText="Not Assigned" query={searchUsers} defaultUser={meLogin} onUpdate={(newAssignee) => {
+                if (item.assignee && newAssignee !== item.assignee && newAssignee !== '') {
+                  triggerReassign(newAssignee);
+                } else {
+                  updateCase.mutate({ assignee: newAssignee });
+                }
+              }} /> : (item.assignee ? <span className="text-slate-200">{item.assignee}</span> : <em className="text-yellow-500">Not Assigned</em>)}</div>
+              
+              <InfoTooltip content="Date of incident occurrence"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">Date</div></InfoTooltip>
+              <div>{canWrite ? <UpdatableDate value={item.start_date ?? null} disabled={disabled} onUpdate={(start_date) => updateCase.mutate({ start_date })} clearable /> : (item.start_date ? <span className="text-slate-200">{new Date(item.start_date).toLocaleString()}</span> : <em className="text-yellow-500">Not Specified</em>)}</div>
+              
+              <InfoTooltip content="Categorization tags"><div className="text-slate-500 text-sm font-medium uppercase tracking-wider cursor-help">Tags</div></InfoTooltip>
+              <div>{canWrite ? <UpdatableTags value={item.tags ?? []} disabled={disabled} onUpdate={(tags) => updateCase.mutate({ tags })} clearable /> : <TagList data={item.tags} />}</div>
+              
+              {item.status !== 'Open' && (
+                <>
+                  <div className="text-green-500 text-sm font-medium uppercase tracking-wider">Close date</div>
+                  <div className="text-green-500 text-base">{item.end_date ? new Date(item.end_date).toLocaleString() : <em>Not Specified</em>}</div>
+                </>
+              )}
+            </div>
+        </div>
+
+        <div className="px-8 py-5 mt-4 border-b border-slate-700/30 bg-slate-800/30">
+          <h4 className="text-slate-100 font-semibold text-lg flex items-center gap-2"><i className="fa fa-align-left text-blue-500"></i> Description & Summary</h4>
+        </div>
+        <div className="p-8 flex-1 flex flex-col gap-6">
+          <div>
+            <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Description</div>
+            {canWrite ? <UpdatableText value={item.description || ''} disabled={disabled} onUpdate={(description) => updateCase.mutate({ description })} clearable /> : <div className="prose prose-invert max-w-none text-slate-300">{item.description || <em className="text-yellow-500">Not Specified</em>}</div>}
+          </div>
+          {(item.summary || item.status !== 'Open') && (
+            <div>
+              <div className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Summary</div>
+              {canWrite ? <UpdatableText value={item.summary || ''} disabled={disabled} onUpdate={(summary) => updateCase.mutate({ summary })} clearable /> : <div className="prose prose-invert max-w-none text-slate-300">{item.summary || <em className="text-yellow-500">Not Specified</em>}</div>}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="col-md-4">
-        <h4 className="vpad10 text-primary">Related cases</h4>
-        <div className="box box-solid box-default">
-          <div className="box-body detail-side-list">
-            <dl className="dl-horizontal clear"><dt>Owner</dt><dd>{item.owner || 'None'}</dd></dl>
-            <dl className="dl-horizontal clear"><dt>Organisation</dt><dd>{item.owning_organisation || 'None'}</dd></dl>
-            <dl className="dl-horizontal clear"><dt>Template</dt><dd>{item.case_template || <em className="text-muted">None</em>}</dd></dl>
-            <dl className="dl-horizontal clear"><dt>Impact</dt><dd>{item.impact_status || '—'}</dd></dl>
-            <dl className="dl-horizontal clear"><dt>Resolution</dt><dd>{item.resolution_status || '—'}</dd></dl>
-            <dl className="dl-horizontal clear"><dt>Updated</dt><dd>{new Date(item.updated_at).toLocaleString()}</dd></dl>
+      
+      {/* Right Column: Case Metadata & Linked cases & Responder Actions */}
+      <div className="w-full xl:w-[450px] shrink-0 flex flex-col bg-slate-900/40">
+        <div className="flex flex-col mb-4">
+          <div className="px-6 py-5 border-b border-slate-700/30 bg-slate-800/30">
+            <h4 className="text-slate-100 font-semibold text-lg flex items-center gap-2"><i className="fa fa-database text-blue-500"></i> Case Metadata</h4>
+          </div>
+          <div className="p-6">
+            <div className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-4 items-center text-sm">
+              <div className="text-slate-400 font-medium">Owner</div>
+              <div className="text-slate-200 bg-slate-800/50 px-3 py-1.5 rounded">{item.owner || 'None'}</div>
+              <div className="text-slate-400 font-medium">Organisation</div>
+              <div className="text-slate-200 bg-slate-800/50 px-3 py-1.5 rounded">{item.owning_organisation || 'None'}</div>
+              <div className="text-slate-400 font-medium">Template</div>
+              <div className="text-slate-200 bg-slate-800/50 px-3 py-1.5 rounded truncate">{item.case_template || <em className="text-slate-500">None</em>}</div>
+              <div className="text-slate-400 font-medium">Impact</div>
+              <div className="text-slate-200 bg-slate-800/50 px-3 py-1.5 rounded">{item.impact_status || '—'}</div>
+              <div className="text-slate-400 font-medium">Resolution</div>
+              <div className="text-slate-200 bg-slate-800/50 px-3 py-1.5 rounded">{item.resolution_status || '—'}</div>
+              <div className="text-slate-400 font-medium">Updated</div>
+              <div className="text-slate-400 text-xs bg-slate-800/50 px-3 py-1.5 rounded">{new Date(item.updated_at).toLocaleString()}</div>
+            </div>
           </div>
         </div>
-        <RelatedCasesPanel relatedCases={relatedCases} filter={relatedFilter} setFilter={setRelatedFilter} />
-        <ResponderActionsPanel actions={responderActions} />
+        <div className="flex flex-col mb-4">
+          <RelatedCasesPanel relatedCases={relatedCases} filter={relatedFilter} setFilter={setRelatedFilter} />
+        </div>
+        <div className="flex flex-col">
+          <ResponderActionsPanel actions={responderActions} />
+        </div>
       </div>
     </div>
-
-    <CustomFieldEditor
-      fields={customFields as CustomFieldDef[]}
-      canWrite={canWrite}
-      onAdd={(field) => addCF.mutate(field)}
-      onUpdate={(cfId, value) => updateCF.mutate({ cfId, value })}
-      onDelete={(cfId) => deleteCF.mutate(cfId)}
-      pending={addCF.isPending || updateCF.isPending}
-    />
-
-    <div className="vpad10">
-      <h4 className="vpad10 text-primary">Description</h4>
-      <div className="description-pane">
-        {canWrite ? <UpdatableText value={item.description || ''} disabled={disabled} onUpdate={(description) => updateCase.mutate({ description })} clearable /> : <div className="markdown">{item.description || <em className="text-warning">Not Specified</em>}</div>}
-      </div>
-    </div>
-    {(item.summary || item.status !== 'Open') && <div className="vpad10">
-      <h4 className="vpad10 text-primary">Summary</h4>
-      <div className="description-pane">
-        {canWrite ? <UpdatableText value={item.summary || ''} disabled={disabled} onUpdate={(summary) => updateCase.mutate({ summary })} clearable /> : <div className="markdown">{item.summary || <em className="text-warning">Not Specified</em>}</div>}
-      </div>
-    </div>}
   </>);
 }
 
-function TasksTab({ tasks, caseId, canWrite, showTaskForm, setShowTaskForm, taskForm, setTaskForm, createTask, closeTask, assignTask }: {
-  tasks: Task[]; caseId: string; canWrite: boolean;
+function TasksTab({ tasks, attachments, user, caseId, canWrite, showTaskForm, setShowTaskForm, taskForm, setTaskForm, createTask, closeTask, assignTask, searchUsers }: {
+  tasks: Task[]; attachments: AttachmentItem[]; user: User | undefined; caseId: string; canWrite: boolean;
   showTaskForm: boolean; setShowTaskForm: (v: boolean) => void;
   taskForm: { title: string; group_name: string; assignee: string; description: string };
   setTaskForm: (v: typeof taskForm | ((p: typeof taskForm) => typeof taskForm)) => void;
   createTask: { mutate: () => void; isPending: boolean };
   closeTask: { mutate: (id: string) => void };
   assignTask: { mutate: (v: { taskId: string; assignee: string }) => void };
+  searchUsers: (q: string) => Promise<{login: string; name: string}[]>;
 }) {
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
+  const [userSuggestions, setUserSuggestions] = useState<{login: string; name: string}[]>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
   const toggleExpand = (id: string) => setExpandedTasks(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
   const refetch = () => window.location.reload();
   const startTask = (id: string) => apiFetch(`/api/v1/tasks/${id}/start`, { method: 'POST' }).then(refetch);
@@ -487,21 +676,92 @@ function TasksTab({ tasks, caseId, canWrite, showTaskForm, setShowTaskForm, task
   const bulkCloseWaiting = () => apiFetch('/api/v1/tasks/bulk/close', { method: 'POST', json: { case_id: caseId } }).then(refetch);
 
   return (<>
-    <div className="case-tab-toolbar">
-      <h3 className="detail-section-title" style={{ margin: 0 }}>List of tasks ({tasks.length})</h3>
-      {canWrite && <div className="btn-toolbar"><button className="btn btn-sm btn-default" onClick={bulkCloseWaiting}>Close/Cancel open tasks</button><button className="btn btn-sm btn-primary" onClick={() => setShowTaskForm(!showTaskForm)}>{showTaskForm ? 'Cancel' : 'Add Task'}</button></div>}
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-blue-400/80 font-medium text-sm m-0">List of tasks ({tasks.length})</h3>
+      {canWrite && <div className="flex gap-2"><button className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-md text-sm transition-colors" onClick={bulkCloseWaiting}>Close/Cancel open tasks</button><button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm" onClick={() => setShowTaskForm(!showTaskForm)}>{showTaskForm ? 'Cancel' : 'Add Task'}</button></div>}
     </div>
-    {showTaskForm && canWrite && <div className="detail-action-panel" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: 8, marginTop: 10 }}>
-      <label>Group<input className="thehive-input" value={taskForm.group_name} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, group_name: e.target.value }))} placeholder="Task group" /></label>
-      <label>Title *<input className="thehive-input" value={taskForm.title} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, title: e.target.value }))} placeholder="Task title" /></label>
-      <label>Assignee<input className="thehive-input" value={taskForm.assignee} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, assignee: e.target.value }))} placeholder="Assignee login" /></label>
-      <div style={{ gridColumn: '1 / -1' }}><label>Description<textarea className="thehive-input" value={taskForm.description} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, description: e.target.value }))} placeholder="Task description" /></label></div>
-      <button className="thehive-btn-primary" disabled={!taskForm.title.trim() || createTask.isPending} onClick={() => createTask.mutate()}>Create task</button>
-    </div>}
-    <table className="table table-hover valigned tasks-table data-list" style={{ marginTop: 10 }}><thead><tr><th></th><th>Group</th><th>Task</th><th>Status</th><th>Assignee</th><th>Date</th><th>Due/SLA</th><th>Order</th>{canWrite && <th className="text-right">Actions</th>}</tr></thead><tbody>
+    {showTaskForm && canWrite && (
+      <div className="mb-6 bg-slate-800/80 border border-slate-700/80 rounded-xl shadow-2xl overflow-hidden relative">
+        <div className="px-6 py-4 border-b border-slate-700/50 bg-slate-800/50">
+          <h4 className="text-sm font-semibold text-blue-400 flex items-center gap-2"><i className="fa fa-plus-circle" /> Create New Task</h4>
+        </div>
+        
+        <div className="p-6 flex flex-col gap-5">
+          <div className="w-full">
+            <label className="flex flex-col gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-full">
+              <span>Task Title <span className="text-red-400">*</span></span>
+              <input autoFocus className="w-full bg-slate-900/80 border border-slate-700/80 rounded-md px-4 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner" value={taskForm.title} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, title: e.target.value }))} placeholder="Enter a clear, actionable title..." />
+            </label>
+          </div>
+          
+          <div className="flex flex-col md:flex-row gap-6 w-full">
+            <div className="flex-1 w-full">
+              <label className="flex flex-col gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-full">
+                Task Group
+                <input className="w-full bg-slate-900/80 border border-slate-700/80 rounded-md px-4 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner" value={taskForm.group_name} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, group_name: e.target.value }))} placeholder="e.g. Investigation, Containment" />
+              </label>
+            </div>
+            
+            <div className="flex-1 w-full relative">
+              <label className="flex flex-col gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-full">
+                Assignee
+                <input className="w-full bg-slate-900/80 border border-slate-700/80 rounded-md px-4 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner" value={taskForm.assignee} onChange={e => {
+                  const val = e.target.value;
+                  setTaskForm((f: typeof taskForm) => ({ ...f, assignee: val }));
+                  if (val.length >= 2) {
+                    searchUsers(val).then(res => { setUserSuggestions(res); setShowUserDropdown(true); });
+                  } else {
+                    setShowUserDropdown(false);
+                  }
+                }} onFocus={() => { if (userSuggestions.length > 0) setShowUserDropdown(true); }} onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)} placeholder="Search user login..." />
+              </label>
+              {showUserDropdown && userSuggestions.length > 0 && (
+                <ul className="absolute top-full left-0 mt-1 w-full bg-slate-800 border border-slate-700 rounded-md shadow-2xl z-50 overflow-hidden max-h-48 overflow-y-auto">
+                  {userSuggestions.map(u => (
+                    <li key={u.login}>
+                      <button type="button" className="w-full text-left px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors flex flex-col" onClick={() => { setTaskForm((f: typeof taskForm) => ({ ...f, assignee: u.login })); setShowUserDropdown(false); }}>
+                        <span className="font-medium text-slate-200">{u.login}</span>
+                        {u.name && <span className="text-slate-500 text-[11px]">{u.name}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          
+          <div className="w-full">
+            <label className="flex flex-col gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-full">
+              Description
+              <textarea className="w-full bg-slate-900/80 border border-slate-700/80 rounded-md px-4 py-2.5 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 shadow-inner" value={taskForm.description} onChange={e => setTaskForm((f: typeof taskForm) => ({ ...f, description: e.target.value }))} placeholder="Provide details, context, or steps required to complete the task..." rows={3} />
+            </label>
+          </div>
+        </div>
+        
+        <div className="px-6 py-4 bg-slate-900/60 border-t border-slate-700/60 flex justify-end gap-3">
+          <button className="px-5 py-2 bg-slate-700/50 hover:bg-slate-600/50 text-slate-300 rounded-md text-sm font-medium transition-colors" onClick={() => { setShowTaskForm(false); setTaskForm({ title: '', group_name: '', assignee: '', description: '' }); }}>Cancel</button>
+          <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled={!taskForm.title.trim() || createTask.isPending} onClick={() => createTask.mutate()}>{createTask.isPending ? 'Creating...' : 'Create Task'}</button>
+        </div>
+      </div>
+    )}
+    <table className="w-full text-left border-collapse whitespace-nowrap mt-4">
+      <thead>
+        <tr className="bg-slate-900 border-b border-slate-700 text-slate-400 text-sm">
+          <th className="px-4 py-3 w-10"></th>
+          <th className="px-4 py-3">Group</th>
+          <th className="px-4 py-3 w-1/3">Task</th>
+          <th className="px-4 py-3">Status</th>
+          <th className="px-4 py-3">Assignee</th>
+          <th className="px-4 py-3">Date</th>
+          <th className="px-4 py-3">Due/SLA</th>
+          <th className="px-4 py-3">Order</th>
+          {canWrite && <th className="px-4 py-3 text-right">Actions</th>}
+        </tr>
+      </thead>
+      <tbody className="text-sm divide-y divide-slate-800">
       {tasks.map(t => <Fragment key={t.id}>
       <tr
-        className={t.flag ? 'task-flagged' : ''}
+        className={`hover:bg-slate-800/50 transition-colors ${t.flag ? 'bg-red-900/10' : ''}`}
         draggable={canWrite}
         onDragStart={(e) => e.dataTransfer.setData('taskId', t.id)}
         onDragOver={(e) => e.preventDefault()}
@@ -519,37 +779,46 @@ function TasksTab({ tasks, caseId, canWrite, showTaskForm, setShowTaskForm, task
           }
         }}
       >
-        <td className="task-status" align="center"><TaskFlags task={t} /></td>
-        <td>{t.group_name || '—'}</td>
-        <td>
-          {t.description && <button className="btn btn-xs btn-link" onClick={() => toggleExpand(t.id)} style={{ padding: 0, marginRight: 4 }}><i className={`fa ${expandedTasks.has(t.id) ? 'fa-chevron-up' : 'fa-chevron-down'}`} /></button>}
-          <a href={`/tasks/${t.id}`} className={t.flag ? 'text-danger' : ''}>{t.flag && <span className="text-danger noline mr-xxxs" title="Action Required"><i className="fa fa-exclamation-triangle" /></span>}{t.title}</a>
-          {t.status === 'Completed' && t.end_date && t.start_date && <div className="text-success" style={{ fontSize: '0.75rem' }}>Closed after <em>{Math.round((new Date(t.end_date).getTime() - new Date(t.start_date).getTime()) / 60000)}m</em></div>}
-          {t.status === 'InProgress' && t.start_date && <div className="text-warning" style={{ fontSize: '0.75rem' }}>Started <em>{new Date(t.start_date).toLocaleDateString()}</em></div>}
+        <td className="px-4 py-3 text-center"><TaskFlags task={t} /></td>
+        <td className="px-4 py-3 text-slate-300">{t.group_name || '—'}</td>
+        <td className="px-4 py-3 whitespace-normal">
+          {t.description && <button className="text-slate-400 hover:text-blue-400 p-0 mr-2 focus:outline-none" onClick={() => toggleExpand(t.id)}><i className={`fa ${expandedTasks.has(t.id) ? 'fa-chevron-up' : 'fa-chevron-down'}`} /></button>}
+          <a href={`/tasks/${t.id}`} className={`font-medium hover:underline ${t.flag ? 'text-red-400' : 'text-blue-400'}`}>{t.flag && <span className="text-red-500 mr-1" title="Action Required"><i className="fa fa-exclamation-triangle" /></span>}{t.title}</a>
         </td>
-        <td><span className={taskStatusClass(t.status)}>{t.status}</span>{t.status === 'InProgress' && t.start_date && <div className="text-warning" style={{ fontSize: '0.75rem' }}>Started {new Date(t.start_date).toLocaleDateString()}</div>}{t.status === 'Completed' && t.end_date && <div className="text-success" style={{ fontSize: '0.75rem' }}>Closed {new Date(t.end_date).toLocaleDateString()}</div>}</td>
-        <td>{t.assignee || <em className="text-warning">Not Assigned</em>}</td>
-        <td>{t.start_date ? new Date(t.start_date).toLocaleDateString() : '—'}</td>
-        <td>{t.due_date ? <><div>{new Date(t.due_date).toLocaleDateString()}</div><SlaBadge dueDate={t.due_date} status={t.status} /></> : '—'}</td>
-        <td style={{ whiteSpace: 'nowrap' }}>
-          <span className="task-reorder-handle" title="Drag to reorder">
-            <i className="fa fa-bars text-muted" style={{ cursor: 'grab', marginRight: 4 }} />
-          </span>
-          <button className="thehive-btn-sm" onClick={() => reorderTask(t, -1)} title="Move up" style={{ padding: '1px 4px' }}>▲</button>
-          <span className="mono" style={{ margin: '0 4px', fontSize: '0.75rem', color: '#999' }}>{t.order_index}</span>
-          <button className="thehive-btn-sm" onClick={() => reorderTask(t, 1)} title="Move down" style={{ padding: '1px 4px' }}>▼</button>
+        <td className="px-4 py-3">
+          <span className={taskStatusClass(t.status)}>{t.status}</span>
+          {t.status === 'InProgress' && t.start_date && <div className="text-yellow-500/80 text-[11px] mt-1.5 font-medium">Started {new Date(t.start_date).toLocaleDateString()}</div>}
+          {t.status === 'Completed' && t.end_date && <div className="text-green-500/80 text-[11px] mt-1.5 font-medium">Closed {new Date(t.end_date).toLocaleDateString()}</div>}
         </td>
-        {canWrite && <td style={{ whiteSpace: 'nowrap' }}>
-          {t.status === 'Waiting' && <button className="thehive-btn-sm" onClick={() => startTask(t.id)} title="Start">▶ Start</button>}
-          {t.status === 'InProgress' && <button className="thehive-btn-sm" onClick={() => closeTask.mutate(t.id)} title="Close">✔ Close</button>}
-          {(t.status === 'Completed' || t.status === 'Cancel') && <button className="thehive-btn-sm" onClick={() => reopenTask(t.id)} title="Reopen">↩ Reopen</button>}
-          {t.status !== 'Cancel' && t.status !== 'Completed' && <button className="thehive-btn-sm danger" style={{ marginLeft: 4 }} onClick={() => cancelTask(t.id)} title="Cancel">✖</button>}
+        <td className="px-4 py-3">{t.assignee ? <span className="text-slate-300">{t.assignee}</span> : <em className="text-yellow-500">Not Assigned</em>}</td>
+        <td className="px-4 py-3 text-slate-300">{t.start_date ? new Date(t.start_date).toLocaleDateString() : '—'}</td>
+        <td className="px-4 py-3 flex flex-col gap-1">{t.due_date ? <><div className="text-slate-300">{new Date(t.due_date).toLocaleDateString()}</div><SlaBadge dueDate={t.due_date} status={t.status} /></> : <span className="text-slate-500">—</span>}</td>
+        <td className="px-4 py-3">
+          <div className="flex items-center">
+            <span className="text-slate-500 cursor-grab mr-2 hover:text-slate-300" title="Drag to reorder">
+              <i className="fa fa-bars" />
+            </span>
+            <button className="text-slate-400 hover:text-slate-200 p-1" onClick={() => reorderTask(t, -1)} title="Move up">▲</button>
+            <span className="font-mono text-xs text-slate-500 mx-1 w-4 text-center">{t.order_index}</span>
+            <button className="text-slate-400 hover:text-slate-200 p-1" onClick={() => reorderTask(t, 1)} title="Move down">▼</button>
+          </div>
+        </td>
+        {canWrite && <td className="px-4 py-3 text-right">
+          <div className="flex gap-1 justify-end">
+            {t.status === 'Waiting' && <button className="px-2 py-1 bg-blue-900/30 hover:bg-blue-900/50 text-blue-400 border border-blue-700/50 rounded text-xs transition-colors" onClick={() => startTask(t.id)} title="Start">▶ Start</button>}
+            {t.status === 'InProgress' && <button className="px-2 py-1 bg-green-900/30 hover:bg-green-900/50 text-green-400 border border-green-700/50 rounded text-xs transition-colors" onClick={() => closeTask.mutate(t.id)} title="Close">✔ Close</button>}
+            {(t.status === 'Completed' || t.status === 'Cancel') && <button className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded text-xs transition-colors" onClick={() => reopenTask(t.id)} title="Reopen">↩ Reopen</button>}
+            {t.status !== 'Cancel' && t.status !== 'Completed' && <button className="px-2 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-700/50 rounded text-xs transition-colors ml-1" onClick={() => cancelTask(t.id)} title="Cancel">✖</button>}
+          </div>
         </td>}
       </tr>
-      {t.description && expandedTasks.has(t.id) && <tr><td colSpan={canWrite ? 9 : 8} className="wrap"><div className="mt-xxs filter-panel markdown" style={{ fontSize: '0.85rem', padding: '8px 12px' }}>{t.description}</div></td></tr>}
+      {t.description && expandedTasks.has(t.id) && <tr><td colSpan={canWrite ? 9 : 8} className="px-4 py-3 whitespace-normal bg-slate-900/30"><div className="prose prose-invert max-w-none text-slate-300 text-sm p-2 border-l-2 border-blue-500">{t.description}</div></td></tr>}
       </Fragment>)}
-      {!tasks.length && <tr><td colSpan={canWrite ? 9 : 8} className="thehive-empty">No tasks yet.</td></tr>}
+      {!tasks.length && <tr><td colSpan={canWrite ? 9 : 8} className="px-4 py-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No tasks yet.</td></tr>}
     </tbody></table>
+    <div className="mt-8">
+      <AttachmentPanel user={user} caseId={caseId} initialAttachments={attachments} title="Case Attachments" />
+    </div>
   </>);
 }
 
@@ -562,6 +831,8 @@ function ObservablesTab({ observables, canWrite, obsForm, setObsForm, createObs,
   deleteObs: { mutate: (id: string) => void };
 }) {
   const [showModal, setShowModal] = useState(false);
+  const [drawerObs, setDrawerObs] = useState<Observable | null>(null);
+  const [drawerTab, setDrawerTab] = useState<'parsed' | 'raw'>('parsed');
   const types = ['ip', 'domain', 'url', 'mail', 'hash', 'filename', 'fqdn', 'uri_path', 'user-agent', 'regexp', 'file', 'other'];
   const knownTags = Array.from(new Set(observables.flatMap((o) => o.tags))).sort();
 
@@ -580,9 +851,9 @@ function ObservablesTab({ observables, canWrite, obsForm, setObsForm, createObs,
   }
 
   return (<>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <h3 className="detail-section-title" style={{ margin: 0 }}>Observables ({observables.length})</h3>
-      {canWrite && <button className="btn btn-sm btn-primary" onClick={() => setShowModal(true)}><i className="fa fa-plus" /> New observable(s)</button>}
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-blue-400/80 font-medium text-sm m-0">Observables ({observables.length})</h3>
+      {canWrite && <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm flex items-center gap-1.5" onClick={() => setShowModal(true)}><i className="fa fa-plus" /> New observable(s)</button>}
     </div>
     <ObservableCreationModal
       open={showModal}
@@ -592,75 +863,170 @@ function ObservablesTab({ observables, canWrite, obsForm, setObsForm, createObs,
       onCancel={() => setShowModal(false)}
       onSubmit={handleSubmit}
     />
-    <table className="table table-hover valigned data-list observable-table" style={{ marginTop: 10 }}><thead><tr><th>TLP</th><th>Flags</th><th>Type</th><th>Data</th><th>Tags</th><th>Owner</th>{canWrite && <th>Actions</th>}</tr></thead><tbody>
-      {observables.map(o => <tr key={o.id}>
-        <td><Tlp value={o.tlp} format="icon" /></td>
-        <td style={{ fontSize: '0.8rem' }}>
-          <span onClick={() => canWrite && patchObs.mutate({ obsId: o.id, patch: { ioc: !o.ioc } })} style={{ cursor: canWrite ? 'pointer' : 'default' }}><ObservableFlags observable={o} />{!o.ioc && !o.sighted && !o.ignore_similarity && <span className="text-muted">No flags</span>}</span>
-          <div className="mt-xxs">
-            <a href="#" onClick={(event) => { event.preventDefault(); if (canWrite) patchObs.mutate({ obsId: o.id, patch: { sighted: !o.sighted } }); }} className="noline mr-xxs">{o.sighted ? 'unsight' : 'sight'}</a>
-            <a href="#" onClick={(event) => { event.preventDefault(); if (canWrite) patchObs.mutate({ obsId: o.id, patch: { ignore_similarity: !o.ignore_similarity } }); }} className="noline">{o.ignore_similarity ? 'similarity on' : 'ignore similarity'}</a>
+    <table className="w-full text-left border-collapse whitespace-nowrap mt-4">
+      <thead>
+        <tr className="bg-slate-900 border-b border-slate-700 text-slate-400 text-sm">
+          <th className="px-4 py-3 w-10">TLP</th>
+          <th className="px-4 py-3 w-32">Flags</th>
+          <th className="px-4 py-3 w-32">Type</th>
+          <th className="px-4 py-3 w-1/3">Data</th>
+          <th className="px-4 py-3">Tags</th>
+          <th className="px-4 py-3">Owner</th>
+          {canWrite && <th className="px-4 py-3 text-right">Actions</th>}
+        </tr>
+      </thead>
+      <tbody className="text-sm divide-y divide-slate-800">
+      {observables.map(o => <tr key={o.id} className="hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => setDrawerObs(o)}>
+        <td className="px-4 py-3 text-center"><Tlp value={o.tlp} format="icon" /></td>
+        <td className="px-4 py-3 flex flex-col gap-1.5 text-xs">
+          <span onClick={() => canWrite && patchObs.mutate({ obsId: o.id, patch: { ioc: !o.ioc } })} className={canWrite ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}><ObservableFlags observable={o} />{!o.ioc && !o.sighted && !o.ignore_similarity && <span className="text-slate-500">No flags</span>}</span>
+          <div className="flex gap-2">
+            <a href="#" onClick={(event) => { event.preventDefault(); if (canWrite) patchObs.mutate({ obsId: o.id, patch: { sighted: !o.sighted } }); }} className="text-blue-400 hover:text-blue-300 hover:underline">{o.sighted ? 'unsight' : 'sight'}</a>
+            <a href="#" onClick={(event) => { event.preventDefault(); if (canWrite) patchObs.mutate({ obsId: o.id, patch: { ignore_similarity: !o.ignore_similarity } }); }} className="text-blue-400 hover:text-blue-300 hover:underline">{o.ignore_similarity ? 'similarity on' : 'ignore similarity'}</a>
           </div>
         </td>
-        <td><a href={`/observables/${o.id}`}><span className="label label-info">{o.data_type}</span></a></td>
-        <td><div className="mono" style={{ wordBreak: 'break-all' }}>{o.data}</div>{o.full_data && <div style={{ marginTop: 4 }}><span className="label label-warning" title="Full data stored server-side">hash-indexed</span> <small className="mono">{o.data_hash}</small></div>}<small style={{ color: '#777' }}>{o.message}</small>{o.attachment_id && <div style={{ marginTop: 4 }}><span className="label label-default"><i className="fa fa-paperclip" /> File {(o.attachment_id).split('-')[0]}</span></div>}</td>
-        <td><TagList data={o.tags} /></td>
-        <td>{o.created_by}</td>
-        {canWrite && <td><button className="thehive-btn-sm danger" onClick={() => deleteObs.mutate(o.id)}>Delete</button></td>}
+        <td className="px-4 py-3"><a href={`/observables/${o.id}`} className="px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-600 rounded text-xs hover:bg-slate-700 transition-colors">{o.data_type}</a></td>
+        <td className="px-4 py-3 whitespace-normal">
+          <div className="font-mono text-slate-200 break-all">{o.data}</div>
+          {o.full_data && <div className="mt-1"><span className="px-1.5 py-0.5 rounded text-[10px] bg-yellow-900/50 text-yellow-400 border border-yellow-700/50 mr-1" title="Full data stored server-side">hash-indexed</span> <small className="font-mono text-slate-400">{o.data_hash}</small></div>}
+          <div className="text-slate-500 text-xs mt-1">{o.message}</div>
+          {o.attachment_id && <div className="mt-1"><span className="px-1.5 py-0.5 bg-slate-700 text-slate-300 rounded text-[10px]"><i className="fa fa-paperclip mr-1" /> File {(o.attachment_id).split('-')[0]}</span></div>}
+        </td>
+        <td className="px-4 py-3"><TagList data={o.tags} /></td>
+        <td className="px-4 py-3 text-slate-300">{o.created_by}</td>
+        {canWrite && <td className="px-4 py-3 text-right"><button className="px-2 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-700/50 rounded text-xs transition-colors" onClick={(e) => { e.stopPropagation(); deleteObs.mutate(o.id); }}>Delete</button></td>}
       </tr>)}
-      {!observables.length && <tr><td colSpan={canWrite ? 7 : 6} className="thehive-empty">No observables yet.</td></tr>}
+      {!observables.length && <tr><td colSpan={canWrite ? 7 : 6} className="px-4 py-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No observables yet.</td></tr>}
     </tbody></table>
+
+    {/* Side Drawer Overlay */}
+    {drawerObs && (
+      <div className="fixed inset-0 z-50 flex justify-end bg-black/60 transition-opacity">
+        <div className="w-[600px] h-full bg-slate-900 border-l border-slate-700 shadow-2xl flex flex-col transform transition-transform">
+          <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+            <h3 className="text-base text-blue-400/80 font-medium flex items-center gap-2">
+              <i className="fa fa-eye"></i> Observable Details
+            </h3>
+            <button className="text-slate-400 hover:text-slate-200" onClick={() => setDrawerObs(null)}>
+              <i className="fa fa-times text-xl"></i>
+            </button>
+          </div>
+          
+          <div className="flex border-b border-slate-700 bg-slate-800">
+            <button className={`flex-1 py-3 text-sm font-medium transition-colors ${drawerTab === 'parsed' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-300'}`} onClick={() => setDrawerTab('parsed')}>Parsed Details</button>
+            <button className={`flex-1 py-3 text-sm font-medium transition-colors ${drawerTab === 'raw' ? 'text-blue-500 border-b-2 border-blue-500' : 'text-slate-400 hover:text-slate-300'}`} onClick={() => setDrawerTab('raw')}>Raw JSON</button>
+          </div>
+          
+          <div className="p-6 overflow-y-auto flex-1">
+            {drawerTab === 'parsed' ? (
+              <div className="space-y-6">
+                <div>
+                  <span className="block text-xs text-slate-500 mb-1">Data</span>
+                  <div className="font-mono text-sm text-slate-200 bg-slate-800 p-3 rounded border border-slate-700 break-all">{drawerObs.data}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><span className="block text-xs text-slate-500 mb-1">Type</span><span className="px-2 py-1 bg-slate-800 text-slate-300 rounded border border-slate-600 text-sm">{drawerObs.data_type}</span></div>
+                  <div><span className="block text-xs text-slate-500 mb-1">TLP</span><Tlp value={drawerObs.tlp} /></div>
+                </div>
+                <div>
+                  <span className="block text-xs text-slate-500 mb-1">Tags</span>
+                  <div className="flex flex-wrap gap-1 mt-1"><TagList data={drawerObs.tags} /></div>
+                </div>
+                <div>
+                  <span className="block text-xs text-slate-500 mb-1">Message</span>
+                  <p className="text-sm text-slate-300">{drawerObs.message || <em className="text-slate-500">None</em>}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div><span className="block text-xs text-slate-500 mb-1">Created By</span><span className="text-sm text-slate-300">{drawerObs.created_by}</span></div>
+                  <div><span className="block text-xs text-slate-500 mb-1">Created At</span><span className="text-sm text-slate-300">{new Date(drawerObs.created_at).toLocaleString()}</span></div>
+                </div>
+              </div>
+            ) : (
+              <pre className="text-xs font-mono text-slate-300 bg-slate-900 p-4 rounded border border-slate-700 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(drawerObs, null, 2)}</pre>
+            )}
+          </div>
+          <div className="p-4 border-t border-slate-700 bg-slate-800 flex justify-end">
+            <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-sm transition-colors" onClick={() => setDrawerObs(null)}>Close Drawer</button>
+          </div>
+        </div>
+      </div>
+    )}
   </>);
 }
 
-function LogsTab({ logs, history, logMessage, setLogMessage, appendLog, canWrite }: {
+function LogsTab({ logs, history, logMessage, setLogMessage, appendLog, canWrite, me }: {
   logs: CaseLog[]; history: History[]; logMessage: string; setLogMessage: (v: string) => void;
-  appendLog: { mutate: (f: File | null) => void; isPending: boolean }; canWrite: boolean;
+  appendLog: { mutate: (f: File | null) => void; isPending: boolean }; canWrite: boolean; me?: string;
 }) {
   const [file, setFile] = useState<File | null>(null);
 
   const events = [
     ...logs.map(l => ({ ...l, type: 'log' as const, date: new Date(l.created_at).getTime() })),
     ...history.map(h => ({ ...h, type: 'audit' as const, date: new Date(h.created_at).getTime() }))
-  ].sort((a, b) => b.date - a.date);
+  ].sort((a, b) => a.date - b.date);
 
-  return (<>
-    {canWrite && <>
-      <h3 className="detail-section-title">Add note</h3>
-      <div className="detail-action-panel">
-        <div className="clearfix" style={{ marginBottom: 4 }}>
-          <a className="pull-right text-muted" href="https://github.com/adam-p/markdown-here/wiki/Markdown-Cheatsheet" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem' }}>
-            <i className="fa fa-question-circle" /> Markdown Reference
-          </a>
-        </div>
-        <MarkdownEditor value={logMessage} onChange={setLogMessage} placeholder="Write a note… (markdown supported)" rows={6} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-          <Dropzone onFile={(f) => setFile(f)} compact />
-          {file && <span className="text-muted text-xs"><i className="fa fa-paperclip" /> {file.name} <button className="btn btn-xs btn-link text-danger" onClick={() => setFile(null)}>×</button></span>}
-          <button className="thehive-btn-primary" disabled={!logMessage.trim() || appendLog.isPending} onClick={() => { appendLog.mutate(file); setFile(null); setLogMessage(''); }}>
-            {appendLog.isPending ? 'Saving…' : <><i className="glyphicon glyphicon-comment" /> Add log</>}
-          </button>
-        </div>
+  return (
+    <div className="flex flex-col h-[700px]">
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-900 border border-slate-700 rounded-lg shadow-inner mb-4 space-y-4">
+        {events.length === 0 && <div className="text-center text-slate-500 my-8">No messages yet. Start the conversation.</div>}
+        {events.map((ev, i) => {
+          if (ev.type === 'audit') {
+            return (
+              <div key={`audit-${i}`} className="flex justify-center my-2">
+                <span className="px-3 py-1 bg-slate-800 text-slate-500 rounded-full text-[10px] border border-slate-700 uppercase tracking-wider">
+                  {(ev as any).action} by {(ev as any).actor_id || 'system'} • {new Date(ev.date).toLocaleTimeString()}
+                </span>
+              </div>
+            );
+          }
+          
+          const isMe = (ev as any).created_by === me;
+          
+          return (
+            <div key={`log-${i}`} className={`flex flex-col mb-4 ${isMe ? 'items-end' : 'items-start'}`}>
+              <div className={`flex items-center gap-2 mb-1 px-1 ${isMe ? 'flex-row-reverse' : ''}`}>
+                <strong className={`text-sm ${isMe ? 'text-orange-400' : 'text-blue-400'}`}>{(ev as any).created_by}</strong>
+                <span className="text-slate-500 text-xs">{new Date(ev.date).toLocaleString()}</span>
+              </div>
+              <div className={`border rounded-xl p-3 max-w-[85%] shadow-sm relative ${
+                isMe 
+                  ? 'bg-slate-800/80 border-orange-500/20 text-slate-200 rounded-tr-none' 
+                  : 'bg-slate-800 border-slate-700 text-slate-300 rounded-tl-none'
+              }`}>
+                <div className="prose prose-invert max-w-none text-sm" dangerouslySetInnerHTML={{ __html: renderBasicMarkdown((ev as any).message) }} />
+                {(ev as any).attachment_id && (
+                  <div className={`mt-3 inline-block ${isMe ? 'text-right w-full' : ''}`}>
+                    <span className={`px-2 py-1 bg-slate-900 rounded text-xs border flex items-center gap-1 cursor-pointer hover:bg-slate-800 inline-flex ${isMe ? 'text-orange-400 border-orange-900/50' : 'text-blue-400 border-blue-900/50'}`} title="Attachment">
+                      <i className="fa fa-paperclip" /> {(ev as any).attachment_id.split('-')[0]}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
-    </>}
-    <h3 className="detail-section-title">Timeline ({events.length} entries)</h3>
-    <div className="timeline">
-      {events.map((ev, i) => <div className="timeline-item" key={`${ev.type}-${i}`}>
-        <span className="timeline-dot" style={{ background: ev.type === 'audit' ? '#ccc' : 'var(--thehive-primary)' }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong>{ev.type === 'log' ? (ev as any).created_by : `${(ev as any).action} by ${(ev as any).actor_id || 'system'}`}</strong>
-            <small style={{ color: '#888' }}>{new Date(ev.date).toLocaleString()}</small>
+      
+      {canWrite && (
+        <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 p-4">
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <MarkdownEditor value={logMessage} onChange={setLogMessage} placeholder="Type a message... (Markdown supported)" rows={3} />
+            </div>
           </div>
-          {ev.type === 'log' && <>
-            <div className="detail-markdown" style={{ marginTop: 4 }} dangerouslySetInnerHTML={{ __html: renderBasicMarkdown((ev as any).message) }} />
-            {(ev as any).attachment_id && <div style={{ marginTop: 8 }}><span className="label label-default" title="Attachment ID">📎 Attachment {(ev as any).attachment_id.split('-')[0]}</span></div>}
-          </>}
+          <div className="flex justify-between items-center mt-3">
+            <div className="flex gap-2 items-center">
+              <Dropzone onFile={(f) => setFile(f)} compact />
+              {file && <span className="text-slate-400 text-xs flex items-center bg-slate-900 px-2 py-1 rounded"><i className="fa fa-paperclip mr-1" /> {file.name} <button className="ml-2 text-red-400 hover:text-red-300 focus:outline-none" onClick={() => setFile(null)}>×</button></span>}
+            </div>
+            <button className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2 font-medium" disabled={!logMessage.trim() || appendLog.isPending} onClick={() => { appendLog.mutate(file); setFile(null); setLogMessage(''); }}>
+              {appendLog.isPending ? 'Sending…' : <><i className="fa fa-paper-plane" /> Send</>}
+            </button>
+          </div>
         </div>
-      </div>)}
-      {!events.length && <div className="thehive-empty">No events yet.</div>}
+      )}
     </div>
-  </>);
+  );
 }
 
 function ProceduresTab({ procedures, procForm, setProcForm, addProc, deleteProc, canWrite }: {
@@ -671,16 +1037,34 @@ function ProceduresTab({ procedures, procForm, setProcForm, addProc, deleteProc,
   canWrite: boolean;
 }) {
   return (<>
-    <h3 className="detail-section-title">MITRE ATT&CK Procedures</h3>
-    <table className="thehive-table"><thead><tr><th>Pattern</th><th>Tactic</th><th>Description</th><th>Time</th><th>Created by</th><th></th></tr></thead><tbody>
-      {procedures.map(p => <tr key={p.id}><td>{p.pattern_name || p.pattern_id}</td><td>{p.tactic || '—'}</td><td>{p.description || '—'}</td><td>{p.occurred_at ? new Date(p.occurred_at).toLocaleString() : '—'}</td><td>{p.created_by}</td><td>{canWrite && <button className="thehive-btn-sm danger" onClick={() => deleteProc.mutate(p.id)}>Delete</button>}</td></tr>)}
-      {!procedures.length && <tr><td colSpan={6} className="thehive-empty">No procedures yet.</td></tr>}
+    <h3 className="text-blue-400/80 font-medium text-sm mb-4">MITRE ATT&CK Procedures</h3>
+    <table className="w-full text-left border-collapse whitespace-nowrap mb-6">
+      <thead>
+        <tr className="bg-slate-900 border-b border-slate-700 text-slate-400 text-sm">
+          <th className="px-4 py-3">Pattern</th>
+          <th className="px-4 py-3">Tactic</th>
+          <th className="px-4 py-3">Description</th>
+          <th className="px-4 py-3">Time</th>
+          <th className="px-4 py-3">Created by</th>
+          <th className="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody className="text-sm divide-y divide-slate-800">
+      {procedures.map(p => <tr key={p.id} className="hover:bg-slate-800/50 transition-colors">
+        <td className="px-4 py-3 text-slate-200">{p.pattern_name || p.pattern_id}</td>
+        <td className="px-4 py-3 text-slate-300">{p.tactic || '—'}</td>
+        <td className="px-4 py-3 text-slate-300 whitespace-normal">{p.description || '—'}</td>
+        <td className="px-4 py-3 text-slate-400">{p.occurred_at ? new Date(p.occurred_at).toLocaleString() : '—'}</td>
+        <td className="px-4 py-3 text-slate-400">{p.created_by}</td>
+        <td className="px-4 py-3 text-right">{canWrite && <button className="px-2 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-700/50 rounded text-xs transition-colors" onClick={() => deleteProc.mutate(p.id)}>Delete</button>}</td>
+      </tr>)}
+      {!procedures.length && <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No procedures yet.</td></tr>}
     </tbody></table>
-    {canWrite && <div className="detail-action-panel" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      <label style={{ flex: 1 }}>Pattern ID<input className="thehive-input" value={procForm.pattern_id} onChange={e => setProcForm((f: typeof procForm) => ({ ...f, pattern_id: e.target.value }))} /></label>
-      <label style={{ flex: 1 }}>Name<input className="thehive-input" value={procForm.pattern_name} onChange={e => setProcForm((f: typeof procForm) => ({ ...f, pattern_name: e.target.value }))} /></label>
-      <label style={{ flex: 1 }}>Tactic<input className="thehive-input" value={procForm.tactic} onChange={e => setProcForm((f: typeof procForm) => ({ ...f, tactic: e.target.value }))} /></label>
-      <button className="thehive-btn-primary" disabled={!procForm.pattern_id.trim() || addProc.isPending} onClick={() => addProc.mutate()}>Add</button>
+    {canWrite && <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-5 bg-slate-800 border border-slate-700 rounded-lg shadow-sm">
+      <label className="flex flex-col gap-1 text-sm text-slate-400">Pattern ID<input className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={procForm.pattern_id} onChange={e => setProcForm((f: typeof procForm) => ({ ...f, pattern_id: e.target.value }))} /></label>
+      <label className="flex flex-col gap-1 text-sm text-slate-400">Name<input className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={procForm.pattern_name} onChange={e => setProcForm((f: typeof procForm) => ({ ...f, pattern_name: e.target.value }))} /></label>
+      <label className="flex flex-col gap-1 text-sm text-slate-400">Tactic<input className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={procForm.tactic} onChange={e => setProcForm((f: typeof procForm) => ({ ...f, tactic: e.target.value }))} /></label>
+      <div className="flex items-end"><button className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={!procForm.pattern_id.trim() || addProc.isPending} onClick={() => addProc.mutate()}>Add Procedure</button></div>
     </div>}
   </>);
 }
@@ -708,13 +1092,33 @@ function SharesTab({ shares, shareForm, setShareForm, addShare, deleteShare, can
   }
 
   return (<>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-      <h3 className="detail-section-title" style={{ margin: 0 }}>Sharing ({shares.length})</h3>
-      {canWrite && <button className="btn btn-sm btn-primary" onClick={() => setShowModal(true)}><i className="fa fa-share-square" /> Manage shares</button>}
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-blue-400/80 font-medium text-sm m-0">Sharing ({shares.length})</h3>
+      {canWrite && <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm flex items-center gap-1.5" onClick={() => setShowModal(true)}><i className="fa fa-share-square" /> Manage shares</button>}
     </div>
-    <table className="table table-striped sharing-list-table"><thead><tr><th>Organisation</th><th>Owner</th><th>Profile</th><th>Task rule</th><th>Observable rule</th><th>Action req.</th><th /></tr></thead><tbody>
-      {shares.map(s => <tr key={s.id}><td>{s.organisation}{s.owner && <span className="label label-primary" style={{ marginLeft: 8 }}>Owner</span>}</td><td>{s.owner ? <i className="fa fa-check text-success" /> : '—'}</td><td><span className="label label-default">{s.profile}</span></td><td>{s.task_rule}</td><td>{s.observable_rule}</td><td>{s.task_action_required ? <i className="fa fa-exclamation-triangle text-warning" /> : '—'}</td><td>{canWrite && <button className="btn btn-xs btn-danger" onClick={() => deleteShare.mutate(s.id)}>Revoke</button>}</td></tr>)}
-      {!shares.length && <tr><td colSpan={7} className="empty-message">No shares yet.</td></tr>}
+    <table className="w-full text-left border-collapse whitespace-nowrap mt-4">
+      <thead>
+        <tr className="bg-slate-900 border-b border-slate-700 text-slate-400 text-sm">
+          <th className="px-4 py-3">Organisation</th>
+          <th className="px-4 py-3">Owner</th>
+          <th className="px-4 py-3">Profile</th>
+          <th className="px-4 py-3">Task rule</th>
+          <th className="px-4 py-3">Observable rule</th>
+          <th className="px-4 py-3 text-center">Action req.</th>
+          <th className="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody className="text-sm divide-y divide-slate-800">
+      {shares.map(s => <tr key={s.id} className="hover:bg-slate-800/50 transition-colors">
+        <td className="px-4 py-3 text-slate-200">{s.organisation}{s.owner && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] bg-blue-900/50 text-blue-400 uppercase tracking-wider border border-blue-700/50">Owner</span>}</td>
+        <td className="px-4 py-3 text-slate-400">{s.owner ? <i className="fa fa-check text-green-500" /> : '—'}</td>
+        <td className="px-4 py-3"><span className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs">{s.profile}</span></td>
+        <td className="px-4 py-3 text-slate-300">{s.task_rule}</td>
+        <td className="px-4 py-3 text-slate-300">{s.observable_rule}</td>
+        <td className="px-4 py-3 text-center">{s.task_action_required ? <i className="fa fa-exclamation-triangle text-yellow-500" title="Action required" /> : <span className="text-slate-500">—</span>}</td>
+        <td className="px-4 py-3 text-right">{canWrite && <button className="px-2 py-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-700/50 rounded text-xs transition-colors" onClick={() => deleteShare.mutate(s.id)}>Revoke</button>}</td>
+      </tr>)}
+      {!shares.length && <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No shares yet.</td></tr>}
     </tbody></table>
     <SharingModal
       open={showModal}
@@ -730,47 +1134,62 @@ function SharesTab({ shares, shareForm, setShareForm, addShare, deleteShare, can
 
 function AuditTab({ history }: { history: History[] }) {
   return (<>
-    <h3 className="detail-section-title">History</h3>
-    <div className="timeline">
-      {history.map(h => <div className="timeline-item" key={`${h.action}-${h.created_at}`}><span className="timeline-dot" /><strong>{h.action}</strong><p>{h.actor_id || 'system'}</p><small>{new Date(h.created_at).toLocaleString()}</small></div>)}
-      {!history.length && <div className="thehive-empty">No history yet.</div>}
+    <h3 className="text-blue-400/80 font-medium text-sm mb-6">History</h3>
+    <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-700 before:to-transparent">
+      {history.map((h, i) => <div className="relative flex items-start justify-between md:justify-normal md:odd:flex-row-reverse group is-active" key={`${h.action}-${h.created_at}-${i}`}>
+        <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-slate-900 bg-slate-700 text-slate-400 shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+          <i className="fa fa-history"></i>
+        </div>
+        <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-md">
+          <div className="flex justify-between items-start">
+            <div>
+              <strong className="text-slate-200 block">{h.action}</strong>
+              <span className="text-slate-400 text-sm">{h.actor_id || 'system'}</span>
+            </div>
+            <small className="text-slate-500">{new Date(h.created_at).toLocaleString()}</small>
+          </div>
+        </div>
+      </div>)}
+      {!history.length && <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No history yet.</div>}
     </div>
   </>);
 }
 
-function Info({ label, value }: { label: string; value: unknown }) { return <div className="detail-info"><span>{label}</span><strong>{String(value ?? '—')}</strong></div>; }
+function Info({ label, value }: { label: string; value: unknown }) { 
+  return <div className="flex gap-2 text-sm"><span className="text-slate-400">{label}:</span><strong className="text-slate-200">{String(value ?? '—')}</strong></div>; 
+}
 
 function SeverityInline({ value }: { value: number }) {
   const labels: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical', 4: 'Critical' };
-  const klass: Record<number, string> = { 0: 'label-info', 1: 'label-info', 2: 'label-warning', 3: 'label-danger', 4: 'label-danger' };
-  return <span className={`label ${klass[value] ?? 'label-default'}`}>{labels[value] ?? `S${value}`}</span>;
+  const klass: Record<number, string> = { 0: 'bg-blue-900/50 text-blue-400 border-blue-700/50', 1: 'bg-blue-900/50 text-blue-400 border-blue-700/50', 2: 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50', 3: 'bg-red-900/50 text-red-400 border-red-700/50', 4: 'bg-red-900/50 text-red-400 border-red-700/50' };
+  return <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${klass[value] ?? 'bg-slate-700 text-slate-300 border-slate-600'}`}>{labels[value] ?? `S${value}`}</span>;
 }
 
 function statusLabelClass(status: string | undefined): string {
   switch ((status ?? '').toLowerCase()) {
-    case 'open': return 'label label-danger';
-    case 'resolved': return 'label label-success';
-    case 'duplicated': return 'label label-warning';
-    default: return 'label label-default';
+    case 'open': return 'px-2 py-0.5 rounded text-[10px] bg-red-900/50 text-red-400 uppercase font-bold tracking-wider border border-red-700/50';
+    case 'resolved': return 'px-2 py-0.5 rounded text-[10px] bg-green-900/50 text-green-400 uppercase font-bold tracking-wider border border-green-700/50';
+    case 'duplicated': return 'px-2 py-0.5 rounded text-[10px] bg-yellow-900/50 text-yellow-400 uppercase font-bold tracking-wider border border-yellow-700/50';
+    default: return 'px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 uppercase font-bold tracking-wider border border-slate-600';
   }
 }
 
 function taskStatusClass(status: string): string {
   switch (status) {
-    case 'Completed': return 'label label-success';
-    case 'InProgress': return 'label label-warning';
-    case 'Cancel': return 'label label-default';
-    case 'Waiting': default: return 'label label-info';
+    case 'Completed': return 'px-2 py-0.5 rounded text-[10px] bg-green-900/50 text-green-400 uppercase tracking-wider border border-green-700/50';
+    case 'InProgress': return 'px-2 py-0.5 rounded text-[10px] bg-yellow-900/50 text-yellow-400 uppercase tracking-wider border border-yellow-700/50';
+    case 'Cancel': return 'px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 uppercase tracking-wider border border-slate-600';
+    case 'Waiting': default: return 'px-2 py-0.5 rounded text-[10px] bg-blue-900/50 text-blue-400 uppercase tracking-wider border border-blue-700/50';
   }
 }
 
 function SlaBadge({ dueDate, status }: { dueDate: string; status: string }) {
-  if (status === 'Completed' || status === 'Cancel') return <span className="label label-default">closed</span>;
+  if (status === 'Completed' || status === 'Cancel') return <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 border border-slate-600 uppercase">closed</span>;
   const due = new Date(dueDate).getTime();
   const diffDays = Math.ceil((due - Date.now()) / 86400000);
-  if (diffDays < 0) return <span className="label label-danger">overdue {Math.abs(diffDays)}d</span>;
-  if (diffDays <= 1) return <span className="label label-warning">due soon</span>;
-  return <span className="label label-success">{diffDays}d left</span>;
+  if (diffDays < 0) return <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-900/50 text-red-400 border border-red-700/50 uppercase">overdue {Math.abs(diffDays)}d</span>;
+  if (diffDays <= 1) return <span className="px-1.5 py-0.5 rounded text-[10px] bg-yellow-900/50 text-yellow-400 border border-yellow-700/50 uppercase">due soon</span>;
+  return <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-900/50 text-green-400 border border-green-700/50 uppercase">{diffDays}d left</span>;
 }
 
 function TaskStatusIcon({ status }: { status: string }) {
@@ -850,45 +1269,52 @@ function RelatedCasesPanel({ relatedCases, filter, setFilter }: {
   }
 
   return (
-    <div className="related-cases-panel" style={{ marginTop: 12 }}>
-      <h4 className="vpad10 text-primary">Linked cases ({relatedCases.length})</h4>
+    <div className="p-6">
+      <h4 className="text-blue-400 font-semibold text-base flex items-center gap-2 mb-6"><i className="fa fa-link"></i> Linked cases ({relatedCases.length})</h4>
       {relatedCases.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          <span className={`label label-lg label-default mr-xxs clickable ${filter === '' ? 'label-primary' : ''}`} onClick={() => setFilter('')}>All ({relatedCases.length})</span>
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === '' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}`} onClick={() => setFilter('')}>All ({relatedCases.length})</button>
           {Object.entries(stats).map(([key, count]) => (
-            <span key={key} className={`label label-lg label-default mr-xxs clickable ${filter === key ? 'label-primary' : ''}`} onClick={() => setFilter(key)}>{key} ({count})</span>
+            <button key={key} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === key ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}`} onClick={() => setFilter(key)}>{key} ({count})</button>
           ))}
         </div>
       )}
-      {filtered.length === 0 && <div className="empty-message">No linked cases</div>}
-      {filtered.map(rc => (
-        <div key={rc.id} className="case-item" style={{ marginBottom: 6, padding: '6px 8px', border: '1px solid #eee', borderRadius: 4 }}>
-          <div className={`case-tlp bg-tlp-${rc.tlp}`} style={{ width: 4, display: 'inline-block', marginRight: 6 }} />
-          <a href={`/cases/${rc.id}`}>#{rc.number} - {rc.title}</a>
-          <SeverityInline value={rc.severity} />
-          {rc.status !== 'Open' && (
-            <small className="text-success" style={{ marginLeft: 8 }}>
-              (Closed at {rc.end_date ? new Date(rc.end_date).toLocaleDateString() : '?'} as <strong>{rc.resolution_status ?? rc.status}</strong>)
-            </small>
-          )}
-          <div className="text-muted text-xs">
-            {rc.start_date && <span><i className="fa fa-clock-o" /> {caseDuration(rc.start_date, rc.end_date)}</span>}
-            {' · '}{rc.links_count} linked observable(s)
+      {filtered.length === 0 && <div className="p-4 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No linked cases</div>}
+      <div className="space-y-3">
+        {filtered.map(rc => (
+          <div key={rc.id} className="relative bg-slate-800 border border-slate-700 rounded-lg p-4 shadow-sm hover:border-slate-600 transition-colors pl-5 overflow-hidden">
+            <div className={`absolute left-0 top-0 bottom-0 w-1 bg-tlp-${rc.tlp}`} />
+            <div className="flex flex-wrap items-center gap-3 mb-1">
+              <a href={`/cases/${rc.id}`} className="font-medium text-blue-400 hover:text-blue-300 hover:underline">#{String(rc.number).padStart(7, '0')} - {rc.title}</a>
+              <SeverityInline value={rc.severity} />
+              {rc.status !== 'Open' && (
+                <small className="text-green-500 ml-auto">
+                  (Closed at {rc.end_date ? new Date(rc.end_date).toLocaleDateString() : '?'} as <strong className="font-bold">{rc.resolution_status ?? rc.status}</strong>)
+                </small>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-slate-400 text-xs mb-2">
+              {rc.start_date && <span className="flex items-center gap-1"><i className="fa fa-clock-o" /> {caseDuration(rc.start_date, rc.end_date)}</span>}
+              <span className="flex items-center gap-1"><i className="fa fa-link" /> {rc.links_count} linked observable(s)</span>
+            </div>
+            {rc.merged_from && rc.merged_from.length > 0 && (
+              <div className="text-red-400 text-xs mb-2 p-2 bg-red-900/10 border border-red-900/30 rounded">
+                Merged from {rc.merged_from.map((mf, i) => <span key={mf}>{i > 0 ? ' and ' : ''}<a href={`/cases/${mf}`} className="hover:underline">Case #{mf.slice(0, 8)}</a></span>)}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {rc.linked_observables?.slice(0, 3).map(lo => (
+                <div key={lo.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-900 border border-slate-700 rounded text-xs text-slate-300">
+                  <span className="px-1 py-0.5 bg-blue-900/50 text-blue-400 rounded text-[10px] leading-none uppercase tracking-wider">{lo.data_type}</span>
+                  <span className="truncate max-w-[150px]">{lo.data}</span>
+                  {lo.ioc && <i className="fa fa-bullseye text-red-500" title="IOC" />}
+                </div>
+              ))}
+              {rc.linked_observables && rc.linked_observables.length > 3 && <div className="inline-flex items-center px-2 py-1 text-xs text-slate-500">+{rc.linked_observables.length - 3} more</div>}
+            </div>
           </div>
-          {rc.merged_from && rc.merged_from.length > 0 && (
-            <div className="text-danger" style={{ fontSize: '0.8em' }}>
-              <small>Merged from {rc.merged_from.map((mf, i) => <span key={mf}>{i > 0 ? ' and ' : ''}<a href={`/cases/${mf}`}>Case #{mf.slice(0, 8)}</a></span>)}</small>
-            </div>
-          )}
-          {rc.linked_observables?.slice(0, 3).map(lo => (
-            <div key={lo.id} className="text-xs" style={{ marginLeft: 12 }}>
-              <span className="label label-info" style={{ fontSize: '0.65rem' }}>{lo.data_type}</span> {lo.data}
-              {lo.ioc && <i className="fa fa-bullseye text-danger" style={{ marginLeft: 4, fontSize: '0.65rem' }} />}
-            </div>
-          ))}
-          {rc.linked_observables && rc.linked_observables.length > 3 && <div className="text-xs text-muted" style={{ marginLeft: 12 }}>+{rc.linked_observables.length - 3} more</div>}
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
@@ -898,29 +1324,38 @@ function ResponderActionsPanel({ actions }: { actions: ResponderAction[] }) {
   if (!actions.length) return null;
   const statusClass = (s: string) => {
     switch (s) {
-      case 'Success': return 'label label-success';
-      case 'InProgress': return 'label label-warning';
-      case 'Waiting': return 'label label-info';
-      case 'Failure': return 'label label-danger';
-      default: return 'label label-default';
+      case 'Success': return 'px-2 py-0.5 bg-green-900/30 text-green-400 border border-green-700/50 rounded text-[10px] uppercase tracking-wider';
+      case 'InProgress': return 'px-2 py-0.5 bg-yellow-900/30 text-yellow-400 border border-yellow-700/50 rounded text-[10px] uppercase tracking-wider';
+      case 'Waiting': return 'px-2 py-0.5 bg-blue-900/30 text-blue-400 border border-blue-700/50 rounded text-[10px] uppercase tracking-wider';
+      case 'Failure': return 'px-2 py-0.5 bg-red-900/30 text-red-400 border border-red-700/50 rounded text-[10px] uppercase tracking-wider';
+      default: return 'px-2 py-0.5 bg-slate-700 text-slate-300 border border-slate-600 rounded text-[10px] uppercase tracking-wider';
     }
   };
   return (
-    <div className="responder-actions-panel" style={{ marginTop: 12 }}>
-      <h4 className="vpad10 text-primary">Responder jobs ({actions.length})</h4>
-      <table className="table table-striped table-condensed">
-        <thead><tr><th>Responder</th><th>Status</th><th>Started</th><th>Message</th></tr></thead>
-        <tbody>
-          {actions.map(a => (
-            <tr key={a.id}>
-              <td>{a.responder_name || a.responder_id}</td>
-              <td><span className={statusClass(a.status)}>{a.status}</span></td>
-              <td>{a.start_date ? new Date(a.start_date).toLocaleString() : '—'}</td>
-              <td>{a.operations?.map(o => o.message).filter(Boolean).join('; ') || '—'}</td>
+    <div className="mt-6">
+      <h4 className="text-blue-400/80 font-medium text-sm mb-3">Responder jobs ({actions.length})</h4>
+      <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden">
+        <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
+          <thead>
+            <tr className="bg-slate-900 border-b border-slate-700 text-slate-400">
+              <th className="px-4 py-3">Responder</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Started</th>
+              <th className="px-4 py-3">Message</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {actions.map(a => (
+              <tr key={a.id} className="hover:bg-slate-800/50 transition-colors">
+                <td className="px-4 py-3 text-slate-200">{a.responder_name || a.responder_id}</td>
+                <td className="px-4 py-3"><span className={statusClass(a.status)}>{a.status}</span></td>
+                <td className="px-4 py-3 text-slate-400">{a.start_date ? new Date(a.start_date).toLocaleString() : '—'}</td>
+                <td className="px-4 py-3 text-slate-300 whitespace-normal">{a.operations?.map(o => o.message).filter(Boolean).join('; ') || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -948,48 +1383,52 @@ function CaseAlertsTab({ alerts }: { alerts: CaseAlert[] }) {
   }
 
   return (<>
-    <div className="case-tab-toolbar">
-      <h3 className="detail-section-title" style={{ margin: 0 }}>Linked alerts ({alerts.length})</h3>
+    <div className="flex justify-between items-center mb-4">
+      <h3 className="text-blue-400/80 font-medium text-sm m-0">Linked alerts ({alerts.length})</h3>
     </div>
     {alerts.length > 0 && (
-      <div style={{ marginBottom: 8 }}>
-        <span className={`label label-lg label-default mr-xxs clickable ${filter === '' ? 'label-primary' : ''}`} onClick={() => setFilter('')}>All ({alerts.length})</span>
-        <strong>Type: </strong>
+      <div className="flex flex-wrap gap-2 mb-6 items-center">
+        <button className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === '' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}`} onClick={() => setFilter('')}>All ({alerts.length})</button>
+        <span className="text-slate-500 text-sm ml-2 mr-1 font-medium">Type:</span>
         {Object.entries(typeStats).map(([k, v]) => (
-          <span key={k} className={`label label-lg label-default mr-xxs clickable ${filter === k ? 'label-primary' : ''}`} onClick={() => setFilter(k)}>{k} ({v})</span>
+          <button key={k} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === k ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}`} onClick={() => setFilter(k)}>{k} ({v})</button>
         ))}
-        <strong style={{ marginLeft: 8 }}>Source: </strong>
+        <span className="text-slate-500 text-sm ml-2 mr-1 font-medium">Source:</span>
         {Object.entries(sourceStats).map(([k, v]) => (
-          <span key={k} className={`label label-lg label-default mr-xxs clickable ${filter === k ? 'label-primary' : ''}`} onClick={() => setFilter(k)}>{k} ({v})</span>
+          <button key={k} className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === k ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 border border-slate-700'}`} onClick={() => setFilter(k)}>{k} ({v})</button>
         ))}
       </div>
     )}
-    {sorted.length === 0 && <div className="empty-message">No alerts linked to this case.</div>}
+    {sorted.length === 0 && <div className="p-8 text-center text-slate-500 border border-dashed border-slate-700 rounded-lg">No alerts linked to this case.</div>}
     {sorted.length > 0 && (
-      <table className="table tbody-stripped case-list">
-        <thead><tr>
-          <th style={{ width: 150 }}><button className="text-default sort-btn" onClick={() => toggleSort('source_ref')}>Reference {sortField === 'source_ref' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
-          <th style={{ width: 160 }}><button className="text-default sort-btn" onClick={() => toggleSort('type')}>Type {sortField === 'type' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
-          <th><button className="text-default sort-btn" onClick={() => toggleSort('title')}>Title {sortField === 'title' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
-          <th style={{ width: 150 }}><button className="text-default sort-btn" onClick={() => toggleSort('source')}>Source {sortField === 'source' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
-          <th style={{ width: 80 }}><button className="text-default sort-btn" onClick={() => toggleSort('severity')}>Severity {sortField === 'severity' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
-          <th style={{ width: 80 }}>Attributes</th>
-          <th style={{ width: 160 }}><button className="text-default sort-btn" onClick={() => toggleSort('created_at')}>Date {sortField === 'created_at' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
-        </tr></thead>
-        <tbody>
-          {sorted.map(a => (
-            <tr key={a.id}>
-              <td className="wrap"><strong>{a.source_ref}</strong></td>
-              <td><a href={`/alerts/${a.id}`}>{a.type}</a></td>
-              <td className="wrap"><a href={`/alerts/${a.id}`}>{a.title}</a><TagList data={a.tags} /></td>
-              <td>{a.source}</td>
-              <td><SeverityInline value={a.severity} /></td>
-              <td className="text-center">{a.tags?.length ?? 0}</td>
-              <td>{new Date(a.created_at).toLocaleString()}</td>
+      <div className="bg-slate-800 rounded-lg shadow-md border border-slate-700 overflow-hidden">
+        <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
+          <thead>
+            <tr className="bg-slate-900 border-b border-slate-700 text-slate-400">
+              <th className="px-4 py-3"><button className="text-slate-400 hover:text-blue-400 font-medium" onClick={() => toggleSort('source_ref')}>Reference {sortField === 'source_ref' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
+              <th className="px-4 py-3"><button className="text-slate-400 hover:text-blue-400 font-medium" onClick={() => toggleSort('type')}>Type {sortField === 'type' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
+              <th className="px-4 py-3"><button className="text-slate-400 hover:text-blue-400 font-medium" onClick={() => toggleSort('title')}>Title {sortField === 'title' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
+              <th className="px-4 py-3"><button className="text-slate-400 hover:text-blue-400 font-medium" onClick={() => toggleSort('source')}>Source {sortField === 'source' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
+              <th className="px-4 py-3"><button className="text-slate-400 hover:text-blue-400 font-medium" onClick={() => toggleSort('severity')}>Severity {sortField === 'severity' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
+              <th className="px-4 py-3 text-center text-slate-400 font-medium">Attributes</th>
+              <th className="px-4 py-3"><button className="text-slate-400 hover:text-blue-400 font-medium" onClick={() => toggleSort('created_at')}>Date {sortField === 'created_at' && (sortDir === 'ASC' ? '▲' : '▼')}</button></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-slate-800">
+            {sorted.map(a => (
+              <tr key={a.id} className="hover:bg-slate-800/50 transition-colors">
+                <td className="px-4 py-3 text-slate-200 font-medium whitespace-normal break-words max-w-[150px]">{a.source_ref}</td>
+                <td className="px-4 py-3"><a href={`/alerts/${a.id}`} className="px-2 py-0.5 bg-slate-700 text-slate-300 rounded text-xs hover:bg-slate-600 transition-colors">{a.type}</a></td>
+                <td className="px-4 py-3 whitespace-normal break-words max-w-sm"><a href={`/alerts/${a.id}`} className="font-medium text-blue-400 hover:text-blue-300 hover:underline">{a.title}</a><div className="mt-1"><TagList data={a.tags} /></div></td>
+                <td className="px-4 py-3 text-slate-300">{a.source}</td>
+                <td className="px-4 py-3"><SeverityInline value={a.severity} /></td>
+                <td className="px-4 py-3 text-center text-slate-400">{a.tags?.length ?? 0}</td>
+                <td className="px-4 py-3 text-slate-400">{new Date(a.created_at).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     )}
   </>);
 }

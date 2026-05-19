@@ -60,7 +60,7 @@ export default function ObservableDetailPage() {
   const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login');
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
     if (!login) router.replace('/login');
     else setAuthedLogin(login);
   }, [router]);
@@ -142,397 +142,457 @@ export default function ObservableDetailPage() {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar user={me.data ?? { login: authedLogin }} />
-        <main className="content-wrapper flex-1">
-          <section className="content-header">
-            <h1>
-              {obs?.data_type && <span className="label label-primary mr-1">{obs.data_type}</span>}
-              {obs?.full_data || obs?.data || 'Observable'}
-              <small> observable detail</small>
-            </h1>
-            <ol className="breadcrumb">
-              <li>Home</li>
-              <li>Investigation</li>
-              <li>Observables</li>
-              <li className="active">{obs?.data || params.id}</li>
-            </ol>
-          </section>
+        <main className="flex-1 p-6 overflow-y-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-100 mb-2 flex items-center gap-2">
+                {obs?.data_type && <span className="px-2 py-0.5 bg-blue-900/50 text-blue-400 border border-blue-700/50 rounded text-xs uppercase tracking-wider">{obs.data_type}</span>}
+                <span className="truncate max-w-[400px]">{obs?.full_data || obs?.data || 'Observable'}</span>
+                <span className="text-slate-400 font-normal text-lg">detail</span>
+              </h1>
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <span>Home</span>
+                <span className="text-slate-600">/</span>
+                <span>Investigation</span>
+                <span className="text-slate-600">/</span>
+                <span>Observables</span>
+                <span className="text-slate-600">/</span>
+                <span className="text-blue-400 truncate max-w-[200px]">{obs?.data || params.id}</span>
+              </div>
+            </div>
+          </div>
 
-          <section className="content observable-detail-page">
-            {actionError && <div className="admin-alert error">{actionError}</div>}
+          <div className="flex flex-col">
+            {actionError && <div className="mb-6 p-4 bg-red-900/30 border border-red-700/50 text-red-400 rounded-lg text-sm">{actionError}</div>}
 
-            <div className="case-detail-layout">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
               {/* Main content */}
-              <section className="nav-tabs-custom case-main-tabset">
+              <div className="lg:col-span-3 flex flex-col gap-6">
                 {/* Observable banner */}
-                <div className="box box-primary observable-banner">
-                  <div className="box-header with-border case-panelinfo-header">
-                    <h3 className="box-title text-primary">
-                      <Eye size={15} className="mr-1" />
-                      {obs?.data_type && <span className="label label-primary mr-1">{obs.data_type}</span>}
-                      {obs?.full_data || obs?.data || '…'}
+                <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl overflow-hidden shadow-lg flex flex-col relative">
+                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-tlp-${obs?.tlp ?? 2}`} />
+                  <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50 pl-8">
+                    <h3 className="font-semibold text-slate-100 flex items-center gap-2 truncate max-w-[70%]">
+                      <Eye size={16} className="text-blue-500" />
+                      {obs?.data_type && <span className="px-1.5 py-0.5 bg-blue-900/50 text-blue-400 rounded text-[10px] uppercase tracking-wider border border-blue-700/50">{obs.data_type}</span>}
+                      <span className="truncate">{obs?.full_data || obs?.data || '…'}</span>
                     </h3>
-                    <div className="box-tools pull-right">
+                    <div className="flex items-center gap-3 shrink-0">
                       <ObservableFlags observable={{ ioc: obs?.ioc, sighted: obs?.sighted, ignore_similarity: obs?.ignore_similarity }} />
-                      <Tlp value={obs?.tlp ?? 2} />
+                      <Tlp value={obs?.tlp ?? 2} format="static" />
                     </div>
                   </div>
-                  <div className="box-body case-panelinfo-body">
-                    <span><strong>Type</strong> {obs?.data_type || '—'}</span>
-                    <span><strong>TLP</strong> TLP:{tlpLabel(obs?.tlp ?? 2)}</span>
-                    <span><strong>IOC</strong> {obs?.ioc ? 'Yes' : 'No'}</span>
-                    <span><strong>Sighted</strong> {obs?.sighted ? 'Yes' : 'No'}</span>
-                    <span><strong>Added</strong> {obs ? new Date(obs.created_at).toLocaleString() : '—'}</span>
-                    <span><strong>By</strong> {obs?.created_by || '—'}</span>
+                  <div className="p-6 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 text-sm bg-slate-800 pl-8">
+                    <div className="flex flex-col gap-1"><span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Type</span><span className="text-slate-200">{obs?.data_type || '—'}</span></div>
+                    <div className="flex flex-col gap-1"><span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">TLP</span><span className={`text-tlp-${obs?.tlp ?? 2} font-medium`}>{tlpLabel(obs?.tlp ?? 2)}</span></div>
+                    <div className="flex flex-col gap-1"><span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">IOC</span><span className={obs?.ioc ? 'text-red-400 font-medium' : 'text-slate-400'}>{obs?.ioc ? 'Yes' : 'No'}</span></div>
+                    <div className="flex flex-col gap-1"><span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Sighted</span><span className={obs?.sighted ? 'text-blue-400 font-medium' : 'text-slate-400'}>{obs?.sighted ? 'Yes' : 'No'}</span></div>
+                    <div className="flex flex-col gap-1"><span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Added</span><span className="text-slate-200">{obs ? new Date(obs.created_at).toLocaleString() : '—'}</span></div>
+                    <div className="flex flex-col gap-1"><span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">By</span><span className="text-slate-200">{obs?.created_by || '—'}</span></div>
                   </div>
                 </div>
 
                 {/* Tabs */}
-                <ul className="nav nav-tabs detail-tab-strip">
-                  {TABS.map(tab => (
-                    <li key={tab} className={activeTab === tab ? 'active' : ''}>
-                      <button type="button" onClick={() => setActiveTab(tab)}>
+                <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl overflow-hidden shadow-lg">
+                  <div className="flex overflow-x-auto border-b border-slate-700 bg-slate-900/30 custom-scrollbar">
+                    {TABS.map(tab => (
+                      <button
+                        key={tab}
+                        type="button"
+                        className={`px-5 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex items-center gap-2 ${
+                          activeTab === tab
+                            ? 'border-blue-500 text-blue-400 bg-slate-800'
+                            : 'border-transparent text-slate-400 hover:text-slate-200 hover:border-slate-600 hover:bg-slate-800/50'
+                        }`}
+                        onClick={() => setActiveTab(tab)}
+                      >
                         {tab}
-                        {tab === 'Analyzers' && <span className="badge">{jobs.length}</span>}
+                        {tab === 'Analyzers' && <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px]">{jobs.length}</span>}
                       </button>
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                  </div>
 
-                <div className="tab-content case-page-content">
-
-                  {/* ── Summary tab ── */}
-                  {activeTab === 'Summary' && (
-                    <div className="observable-summary-tab">
-                      <h4 className="vpad10 text-primary">
-                        Basic Information
-                        <div className="task-actions pull-right">
-                          {canEdit && (
-                            <button className="btn btn-xs btn-default" onClick={() => setEditingMeta(v => !v)}>
-                              {editingMeta ? 'Cancel' : 'Edit'}
-                            </button>
-                          )}
-                          {canDelete && (
-                            <button className="btn btn-xs btn-danger ml-1" disabled={deleteObs.isPending} onClick={() => deleteObs.mutate()}>
-                              <Trash2 size={12} /> Delete
-                            </button>
-                          )}
-                        </div>
-                      </h4>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>TLP</dt>
-                        <dd>
-                          {canEdit ? (
-                            <span className="clickable" onClick={() => patchObs.mutate({ tlp: ((obs?.tlp ?? 2) + 1) % 4 })}>
-                              <Tlp value={obs?.tlp ?? 2} />
-                            </span>
-                          ) : (
-                            <Tlp value={obs?.tlp ?? 2} />
-                          )}
-                        </dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Data type</dt>
-                        <dd><span className="label label-primary">{obs?.data_type || '—'}</span></dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Data</dt>
-                        <dd className="mono wrap">{obs?.data || '—'}</dd>
-                      </dl>
-
-                      {obs?.full_data && (
-                        <dl className="dl-horizontal clear">
-                          <dt>Full data</dt>
-                          <dd className="mono wrap text-muted">{obs.full_data}</dd>
-                        </dl>
-                      )}
-
-                      {obs?.data_hash && (
-                        <dl className="dl-horizontal clear">
-                          <dt>Hash</dt>
-                          <dd className="mono">{obs.data_hash}</dd>
-                        </dl>
-                      )}
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Date added</dt>
-                        <dd>{obs ? new Date(obs.created_at).toLocaleString() : '—'}</dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Is IOC</dt>
-                        <dd>
-                          {canEdit ? (
-                            <span className="clickable" title="Toggle IOC" onClick={() => toggleField('ioc')}>
-                              {obs?.ioc ? <Star size={16} className="text-primary" /> : <StarOff size={16} className="text-muted" />}
-                            </span>
-                          ) : (
-                            obs?.ioc ? <Star size={16} className="text-primary" /> : <StarOff size={16} className="text-muted" />
-                          )}
-                        </dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Has been sighted</dt>
-                        <dd>
-                          {canEdit ? (
-                            <span className="clickable" title="Toggle sighted" onClick={() => toggleField('sighted')}>
-                              {obs?.sighted ? <ToggleRight size={20} className="text-primary" /> : <ToggleLeft size={20} className="text-muted" />}
-                            </span>
-                          ) : (
-                            obs?.sighted ? <ToggleRight size={20} className="text-primary" /> : <ToggleLeft size={20} className="text-muted" />
-                          )}
-                        </dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Ignored for similarity</dt>
-                        <dd>
-                          {canEdit ? (
-                            <span className="clickable" title="Toggle ignore similarity" onClick={() => toggleField('ignore_similarity')}>
-                              {obs?.ignore_similarity ? <Unlink size={16} className="text-warning" /> : <Link size={16} className="text-muted" />}
-                            </span>
-                          ) : (
-                            obs?.ignore_similarity ? <Unlink size={16} className="text-warning" /> : <Link size={16} className="text-muted" />
-                          )}
-                        </dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Tags</dt>
-                        <dd>
-                          {editingMeta ? (
-                            <input className="thehive-input" value={editTags} onChange={e => setEditTags(e.target.value)} placeholder="tag1, tag2" />
-                          ) : (
-                            <TagList data={obs?.tags ?? []} />
-                          )}
-                        </dd>
-                      </dl>
-
-                      <dl className="dl-horizontal clear">
-                        <dt>Message</dt>
-                        <dd>
-                          {editingMeta ? (
-                            <textarea className="thehive-input" rows={3} value={editMessage} onChange={e => setEditMessage(e.target.value)} />
-                          ) : (
-                            <span className="description-pane">{obs?.message || <em className="text-muted">No message</em>}</span>
-                          )}
-                        </dd>
-                      </dl>
-
-                      {editingMeta && (
-                        <div className="btn-toolbar mt-2">
-                          <button className="btn btn-primary btn-sm" disabled={patchObs.isPending} onClick={saveMeta}>Save</button>
-                          <button className="btn btn-default btn-sm ml-1" onClick={() => setEditingMeta(false)}>Cancel</button>
-                        </div>
-                      )}
-
-                      {obs?.attachment_id && (
-                        <dl className="dl-horizontal clear">
-                          <dt>Attachment</dt>
-                          <dd className="mono">{obs.attachment_id}</dd>
-                        </dl>
-                      )}
-                    </div>
-                  )}
-
-                  {/* ── Analyzers tab ── */}
-                  {activeTab === 'Analyzers' && (
-                    <div className="observable-analyzers-tab">
-                      {canAnalyze && (
-                        <div className="box box-default analyzer-run-box">
-                          <div className="box-header with-border">
-                            <h3 className="box-title"><Play size={14} /> Run analyzer</h3>
-                          </div>
-                          <div className="box-body integration-form-grid">
-                            <select
-                              className="thehive-input"
-                              value={selectedAnalyzer}
-                              onChange={e => setSelectedAnalyzer(e.target.value)}
-                            >
-                              <option value="">Select analyzer…</option>
-                              {(analyzers.data ?? []).map(a => (
-                                <option key={a.analyzer_id} value={a.analyzer_id}>
-                                  {a.name} ({a.version})
-                                </option>
-                              ))}
-                            </select>
-                            <button
-                              className="btn btn-primary"
-                              disabled={!selectedAnalyzer || analyzeMut.isPending}
-                              onClick={() => analyzeMut.mutate(selectedAnalyzer)}
-                            >
-                              {analyzeMut.isPending ? 'Submitting…' : 'Analyze'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      <table className="thehive-table adminlte-table observable-report-table">
-                        <thead>
-                          <tr>
-                            <th>Analyzer</th>
-                            <th>Status</th>
-                            <th>Started</th>
-                            <th>Finished</th>
-                            <th>Summary</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {jobs.map(j => (
-                            <tr key={j.id} className="clickable" onClick={() => { setReportJob(j); setShowReport(true); }} style={{ cursor: 'pointer' }}>
-                              <td>{j.analyzer_id}</td>
-                              <td>
-                                <span className={
-                                  j.status === 'Success' ? 'label label-success' :
-                                  j.status === 'Failure' ? 'label label-danger' :
-                                  j.status === 'InProgress' ? 'label label-warning' :
-                                  'label label-default'
-                                }>{j.status}</span>
-                              </td>
-                              <td>{j.started_at ? new Date(j.started_at).toLocaleString() : '—'}</td>
-                              <td>{j.finished_at ? new Date(j.finished_at).toLocaleString() : '—'}</td>
-                              <td className="wrap mono text-xs">
-                                {j.report ? (() => {
-                                  try {
-                                    const r = JSON.parse(j.report);
-                                    return r?.summary?.taxonomies?.map((t: { level: string; namespace: string; predicate: string; value: string }, i: number) => (
-                                      <span key={i} className={`label label-${t.level === 'malicious' ? 'danger' : t.level === 'suspicious' ? 'warning' : 'info'} mr-1`}>
-                                        {t.namespace}:{t.predicate}={t.value}
-                                      </span>
-                                    )) ?? j.report.slice(0, 200);
-                                  } catch { return j.report.slice(0, 200); }
-                                })() : '—'}
-                              </td>
-                            </tr>
-                          ))}
-                          {!jobs.length && (
-                            <tr><td colSpan={5} className="empty-message">No analyzer reports yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  {/* ── Sharing tab ── */}
-                  {activeTab === 'Sharing' && (
-                    <div className="observable-sharing-tab">
-                      <div className="box box-default">
-                        <div className="box-header with-border">
-                          <h3 className="box-title"><Share2 size={14} /> Observable sharing</h3>
-                        </div>
-                        <div className="box-body">
-                          <p className="text-muted">
-                            Observable sharing follows the parent case sharing rules.
-                            {obs?.case_id && (
-                              <> See <a href={`/cases/${obs.case_id}`}>case shares</a> to manage access.</>
+                  <div className="p-6">
+                    {/* ── Summary tab ── */}
+                    {activeTab === 'Summary' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="flex justify-between items-center mb-6">
+                          <h4 className="text-blue-500 font-medium text-lg">Basic Information</h4>
+                          <div className="flex gap-2">
+                            {canEdit && (
+                              <button className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 border border-slate-600 rounded-md text-sm transition-colors shadow-sm" onClick={() => setEditingMeta(v => !v)}>
+                                {editingMeta ? 'Cancel' : 'Edit Meta'}
+                              </button>
                             )}
-                          </p>
-                          <dl className="dl-horizontal">
-                            <dt>Case ID</dt>
-                            <dd>{obs?.case_id ? <a href={`/cases/${obs.case_id}`}>{obs.case_id}</a> : '—'}</dd>
-                            <dt>Alert ID</dt>
-                            <dd>{obs?.alert_id || '—'}</dd>
-                          </dl>
+                            {canDelete && (
+                              <button className="px-3 py-1.5 bg-red-900/40 hover:bg-red-900/60 text-red-400 border border-red-700/50 rounded-md text-sm transition-colors shadow-sm flex items-center gap-1.5" disabled={deleteObs.isPending} onClick={() => deleteObs.mutate()}>
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">TLP</span>
+                            <div>
+                              {canEdit ? (
+                                <button className="hover:opacity-80 transition-opacity focus:outline-none" onClick={() => patchObs.mutate({ tlp: ((obs?.tlp ?? 2) + 1) % 4 })}>
+                                  <Tlp value={obs?.tlp ?? 2} format="static" />
+                                </button>
+                              ) : (
+                                <Tlp value={obs?.tlp ?? 2} format="static" />
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Data type</span>
+                            <div><span className="px-2 py-0.5 bg-blue-900/50 text-blue-400 rounded text-[10px] uppercase tracking-wider border border-blue-700/50">{obs?.data_type || '—'}</span></div>
+                          </div>
+
+                          <div className="flex flex-col gap-1 md:col-span-2">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Data</span>
+                            <div className="font-mono text-slate-200 break-all bg-slate-900/50 p-3 rounded border border-slate-700/50">{obs?.data || '—'}</div>
+                          </div>
+
+                          {obs?.full_data && (
+                            <div className="flex flex-col gap-1 md:col-span-2">
+                              <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Full data</span>
+                              <div className="font-mono text-slate-400 break-all bg-slate-900/50 p-3 rounded border border-slate-700/50">{obs.full_data}</div>
+                            </div>
+                          )}
+
+                          {obs?.data_hash && (
+                            <div className="flex flex-col gap-1 md:col-span-2">
+                              <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Hash</span>
+                              <div className="font-mono text-slate-300">{obs.data_hash}</div>
+                            </div>
+                          )}
+
+                          <div className="flex flex-col gap-1">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Date added</span>
+                            <span className="text-slate-200">{obs ? new Date(obs.created_at).toLocaleString() : '—'}</span>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Is IOC</span>
+                            <div>
+                              {canEdit ? (
+                                <button className="hover:opacity-80 focus:outline-none flex items-center gap-2" title="Toggle IOC" onClick={() => toggleField('ioc')}>
+                                  {obs?.ioc ? <Star size={18} className="text-red-500" /> : <StarOff size={18} className="text-slate-500" />}
+                                  <span className={obs?.ioc ? 'text-red-400' : 'text-slate-400'}>{obs?.ioc ? 'Yes' : 'No'}</span>
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  {obs?.ioc ? <Star size={18} className="text-red-500" /> : <StarOff size={18} className="text-slate-500" />}
+                                  <span className={obs?.ioc ? 'text-red-400' : 'text-slate-400'}>{obs?.ioc ? 'Yes' : 'No'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Has been sighted</span>
+                            <div>
+                              {canEdit ? (
+                                <button className="hover:opacity-80 focus:outline-none flex items-center gap-2" title="Toggle sighted" onClick={() => toggleField('sighted')}>
+                                  {obs?.sighted ? <ToggleRight size={22} className="text-blue-500" /> : <ToggleLeft size={22} className="text-slate-500" />}
+                                  <span className={obs?.sighted ? 'text-blue-400' : 'text-slate-400'}>{obs?.sighted ? 'Yes' : 'No'}</span>
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  {obs?.sighted ? <ToggleRight size={22} className="text-blue-500" /> : <ToggleLeft size={22} className="text-slate-500" />}
+                                  <span className={obs?.sighted ? 'text-blue-400' : 'text-slate-400'}>{obs?.sighted ? 'Yes' : 'No'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Ignored for similarity</span>
+                            <div>
+                              {canEdit ? (
+                                <button className="hover:opacity-80 focus:outline-none flex items-center gap-2" title="Toggle ignore similarity" onClick={() => toggleField('ignore_similarity')}>
+                                  {obs?.ignore_similarity ? <Unlink size={16} className="text-yellow-500" /> : <Link size={16} className="text-slate-500" />}
+                                  <span className={obs?.ignore_similarity ? 'text-yellow-400' : 'text-slate-400'}>{obs?.ignore_similarity ? 'Ignored' : 'Not ignored'}</span>
+                                </button>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  {obs?.ignore_similarity ? <Unlink size={16} className="text-yellow-500" /> : <Link size={16} className="text-slate-500" />}
+                                  <span className={obs?.ignore_similarity ? 'text-yellow-400' : 'text-slate-400'}>{obs?.ignore_similarity ? 'Ignored' : 'Not ignored'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1 md:col-span-2">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Tags</span>
+                            <div>
+                              {editingMeta ? (
+                                <input className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full md:w-1/2" value={editTags} onChange={e => setEditTags(e.target.value)} placeholder="tag1, tag2" />
+                              ) : (
+                                <TagList data={obs?.tags ?? []} />
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1 md:col-span-2">
+                            <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Message</span>
+                            <div>
+                              {editingMeta ? (
+                                <textarea className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full" rows={3} value={editMessage} onChange={e => setEditMessage(e.target.value)} />
+                              ) : (
+                                <span className="text-slate-300 whitespace-pre-wrap">{obs?.message || <em className="text-slate-500 not-italic">No message</em>}</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {editingMeta && (
+                            <div className="flex gap-2 md:col-span-2">
+                              <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50" disabled={patchObs.isPending} onClick={saveMeta}>Save</button>
+                              <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors shadow-sm" onClick={() => setEditingMeta(false)}>Cancel</button>
+                            </div>
+                          )}
+
+                          {obs?.attachment_id && (
+                            <div className="flex flex-col gap-1 md:col-span-2">
+                              <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Attachment ID</span>
+                              <span className="font-mono text-slate-300">{obs.attachment_id}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* ── Attachments tab ── */}
-                  {activeTab === 'Attachments' && (
-                    <AttachmentPanel user={me.data} observableId={params.id} title="Observable attachments" />
-                  )}
+                    {/* ── Analyzers tab ── */}
+                    {activeTab === 'Analyzers' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        {canAnalyze && (
+                          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-5 mb-6">
+                            <h3 className="text-slate-200 font-medium mb-4 flex items-center gap-2"><Play size={14} className="text-blue-500" /> Run analyzer</h3>
+                            <div className="flex flex-col md:flex-row gap-3 items-end">
+                              <div className="flex-1 w-full">
+                                <label className="block text-slate-500 text-xs mb-1.5 uppercase tracking-wider font-semibold">Select Analyzer</label>
+                                <select
+                                  className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  value={selectedAnalyzer}
+                                  onChange={e => setSelectedAnalyzer(e.target.value)}
+                                >
+                                  <option value="">Select analyzer…</option>
+                                  {(analyzers.data ?? []).map(a => (
+                                    <option key={a.analyzer_id} value={a.analyzer_id}>
+                                      {a.name} ({a.version})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 w-full md:w-auto h-[38px] flex items-center justify-center whitespace-nowrap"
+                                disabled={!selectedAnalyzer || analyzeMut.isPending}
+                                onClick={() => analyzeMut.mutate(selectedAnalyzer)}
+                              >
+                                {analyzeMut.isPending ? 'Submitting…' : 'Run Analyzer'}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-900/30">
+                          <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
+                            <thead>
+                              <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-400">
+                                <th className="px-4 py-3 font-medium">Analyzer</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">Started</th>
+                                <th className="px-4 py-3 font-medium">Finished</th>
+                                <th className="px-4 py-3 font-medium w-full">Summary</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800/50">
+                              {jobs.map(j => (
+                                <tr key={j.id} className="hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => { setReportJob(j); setShowReport(true); }}>
+                                  <td className="px-4 py-3 text-slate-200 font-medium">{j.analyzer_id}</td>
+                                  <td className="px-4 py-3">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${
+                                      j.status === 'Success' ? 'bg-green-900/50 text-green-400 border-green-700/50' :
+                                      j.status === 'Failure' ? 'bg-red-900/50 text-red-400 border-red-700/50' :
+                                      j.status === 'InProgress' ? 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50' :
+                                      'bg-slate-700 text-slate-300 border-slate-600'
+                                    }`}>{j.status}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-slate-400">{j.started_at ? new Date(j.started_at).toLocaleString() : '—'}</td>
+                                  <td className="px-4 py-3 text-slate-400">{j.finished_at ? new Date(j.finished_at).toLocaleString() : '—'}</td>
+                                  <td className="px-4 py-3 text-slate-300 whitespace-normal text-xs font-mono">
+                                    {j.report ? (() => {
+                                      try {
+                                        const r = JSON.parse(j.report);
+                                        return r?.summary?.taxonomies?.map((t: { level: string; namespace: string; predicate: string; value: string }, i: number) => (
+                                          <span key={i} className={`inline-block mr-1 mb-1 px-1.5 py-0.5 rounded border ${
+                                            t.level === 'malicious' ? 'bg-red-900/50 text-red-400 border-red-700/50' : 
+                                            t.level === 'suspicious' ? 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50' : 
+                                            'bg-blue-900/50 text-blue-400 border-blue-700/50'
+                                          }`}>
+                                            {t.namespace}:{t.predicate}={t.value}
+                                          </span>
+                                        )) ?? j.report.slice(0, 200);
+                                      } catch { return j.report.slice(0, 200); }
+                                    })() : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                              {!jobs.length && (
+                                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 border-t border-dashed border-slate-700">No analyzer reports yet.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Sharing tab ── */}
+                    {activeTab === 'Sharing' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <div className="bg-slate-900/50 rounded-lg border border-slate-700 overflow-hidden">
+                          <div className="px-5 py-4 border-b border-slate-700 flex items-center gap-2">
+                            <Share2 size={16} className="text-blue-500" />
+                            <h3 className="text-slate-200 font-medium">Observable sharing</h3>
+                          </div>
+                          <div className="p-5">
+                            <p className="text-slate-400 text-sm mb-6 bg-slate-800/50 p-3 rounded border border-slate-700/50">
+                              Observable sharing follows the parent case sharing rules.
+                              {obs?.case_id && (
+                                <> See <a href={`/cases/${obs.case_id}`} className="text-blue-400 hover:text-blue-300 hover:underline">case shares</a> to manage access.</>
+                              )}
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Case ID</span>
+                                <span>{obs?.case_id ? <a href={`/cases/${obs.case_id}`} className="text-blue-400 hover:underline">{obs.case_id}</a> : <span className="text-slate-500">—</span>}</span>
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Alert ID</span>
+                                <span>{obs?.alert_id ? <span className="text-slate-200">{obs.alert_id}</span> : <span className="text-slate-500">—</span>}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── Attachments tab ── */}
+                    {activeTab === 'Attachments' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <AttachmentPanel user={me.data} observableId={params.id} title="Observable attachments" />
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </section>
+              </div>
 
               {/* Side panel */}
-              <aside className="box box-primary observable-side-box">
-                <div className="box-header with-border">
-                  <h3 className="box-title"><Activity size={14} /> Flags &amp; tags</h3>
-                </div>
-                <div className="box-body detail-side-list">
-                  <div className="mb-2">
-                    <span
-                      className={`label ${obs?.ioc ? 'label-danger' : 'label-default'} clickable`}
-                      title="Toggle IOC"
-                      onClick={() => canEdit && toggleField('ioc')}
+              <div className="lg:col-span-1 flex flex-col gap-6">
+                <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-lg sticky top-6">
+                  <h3 className="text-slate-100 font-semibold mb-4 pb-2 border-b border-slate-700 flex items-center gap-2">
+                    <Activity size={16} className="text-blue-500" /> Flags &amp; tags
+                  </h3>
+                  
+                  <div className="flex flex-col gap-3">
+                    <button
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${obs?.ioc ? 'bg-red-900/20 border-red-700/50 text-red-400 hover:bg-red-900/40' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                      disabled={!canEdit}
+                      onClick={() => toggleField('ioc')}
                     >
-                      {obs?.ioc ? '★ IOC' : '☆ Not IOC'}
-                    </span>
-                  </div>
-                  <div className="mb-2">
-                    <span
-                      className={`label ${obs?.sighted ? 'label-info' : 'label-default'} clickable`}
-                      title="Toggle sighted"
-                      onClick={() => canEdit && toggleField('sighted')}
+                      <span className="flex items-center gap-2">{obs?.ioc ? <Star size={14} /> : <StarOff size={14} />} {obs?.ioc ? 'IOC' : 'Not IOC'}</span>
+                      {obs?.ioc && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                    </button>
+                    
+                    <button
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${obs?.sighted ? 'bg-blue-900/20 border-blue-700/50 text-blue-400 hover:bg-blue-900/40' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                      disabled={!canEdit}
+                      onClick={() => toggleField('sighted')}
                     >
-                      {obs?.sighted ? '● Sighted' : '○ Not sighted'}
-                    </span>
-                  </div>
-                  <div className="mb-2">
-                    <span
-                      className={`label ${obs?.ignore_similarity ? 'label-warning' : 'label-default'} clickable`}
-                      title="Toggle ignore similarity"
-                      onClick={() => canEdit && toggleField('ignore_similarity')}
-                    >
-                      {obs?.ignore_similarity ? '⛓ Ignore similarity' : '🔗 Similarity on'}
-                    </span>
-                  </div>
-                  <hr />
-                  <div className="mb-1"><strong>TLP</strong></div>
-                  <Tlp value={obs?.tlp ?? 2} />
-                  <hr />
-                  <div className="mb-1"><strong>Tags</strong></div>
-                  <TagList data={obs?.tags ?? []} />
-                </div>
-              </aside>
+                      <span className="flex items-center gap-2">{obs?.sighted ? <ToggleRight size={16} /> : <ToggleLeft size={16} />} {obs?.sighted ? 'Sighted' : 'Not sighted'}</span>
+                      {obs?.sighted && <span className="w-2 h-2 rounded-full bg-blue-500"></span>}
+                    </button>
 
-              {/* Similar Observables Links — mirrors legacy observables/details/summary.html lines 117-153 */}
-              {!obs?.ignore_similarity && (
-                <aside className="box box-default" style={{ marginTop: 12 }}>
-                  <div className="box-header with-border">
-                    <h3 className="box-title"><Link size={14} className="mr-1" /> Links</h3>
+                    <button
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${obs?.ignore_similarity ? 'bg-yellow-900/20 border-yellow-700/50 text-yellow-400 hover:bg-yellow-900/40' : 'bg-slate-900/50 border-slate-700 text-slate-400 hover:bg-slate-800'}`}
+                      disabled={!canEdit}
+                      onClick={() => toggleField('ignore_similarity')}
+                    >
+                      <span className="flex items-center gap-2">{obs?.ignore_similarity ? <Unlink size={14} /> : <Link size={14} />} {obs?.ignore_similarity ? 'Ignore similarity' : 'Similarity on'}</span>
+                    </button>
+
+                    <div className="h-px bg-slate-700 my-1" />
+                    
+                    <div className="flex flex-col gap-2">
+                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">TLP</span>
+                      <div className="flex gap-1">
+                        {[0, 1, 2, 3].map(t => (
+                          <button 
+                            key={t}
+                            onClick={() => canEdit && patchObs.mutate({ tlp: t })}
+                            disabled={!canEdit}
+                            className={`flex-1 h-2 rounded-full ${t === 0 ? 'bg-white' : t === 1 ? 'bg-green-500' : t === 2 ? 'bg-amber-500' : 'bg-red-500'} ${obs?.tlp === t ? 'ring-2 ring-offset-2 ring-offset-slate-800 ring-slate-400' : 'opacity-40 hover:opacity-80'} transition-all`}
+                            title={`TLP: ${tlpLabel(t)}`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-slate-700 my-1" />
+                    
+                    <div className="flex flex-col gap-2">
+                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold flex justify-between items-center">
+                        Tags 
+                        {canEdit && <span className="text-[10px] text-blue-400 lowercase cursor-pointer" onClick={() => { setActiveTab('Summary'); setEditingMeta(true); }}>edit</span>}
+                      </span>
+                      <TagList data={obs?.tags ?? []} />
+                    </div>
                   </div>
-                  <div className="box-body">
-                    {similar.isLoading && <div className="text-muted text-sm">Loading…</div>}
-                    {!similar.isLoading && similarObs.length === 0 && (
-                      <div className="empty-message">This observable has not been seen in any other case</div>
-                    )}
-                    {similarObs.length > 0 && (
-                      <>
-                        <p className="text-sm"><strong>Observable seen in {similarObs.length} other case(s)</strong></p>
-                        <table className="table table-striped table-condensed">
-                          <thead>
-                            <tr>
-                              <th style={{ width: 80 }}>Flags</th>
-                              <th>Case</th>
-                              <th style={{ width: 120 }}>Date added</th>
-                            </tr>
-                          </thead>
-                          <tbody>
+                </div>
+
+                {/* Similar Observables Links */}
+                {!obs?.ignore_similarity && (
+                  <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl overflow-hidden shadow-lg">
+                    <div className="px-5 py-3 border-b border-slate-700 bg-slate-900/50 flex items-center gap-2">
+                      <Link size={14} className="text-blue-500" />
+                      <h3 className="text-slate-200 font-medium text-sm">Similar Links</h3>
+                    </div>
+                    <div className="p-4">
+                      {similar.isLoading && <div className="text-slate-500 text-sm flex items-center gap-2"><i className="fa fa-spinner fa-spin"></i> Loading…</div>}
+                      {!similar.isLoading && similarObs.length === 0 && (
+                        <div className="text-slate-500 text-sm text-center py-2 border border-dashed border-slate-700 rounded bg-slate-800/50">Unique observable</div>
+                      )}
+                      {similarObs.length > 0 && (
+                        <div className="flex flex-col gap-3">
+                          <p className="text-xs text-slate-400">Seen in <strong className="text-slate-200">{similarObs.length}</strong> other case(s)</p>
+                          <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                             {similarObs.map(a => (
-                              <tr key={a.id} style={{ cursor: 'pointer' }} onClick={() => router.push(`/observables/${a.id}`)}>
-                                <td>
-                                  <ObservableFlags observable={{ ioc: a.ioc, sighted: a.sighted, ignore_similarity: a.ignore_similarity }} />
-                                </td>
-                                <td>
-                                  <a href={`/cases/${a.case_id}`}>#{a.case_number} - {a.case_title}</a>
-                                </td>
-                                <td>{new Date(a.created_at).toLocaleDateString()}</td>
-                              </tr>
+                              <div key={a.id} className="bg-slate-900/50 border border-slate-700 rounded p-2 text-xs hover:border-blue-500/50 hover:bg-slate-800 cursor-pointer transition-colors" onClick={() => router.push(`/observables/${a.id}`)}>
+                                <div className="flex justify-between items-start mb-1">
+                                  <a href={`/cases/${a.case_id}`} className="font-medium text-blue-400 hover:text-blue-300 truncate" onClick={e => e.stopPropagation()}>#{String(a.case_number).padStart(7, '0')}</a>
+                                  <span className="text-slate-500 shrink-0 ml-2">{new Date(a.created_at).toLocaleDateString()}</span>
+                                </div>
+                                <div className="text-slate-300 truncate mb-1.5">{a.case_title}</div>
+                                <div className="flex items-center gap-1.5">
+                                  {a.ioc && <span className="w-1.5 h-1.5 rounded-full bg-red-500" title="IOC"></span>}
+                                  {a.sighted && <span className="w-1.5 h-1.5 rounded-full bg-blue-500" title="Sighted"></span>}
+                                  {a.ignore_similarity && <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" title="Ignored"></span>}
+                                  {!a.ioc && !a.sighted && !a.ignore_similarity && <span className="text-slate-500 text-[10px]">No flags</span>}
+                                </div>
+                              </div>
                             ))}
-                          </tbody>
-                        </table>
-                      </>
-                    )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </aside>
-              )}
+                )}
+              </div>
             </div>
-          </section>
+          </div>
         </main>
       </div>
       <ObservableReportModal open={showReport} job={reportJob} onClose={() => { setShowReport(false); setReportJob(null); }} />

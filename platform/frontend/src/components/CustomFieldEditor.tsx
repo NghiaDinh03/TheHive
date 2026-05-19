@@ -67,114 +67,121 @@ export function CustomFieldEditor({ fields, canWrite, onAdd, onUpdate, onDelete,
   }
 
   return (
-    <div className="custom-field-editor">
-      <h4 className="vpad10 text-primary">Custom Fields</h4>
-      <table className="table table-striped case-custom-field-table">
-        <thead>
-          <tr>
-            <th style={{ width: 160 }}>Name</th>
-            <th style={{ width: 80 }}>Type</th>
-            <th>Value</th>
-            <th style={{ width: 120 }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {fields.map((cf) => {
-            const fieldType = (cf.field_type ?? 'string') as CustomFieldType;
-            const isEditing = editingId === (cf.id ?? cf.name);
-            return (
-              <tr key={cf.id ?? cf.name}>
-                <td>
-                  <strong>{cf.name}</strong>
-                </td>
-                <td>
-                  <span className="label label-default">{fieldType}</span>
-                </td>
-                <td>
-                  {isEditing ? (
-                    <TypedFieldInput
-                      type={fieldType}
-                      value={editValue}
-                      onChange={setEditValue}
-                      options={cf.options}
-                    />
-                  ) : (
-                    <TypedFieldValue type={fieldType} value={cf.value} />
-                  )}
-                </td>
-                <td style={{ whiteSpace: 'nowrap' }}>
-                  {canWrite && (
-                    <>
-                      {isEditing ? (
-                        <>
-                          <button
-                            className="btn btn-xs btn-success"
-                            onClick={() => saveEdit(cf)}
-                            title="Save"
-                          >
-                            <i className="glyphicon glyphicon-ok" />
-                          </button>
-                          <button
-                            className="btn btn-xs btn-default ml-xxxs"
-                            onClick={() => setEditingId(null)}
-                            title="Cancel"
-                          >
-                            <i className="glyphicon glyphicon-remove" />
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {onUpdate && cf.id && (
+    <div className="mt-8 bg-slate-900/80 rounded-xl shadow-md overflow-hidden">
+      <div className="px-6 py-4 bg-slate-800/40 border-b border-slate-700/30 flex justify-between items-center">
+        <h4 className="text-blue-400 font-semibold text-base flex items-center gap-2" title="Custom Fields allow you to add arbitrary key-value metadata specific to this incident that are not part of the standard case schema (e.g., specific IP addresses, custom threat scores).">
+          <i className="fa fa-list-ul"></i> Custom Fields
+        </h4>
+      </div>
+      
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse whitespace-nowrap">
+          <thead>
+            <tr className="bg-slate-800/20 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b border-slate-700/50">
+              <th className="px-6 py-3 w-1/4">Name</th>
+              <th className="px-6 py-3 w-32">Type</th>
+              <th className="px-6 py-3">Value</th>
+              <th className="px-6 py-3 w-32 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="text-sm divide-y divide-slate-800/50">
+            {fields.map((cf) => {
+              const fieldType = (cf.field_type ?? 'string') as CustomFieldType;
+              const isEditing = editingId === (cf.id ?? cf.name);
+              return (
+                <tr key={cf.id ?? cf.name} className="hover:bg-slate-800/30 transition-colors">
+                  <td className="px-6 py-4 text-slate-200 font-medium">
+                    {cf.name}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="px-2 py-1 rounded-md text-[11px] bg-slate-700/60 text-slate-300 uppercase tracking-wider font-medium">{fieldType}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {isEditing ? (
+                      <TypedFieldInput
+                        type={fieldType}
+                        value={editValue}
+                        onChange={setEditValue}
+                        options={cf.options}
+                      />
+                    ) : (
+                      <TypedFieldValue type={fieldType} value={cf.value} />
+                    )}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    {canWrite && (
+                      <div className="flex gap-2 justify-end">
+                        {isEditing ? (
+                          <>
                             <button
-                              className="btn btn-xs btn-default"
-                              onClick={() => startEdit(cf)}
-                              title="Edit value"
+                              className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors shadow-sm"
+                              onClick={() => saveEdit(cf)}
+                              title="Save"
                             >
-                              <i className="glyphicon glyphicon-pencil" />
+                              <i className="fa fa-check" />
                             </button>
-                          )}
-                          {cf.id && (
                             <button
-                              className="btn btn-xs btn-danger ml-xxxs"
-                              onClick={() => onDelete(cf.id!)}
-                              title="Delete"
+                              className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded text-xs transition-colors shadow-sm"
+                              onClick={() => setEditingId(null)}
+                              title="Cancel"
                             >
-                              <i className="glyphicon glyphicon-trash" />
+                              <i className="fa fa-times" />
                             </button>
-                          )}
-                        </>
-                      )}
-                    </>
-                  )}
+                          </>
+                        ) : (
+                          <>
+                            {onUpdate && cf.id && (
+                              <button
+                                className="text-slate-400 hover:text-blue-400 transition-colors"
+                                onClick={() => startEdit(cf)}
+                                title="Edit value"
+                              >
+                                <i className="fa fa-pencil" />
+                              </button>
+                            )}
+                            {cf.id && (
+                              <button
+                                className="text-slate-400 hover:text-red-400 transition-colors"
+                                onClick={() => onDelete(cf.id!)}
+                                title="Delete"
+                              >
+                                <i className="fa fa-trash" />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!fields.length && (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-slate-500 italic">
+                  No custom fields defined for this case.
                 </td>
               </tr>
-            );
-          })}
-          {!fields.length && (
-            <tr>
-              <td colSpan={4} className="empty-message">
-                No custom fields defined for this case.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {canWrite && (
-        <div className="filter-panel" style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <label style={{ flex: '1 1 150px' }}>
+        <div className="p-6 bg-slate-800/20 border-t border-slate-700/30 flex flex-wrap gap-4 items-end">
+          <label className="flex-1 min-w-[150px] flex flex-col gap-1 text-xs text-slate-400">
             Name
             <input
-              className="form-control input-sm"
+              className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={addName}
               onChange={(e) => setAddName(e.target.value)}
               placeholder="Field name"
             />
           </label>
-          <label style={{ flex: '0 0 120px' }}>
+          <label className="w-32 flex flex-col gap-1 text-xs text-slate-400">
             Type
             <select
-              className="form-control input-sm"
+              className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               value={addType}
               onChange={(e) => setAddType(e.target.value as CustomFieldType)}
             >
@@ -185,23 +192,23 @@ export function CustomFieldEditor({ fields, canWrite, onAdd, onUpdate, onDelete,
               ))}
             </select>
           </label>
-          <label style={{ flex: '1 1 200px' }}>
+          <label className="flex-1 min-w-[200px] flex flex-col gap-1 text-xs text-slate-400">
             Value
             <TypedFieldInput type={addType} value={addValue} onChange={setAddValue} />
           </label>
           {addType === 'enum' && (
-            <label style={{ flex: '1 1 200px' }}>
+            <label className="flex-1 min-w-[150px] flex flex-col gap-1 text-xs text-slate-400">
               Options (comma-separated)
               <input
-                className="form-control input-sm"
+                className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 value={addOptions}
                 onChange={(e) => setAddOptions(e.target.value)}
-                placeholder="opt1, opt2, opt3"
+                placeholder="opt1, opt2"
               />
             </label>
           )}
           <button
-            className="btn btn-sm btn-primary"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-md text-sm font-medium transition-colors shadow-sm h-[38px] flex items-center gap-2"
             disabled={!addName.trim() || !!pending}
             onClick={handleAdd}
           >
@@ -228,7 +235,7 @@ function TypedFieldInput({
   switch (type) {
     case 'boolean':
       return (
-        <select className="form-control input-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+        <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={value} onChange={(e) => onChange(e.target.value)}>
           <option value="true">Yes</option>
           <option value="false">No</option>
         </select>
@@ -237,7 +244,7 @@ function TypedFieldInput({
       return (
         <input
           type="number"
-          className="form-control input-sm"
+          className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="0"
@@ -247,7 +254,7 @@ function TypedFieldInput({
       return (
         <input
           type="date"
-          className="form-control input-sm"
+          className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           value={value}
           onChange={(e) => onChange(e.target.value)}
         />
@@ -255,7 +262,7 @@ function TypedFieldInput({
     case 'enum':
       if (options && options.length > 0) {
         return (
-          <select className="form-control input-sm" value={value} onChange={(e) => onChange(e.target.value)}>
+          <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={value} onChange={(e) => onChange(e.target.value)}>
             <option value="">— Select —</option>
             {options.map((opt) => (
               <option key={opt} value={opt}>
@@ -267,7 +274,7 @@ function TypedFieldInput({
       }
       return (
         <input
-          className="form-control input-sm"
+          className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Value"
@@ -276,7 +283,7 @@ function TypedFieldInput({
     default:
       return (
         <input
-          className="form-control input-sm"
+          className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Value"
@@ -287,30 +294,30 @@ function TypedFieldInput({
 
 /** Renders the display value for a custom field type */
 function TypedFieldValue({ type, value }: { type: CustomFieldType; value: string }) {
-  if (!value && value !== '0') return <em className="text-warning">Not Specified</em>;
+  if (!value && value !== '0') return <em className="text-yellow-500">Not Specified</em>;
 
   switch (type) {
     case 'boolean':
       return value === 'true' ? (
-        <span className="text-success">
-          <i className="glyphicon glyphicon-ok" /> Yes
+        <span className="text-green-500 font-medium">
+          <i className="fa fa-check mr-1" /> Yes
         </span>
       ) : (
-        <span className="text-muted">
-          <i className="glyphicon glyphicon-remove" /> No
+        <span className="text-slate-500">
+          <i className="fa fa-times mr-1" /> No
         </span>
       );
     case 'number':
-      return <span className="mono">{value}</span>;
+      return <span className="font-mono text-slate-300">{value}</span>;
     case 'date':
       try {
-        return <span>{new Date(value).toLocaleDateString()}</span>;
+        return <span className="text-slate-300">{new Date(value).toLocaleDateString()}</span>;
       } catch {
-        return <span>{value}</span>;
+        return <span className="text-slate-300">{value}</span>;
       }
     case 'enum':
-      return <span className="label label-info">{value}</span>;
+      return <span className="px-2 py-0.5 rounded text-[11px] bg-blue-900/40 text-blue-300 font-medium">{value}</span>;
     default:
-      return <span>{value}</span>;
+      return <span className="text-slate-300">{value}</span>;
   }
 }
