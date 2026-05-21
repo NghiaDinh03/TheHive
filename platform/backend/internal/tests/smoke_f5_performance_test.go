@@ -17,7 +17,7 @@ import (
 
 func TestF5_PerformanceBaseline_Login(t *testing.T) {
 	loginReq := map[string]string{
-		"login":    "admin@thehive.local",
+		"login":    "ncs_admin@ncsgroup.vn",
 		"password": "12345@",
 	}
 	body, _ := json.Marshal(loginReq)

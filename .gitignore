@@ -71,3 +71,8 @@ platform/backend/vendor/
 
 # AI Agent Memory - không commit
 agent_memory/
+
+# Extra AI config & temp files
+.agents/
+*.txt
+scratch/

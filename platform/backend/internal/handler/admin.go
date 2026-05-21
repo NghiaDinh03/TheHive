@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ type adminUserSummary struct {
 	Status             string     `db:"status" json:"status"`
 	Locked             bool       `db:"locked" json:"locked"`
 	MustChangePassword bool       `db:"must_change_password" json:"must_change_password"`
+	Force2FA           bool       `db:"force_2fa" json:"force_2fa"`
 	LastLoginAt        *time.Time `db:"last_login_at" json:"last_login_at,omitempty"`
 	CreatedAt          time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt          time.Time  `db:"updated_at" json:"updated_at"`
@@ -73,6 +75,7 @@ type adminUserUpdateRequest struct {
 	Profile            string `json:"profile" validate:"required,min=1"`
 	Status             string `json:"status"`
 	MustChangePassword bool   `json:"must_change_password"`
+	Force2FA           bool   `json:"force_2fa"`
 }
 
 type adminOrganisationRequest struct {
@@ -165,7 +168,7 @@ func (h *AdminHandler) ListUsers(c echo.Context) error {
 	rows := []adminUserSummary{}
 	if err := h.db.SelectContext(c.Request().Context(), &rows, `
 		SELECT u.login, u.name, COALESCE(o.name, '') AS organisation, COALESCE(p.name, '') AS profile,
-			u.status, u.locked, u.must_change_password, u.last_login_at, u.created_at, u.updated_at
+			u.status, u.locked, u.must_change_password, u.force_2fa, u.last_login_at, u.created_at, u.updated_at
 		FROM users u
 		LEFT JOIN organisations o ON o.id = u.organisation_id
 		LEFT JOIN profiles p ON p.id = u.profile_id
@@ -237,9 +240,16 @@ func (h *AdminHandler) CreateUser(c echo.Context) error {
 }
 
 func (h *AdminHandler) UpdateUser(c echo.Context) error {
-	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	loginParam, _ := url.PathUnescape(c.Param("login"))
+	if loginParam == "" {
+		loginParam = c.Param("login")
+	}
+	login := strings.ToLower(strings.TrimSpace(loginParam))
 	if login == "" {
 		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	if login == "ncs.fushion_admin@ncsgroup.vn" {
+		return apierr.New(http.StatusForbidden, "cannot modify master admin user")
 	}
 	var req adminUserUpdateRequest
 	if err := c.Bind(&req); err != nil {
@@ -267,8 +277,8 @@ func (h *AdminHandler) UpdateUser(c echo.Context) error {
 	}
 	result, err := tx.ExecContext(c.Request().Context(), `
 		UPDATE users
-		SET name = $1, organisation_id = $2::uuid, profile_id = $3::uuid, status = $4, must_change_password = $5, updated_at = now()
-		WHERE lower(login) = lower($6)`, req.Name, orgID, profileID, status, req.MustChangePassword, login)
+		SET name = $1, organisation_id = $2::uuid, profile_id = $3::uuid, status = $4, must_change_password = $5, force_2fa = $6, updated_at = now()
+		WHERE lower(login) = lower($7)`, req.Name, orgID, profileID, status, req.MustChangePassword, req.Force2FA, login)
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "user update failed")
 	}
@@ -295,9 +305,16 @@ func (h *AdminHandler) UnlockUser(c echo.Context) error {
 }
 
 func (h *AdminHandler) ResetUserPassword(c echo.Context) error {
-	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	loginParam, _ := url.PathUnescape(c.Param("login"))
+	if loginParam == "" {
+		loginParam = c.Param("login")
+	}
+	login := strings.ToLower(strings.TrimSpace(loginParam))
 	if login == "" {
 		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	if login == "ncs.fushion_admin@ncsgroup.vn" {
+		return apierr.New(http.StatusForbidden, "cannot modify master admin user")
 	}
 	var req adminResetPasswordRequest
 	if err := c.Bind(&req); err != nil {
@@ -343,9 +360,16 @@ func (h *AdminHandler) ResetUserPassword(c echo.Context) error {
 }
 
 func (h *AdminHandler) GenerateResetToken(c echo.Context) error {
-	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	loginParam, _ := url.PathUnescape(c.Param("login"))
+	if loginParam == "" {
+		loginParam = c.Param("login")
+	}
+	login := strings.ToLower(strings.TrimSpace(loginParam))
 	if login == "" {
 		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	if login == "ncs.fushion_admin@ncsgroup.vn" {
+		return apierr.New(http.StatusForbidden, "cannot modify master admin user")
 	}
 	var req adminGenerateResetTokenRequest
 	if err := c.Bind(&req); err != nil && err != echo.ErrUnsupportedMediaType {
@@ -365,9 +389,16 @@ func (h *AdminHandler) GenerateResetToken(c echo.Context) error {
 }
 
 func (h *AdminHandler) ApproveUser(c echo.Context) error {
-	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	loginParam, _ := url.PathUnescape(c.Param("login"))
+	if loginParam == "" {
+		loginParam = c.Param("login")
+	}
+	login := strings.ToLower(strings.TrimSpace(loginParam))
 	if login == "" {
 		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	if login == "ncs.fushion_admin@ncsgroup.vn" {
+		return apierr.New(http.StatusForbidden, "cannot modify master admin user")
 	}
 	var req adminApproveUserRequest
 	if err := c.Bind(&req); err != nil {
@@ -471,9 +502,16 @@ func (h *AdminHandler) UpsertProfile(c echo.Context) error {
 }
 
 func (h *AdminHandler) DeleteUser(c echo.Context) error {
-	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	loginParam, _ := url.PathUnescape(c.Param("login"))
+	if loginParam == "" {
+		loginParam = c.Param("login")
+	}
+	login := strings.ToLower(strings.TrimSpace(loginParam))
 	if login == "" {
 		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	if login == "ncs.fushion_admin@ncsgroup.vn" {
+		return apierr.New(http.StatusForbidden, "cannot modify master admin user")
 	}
 	tx, err := h.db.BeginTxx(c.Request().Context(), nil)
 	if err != nil {
@@ -592,9 +630,16 @@ func (h *AdminHandler) DeleteProfile(c echo.Context) error {
 }
 
 func (h *AdminHandler) setUserLocked(c echo.Context, locked bool) error {
-	login := strings.ToLower(strings.TrimSpace(c.Param("login")))
+	loginParam, _ := url.PathUnescape(c.Param("login"))
+	if loginParam == "" {
+		loginParam = c.Param("login")
+	}
+	login := strings.ToLower(strings.TrimSpace(loginParam))
 	if login == "" {
 		return apierr.New(http.StatusBadRequest, "missing login")
+	}
+	if login == "ncs.fushion_admin@ncsgroup.vn" {
+		return apierr.New(http.StatusForbidden, "cannot modify master admin user")
 	}
 	tx, err := h.db.BeginTxx(c.Request().Context(), nil)
 	if err != nil {

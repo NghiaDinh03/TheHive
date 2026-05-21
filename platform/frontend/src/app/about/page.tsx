@@ -45,18 +45,18 @@ export default function AboutPage() {
         <Topbar user={me.data ?? { login: authedLogin }} />
         <main className="content-wrapper flex-1">
           <section className="content-header">
-            <h1>About <small>TheHive 4 parity platform</small></h1>
+            <h1>About <small>NCS Fusion Center platform</small></h1>
             <ol className="breadcrumb"><li>Home</li><li className="active">About</li></ol>
           </section>
           <section className="content">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="box box-primary md:col-span-2">
-                <div className="box-header with-border"><h3 className="box-title"><Info size={14} /> TheHive</h3></div>
+                <div className="box-header with-border"><h3 className="box-title"><Info size={14} /> NCS Fusion Center</h3></div>
                 <div className="box-body">
                   <div className="about-card">
-                    <h2 className="text-xl font-light mb-2">TheHive 4 re-platform migration</h2>
-                    <p className="text-muted mb-2">This interface preserves TheHive 4 AdminLTE skin-blue workflows while the backend is migrated to Go, PostgreSQL, MinIO and OpenSearch.</p>
-                    <p className="text-muted">Legacy TheHive 4 remains the source of truth for UI density, fields, permissions, and SOC analyst workflows until all parity gates pass.</p>
+                    <h2 className="text-xl font-light mb-2">NCS Fusion Center re-platform</h2>
+                    <p className="text-muted mb-2">This interface preserves NCS Fusion Center workflows while the backend is migrated to Go, PostgreSQL, MinIO and OpenSearch.</p>
+                    <p className="text-muted">NCS Fusion Center remains the source of truth for UI density, fields, permissions, and SOC analyst workflows.</p>
                   </div>
                 </div>
               </div>

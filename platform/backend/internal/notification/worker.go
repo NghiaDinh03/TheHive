@@ -342,11 +342,7 @@ func (a *WebhookAdapter) Deliver(ctx context.Context, item QueueItem) DeliveryRe
 
 // EmailAdapter delivers notifications via SMTP email.
 type EmailAdapter struct {
-	host     string
-	port     int
-	from     string
-	username string
-	password string
+	db *sqlx.DB
 }
 
 // EmailConfig holds the email destination from notification_configs.
@@ -355,15 +351,19 @@ type EmailConfig struct {
 	Subject string   `json:"subject,omitempty"`
 }
 
+// SmtpConfig holds the SMTP server connection settings from ui_settings.
+type SmtpConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"user"`
+	Password string `json:"pass"`
+	From     string `json:"from"`
+	Enabled  bool   `json:"enabled"`
+}
+
 // NewEmailAdapter creates a new email adapter.
-func NewEmailAdapter(host string, port int, from, username, password string) *EmailAdapter {
-	return &EmailAdapter{
-		host:     host,
-		port:     port,
-		from:     from,
-		username: username,
-		password: password,
-	}
+func NewEmailAdapter(db *sqlx.DB) *EmailAdapter {
+	return &EmailAdapter{db: db}
 }
 
 func (a *EmailAdapter) Type() string { return "email" }
@@ -388,9 +388,20 @@ func (a *EmailAdapter) Deliver(ctx context.Context, item QueueItem) DeliveryResu
 		string(item.Payload),
 	)
 
-	addr := fmt.Sprintf("%s:%d", a.host, a.port)
+	var smtpCfg SmtpConfig
+	var val []byte
+	err := a.db.GetContext(ctx, &val, "SELECT value FROM ui_settings WHERE key = 'smtp_config'")
+	if err == nil && len(val) > 0 {
+		_ = json.Unmarshal(val, &smtpCfg)
+	}
+	
+	if !smtpCfg.Enabled || smtpCfg.Host == "" {
+		return DeliveryResult{Status: "failed", Error: "SMTP configuration is disabled or missing"}
+	}
+
+	addr := fmt.Sprintf("%s:%d", smtpCfg.Host, smtpCfg.Port)
 	msg := strings.Join([]string{
-		"From: " + a.from,
+		"From: " + smtpCfg.From,
 		"To: " + strings.Join(cfg.To, ", "),
 		"Subject: " + subject,
 		"Content-Type: text/plain; charset=UTF-8",
@@ -399,11 +410,11 @@ func (a *EmailAdapter) Deliver(ctx context.Context, item QueueItem) DeliveryResu
 	}, "\r\n")
 
 	var auth smtp.Auth
-	if a.username != "" {
-		auth = smtp.PlainAuth("", a.username, a.password, a.host)
+	if smtpCfg.Username != "" {
+		auth = smtp.PlainAuth("", smtpCfg.Username, smtpCfg.Password, smtpCfg.Host)
 	}
 
-	err := smtp.SendMail(addr, auth, a.from, cfg.To, []byte(msg))
+	err = smtp.SendMail(addr, auth, smtpCfg.From, cfg.To, []byte(msg))
 	if err != nil {
 		return DeliveryResult{Status: "failed", Error: fmt.Sprintf("smtp send: %v", err)}
 	}

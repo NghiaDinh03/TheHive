@@ -252,6 +252,12 @@ func buildCaseWhere(filters map[string]string) (string, []any) {
 	addDateRangeFilter(&parts, &args, "c.updated_at", filters["updatedFrom"], filters["updatedTo"])
 	addDateRangeFilter(&parts, &args, "c.start_date", filters["startFrom"], filters["startTo"])
 	addDateRangeFilter(&parts, &args, "c.end_date", filters["endFrom"], filters["endTo"])
+
+	if orgName, ok := filters["user_organisation_name"]; ok && orgName != "" {
+		args = append(args, orgName)
+		parts = append(parts, fmt.Sprintf("$%d::text = ANY(c.organisation_ids)", len(args)))
+	}
+
 	return joinWhere(parts), args
 }
 
@@ -274,6 +280,12 @@ func buildAlertWhere(filters map[string]string) (string, []any) {
 	addDateRangeFilter(&parts, &args, "a.created_at", filters["createdFrom"], filters["createdTo"])
 	addDateRangeFilter(&parts, &args, "a.updated_at", filters["updatedFrom"], filters["updatedTo"])
 	addDateRangeFilter(&parts, &args, "a.last_sync_date", filters["lastSyncFrom"], filters["lastSyncTo"])
+
+	if orgName, ok := filters["user_organisation_name"]; ok && orgName != "" {
+		args = append(args, orgName)
+		parts = append(parts, fmt.Sprintf("a.organisation_id = $%d::text", len(args)))
+	}
+
 	return joinWhere(parts), args
 }
 
@@ -290,6 +302,12 @@ func buildObservableWhere(filters map[string]string) (string, []any) {
 	addTagsFilter(&parts, &args, "o.tags", filters["tags"])
 	addDateRangeFilter(&parts, &args, "o.created_at", filters["createdFrom"], filters["createdTo"])
 	addDateRangeFilter(&parts, &args, "o.updated_at", filters["updatedFrom"], filters["updatedTo"])
+
+	if orgName, ok := filters["user_organisation_name"]; ok && orgName != "" {
+		args = append(args, orgName)
+		parts = append(parts, fmt.Sprintf("$%d::text = ANY(o.organisation_ids)", len(args)))
+	}
+
 	return joinWhere(parts), args
 }
 

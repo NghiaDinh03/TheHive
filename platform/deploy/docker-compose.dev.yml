@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ../backend
+      target: builder 
+    container_name: ncs-fusion-backend-dev
+    # Dùng bản Air cũ hơn (v1.52.3) để tương thích với Go 1.22
+    command: ["sh", "-c", "go install github.com/air-verse/air@v1.52.3 && /go/bin/air -c .air.toml"]
+    environment:
+      - APP_ENV=development
+      - CGO_ENABLED=0
+      - POSTGRES_MIGRATIONS_PATH=file:///src/migrations
+    volumes:
+      - ../backend:/src
+      - go-mod-cache:/go/pkg/mod
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ../frontend
+      target: deps 
+    container_name: ncs-fusion-frontend-dev
+    command: ["sh", "-c", "npm install && npm run dev"]
+    environment:
+      - NODE_ENV=development
+      - NEXT_TELEMETRY_DISABLED=1
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true 
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/.next
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/api/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 60s
+
+volumes:
+  go-mod-cache:

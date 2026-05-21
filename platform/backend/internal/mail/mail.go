@@ -3,31 +3,37 @@ package mail
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net/smtp"
 	"strings"
+	"github.com/jmoiron/sqlx"
 )
 
 type Config struct {
-	Enabled  bool
-	Host     string
-	Port     int
-	Username string
-	Password string
-	From     string
 	BaseURL  string
+}
+
+type SmtpConfig struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"user"`
+	Password string `json:"pass"`
+	From     string `json:"from"`
+	Enabled  bool   `json:"enabled"`
 }
 
 type Sender struct {
 	cfg Config
+	db  *sqlx.DB
 }
 
-func NewSender(cfg Config) *Sender {
-	return &Sender{cfg: cfg}
+func NewSender(cfg Config, db *sqlx.DB) *Sender {
+	return &Sender{cfg: cfg, db: db}
 }
 
 func (s *Sender) Enabled() bool {
-	return s != nil && s.cfg.Enabled && s.cfg.Host != "" && s.cfg.From != ""
+	return s != nil && s.db != nil
 }
 
 func (s *Sender) SendPasswordReset(ctx context.Context, to, token string) error {
@@ -56,9 +62,21 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 		return ctx.Err()
 	default:
 	}
-	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	
+	var smtpCfg SmtpConfig
+	var val []byte
+	err := s.db.GetContext(ctx, &val, "SELECT value FROM ui_settings WHERE key = 'smtp_config'")
+	if err == nil && len(val) > 0 {
+		_ = json.Unmarshal(val, &smtpCfg)
+	}
+
+	if !smtpCfg.Enabled || smtpCfg.Host == "" {
+		return fmt.Errorf("SMTP configuration is disabled or missing")
+	}
+
+	addr := fmt.Sprintf("%s:%d", smtpCfg.Host, smtpCfg.Port)
 	msg := strings.Join([]string{
-		"From: " + s.cfg.From,
+		"From: " + smtpCfg.From,
 		"To: " + to,
 		"Subject: " + subject,
 		"MIME-Version: 1.0",
@@ -67,8 +85,8 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 		body,
 	}, "\r\n")
 	var auth smtp.Auth
-	if s.cfg.Username != "" {
-		auth = smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)
+	if smtpCfg.Username != "" {
+		auth = smtp.PlainAuth("", smtpCfg.Username, smtpCfg.Password, smtpCfg.Host)
 	}
 	client, err := smtp.Dial(addr)
 	if err != nil {
@@ -76,7 +94,7 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 	}
 	defer client.Close()
 	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(&tls.Config{ServerName: s.cfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
+		if err := client.StartTLS(&tls.Config{ServerName: smtpCfg.Host, MinVersion: tls.VersionTLS12}); err != nil {
 			return err
 		}
 	}
@@ -85,7 +103,7 @@ func (s *Sender) send(ctx context.Context, to, subject, body string) error {
 			return err
 		}
 	}
-	if err := client.Mail(s.cfg.From); err != nil {
+	if err := client.Mail(smtpCfg.From); err != nil {
 		return err
 	}
 	if err := client.Rcpt(to); err != nil {

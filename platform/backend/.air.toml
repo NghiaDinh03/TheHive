@@ -1,0 +1,36 @@
+# Config file for [Air](https://github.com/air-verse/air) in TOML format
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Compile the Go server
+cmd = "go build -o ./tmp/main ./cmd/server"
+# Run the compiled binary
+bin = "./tmp/main"
+# Delay for file changes to aggregate before rebuilding (ms)
+delay = 1000
+# Ignore these directories
+exclude_dir = ["assets", "tmp", "vendor", "migrations", "frontend"]
+# Exclude specific files
+exclude_file = []
+# Exclude files by regex
+exclude_regex = ["_test.go"]
+# Include files with these extensions
+include_ext = ["go", "tpl", "tmpl", "html", "yaml"]
+# Log file for build errors
+log = "build-errors.log"
+# Stop running the old binary when building the new one
+stop_on_error = true
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[log]
+time = false
+
+[misc]
+clean_on_exit = true

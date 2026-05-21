@@ -14,6 +14,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/thehive-platform/backend/internal/apierr"
 	"github.com/thehive-platform/backend/internal/authjwt"
+	"github.com/thehive-platform/backend/internal/handler"
 	"github.com/thehive-platform/backend/internal/metrics"
 	"go.uber.org/zap"
 )
@@ -149,6 +150,59 @@ func RequirePermission(permission string) echo.MiddlewareFunc {
 			if !authjwt.HasPermission(claims, permission) {
 				return apierr.New(http.StatusForbidden, "missing permission "+permission)
 			}
+			return next(c)
+		}
+	}
+}
+
+func RequireAnyPermission(permissions ...string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			claims, _ := c.Get("auth_claims").(*authjwt.Claims)
+			hasAny := false
+			for _, p := range permissions {
+				if authjwt.HasPermission(claims, p) {
+					hasAny = true
+					break
+				}
+			}
+			if !hasAny {
+				return apierr.New(http.StatusForbidden, "missing one of permissions: "+strings.Join(permissions, ", "))
+			}
+			return next(c)
+		}
+	}
+}
+
+func RequireStepUp2FA(db *sqlx.DB) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			claims, _ := c.Get("auth_claims").(*authjwt.Claims)
+			if claims == nil || claims.Login == "" {
+				return apierr.New(http.StatusUnauthorized, "missing authentication")
+			}
+
+			// Extract X-TOTP-Code from header
+			code := strings.TrimSpace(c.Request().Header.Get("X-TOTP-Code"))
+			if code == "" {
+				return apierr.New(http.StatusUnauthorized, "missing X-TOTP-Code header for sensitive action")
+			}
+			if len(code) != 6 {
+				return apierr.New(http.StatusBadRequest, "invalid TOTP code length")
+			}
+
+			// Fetch user's totp_secret
+			var secret string
+			err := db.GetContext(c.Request().Context(), &secret, "SELECT totp_secret FROM users WHERE lower(login) = lower($1) AND totp_enabled = true", claims.Login)
+			if err != nil || secret == "" {
+				return apierr.New(http.StatusForbidden, "2FA must be enabled to perform this action")
+			}
+
+			// Verify code using the handler package's exported VerifyTOTPCode function
+			if !handler.VerifyTOTPCode(secret, code) {
+				return apierr.New(http.StatusUnauthorized, "invalid TOTP code")
+			}
+
 			return next(c)
 		}
 	}

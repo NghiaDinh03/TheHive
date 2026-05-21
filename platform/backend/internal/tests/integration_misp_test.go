@@ -8,8 +8,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeMISPEvent represents a MISP event as returned by GET /events/:id.
@@ -324,3 +328,32 @@ func TestFakeMISPEventNotFound(t *testing.T) {
 		t.Fatalf("expected 404, got %d", resp.StatusCode)
 	}
 }
+
+// TestRealMISPIntegration executes a live connection test to a standalone MISP instance
+// when environment variables REAL_MISP_URL and REAL_MISP_KEY are provided.
+func TestRealMISPIntegration(t *testing.T) {
+	mispURL := os.Getenv("REAL_MISP_URL")
+	mispKey := os.Getenv("REAL_MISP_KEY")
+	if mispURL == "" || mispKey == "" {
+		t.Skip("REAL_MISP_URL or REAL_MISP_KEY is not set, skipping real MISP integration test")
+	}
+
+	t.Logf("Running real MISP integration test against: %s", mispURL)
+
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", mispURL+"/events/index", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", mispKey)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Failed to connect to real MISP: %v", err)
+	}
+	defer resp.Body.Close()
+
+	t.Logf("Real MISP responded with status: %d", resp.StatusCode)
+	assert.Contains(t, []int{http.StatusOK, http.StatusForbidden, http.StatusUnauthorized}, resp.StatusCode, "Connection established, status acceptable")
+}
+

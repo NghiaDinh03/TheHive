@@ -14,6 +14,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/thehive-platform/backend/internal/apierr"
+	"github.com/thehive-platform/backend/internal/audit"
 	"github.com/thehive-platform/backend/internal/authjwt"
 )
 
@@ -24,8 +25,8 @@ func generateTOTPSecret() string {
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(b)
 }
 
-// verifyTOTPCode verifies the 6-digit TOTP code against the secret
-func verifyTOTPCode(secret string, code string) bool {
+// VerifyTOTPCode verifies the 6-digit TOTP code against the secret
+func VerifyTOTPCode(secret string, code string) bool {
 	secret = strings.ToUpper(strings.TrimSpace(secret))
 	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
 	if err != nil {
@@ -128,7 +129,7 @@ func (h *AuthHandler) VerifyAndEnableTOTP(c echo.Context) error {
 		return apierr.New(http.StatusBadRequest, "TOTP not setup")
 	}
 
-	if !verifyTOTPCode(user.TotpSecret.String, req.Code) {
+	if !VerifyTOTPCode(user.TotpSecret.String, req.Code) {
 		return apierr.New(http.StatusBadRequest, "invalid TOTP code")
 	}
 
@@ -140,7 +141,7 @@ func (h *AuthHandler) VerifyAndEnableTOTP(c echo.Context) error {
 	}
 
 	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), "auth.totp.enable", "user", claims.Login, echo.Map{})
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.totp.enable", "user", claims.Login, nil, echo.Map{}))
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
@@ -163,7 +164,7 @@ func (h *AuthHandler) DisableTOTP(c echo.Context) error {
 		return apierr.New(http.StatusBadRequest, "TOTP is not enabled")
 	}
 
-	if !verifyTOTPCode(user.TotpSecret.String, req.Code) {
+	if !VerifyTOTPCode(user.TotpSecret.String, req.Code) {
 		return apierr.New(http.StatusBadRequest, "invalid TOTP code")
 	}
 
@@ -175,7 +176,7 @@ func (h *AuthHandler) DisableTOTP(c echo.Context) error {
 	}
 
 	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), "auth.totp.disable", "user", claims.Login, echo.Map{})
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.totp.disable", "user", claims.Login, nil, echo.Map{}))
 	}
 
 	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})

@@ -41,7 +41,7 @@ export default function TasksWorkspacePage() {
           <div className="flex items-end justify-between mb-4 flex-wrap gap-3">
             <div>
               <h1 className="text-2xl font-light text-thehive-text">Tasks</h1>
-              <p className="text-sm text-thehive-muted mt-1">TheHive 4 task/log timeline parity workspace.</p>
+              <p className="text-sm text-thehive-muted mt-1">NCS Fusion Center task/log timeline workspace.</p>
             </div>
             <div className="flex gap-2"><span className="thehive-pill">Admin write enabled</span><span className="thehive-pill warn">UI parity foundation</span></div>
           </div>

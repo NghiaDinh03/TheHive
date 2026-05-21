@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  misp-db:
+    image: mariadb:10.5
+    container_name: ncs-misp-db
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=misp
+      - MYSQL_USER=misp
+      - MYSQL_PASSWORD=misp-db-pass-123
+      - MYSQL_ROOT_PASSWORD=misp-root-pass-123
+    volumes:
+      - misp-db-data:/var/lib/mysql
+    networks:
+      - misp-net
+
+  misp-redis:
+    image: redis:6.2-alpine
+    container_name: ncs-misp-redis
+    restart: unless-stopped
+    networks:
+      - misp-net
+
+  misp-web:
+    image: coolacid/misp-docker:core-latest
+    container_name: ncs-misp-web
+    restart: unless-stopped
+    depends_on:
+      - misp-db
+      - misp-redis
+    ports:
+      - "8081:80"
+      - "8443:443"
+    environment:
+      - MYSQL_HOST=misp-db
+      - MYSQL_LOGIN=misp
+      - MYSQL_PASSWORD=misp-db-pass-123
+      - MYSQL_DATABASE=misp
+      - REDIS_HOST=misp-redis
+      - MISP_ADMIN_EMAIL=admin@misp.local
+      - MISP_ADMIN_PASSPHRASE=admin-misp-secret-123
+      - BASE_URL=http://localhost:8081
+      - CRON_USER_ID=1000
+    volumes:
+      - misp-web-data:/var/www/MISP
+    networks:
+      - misp-net
+
+volumes:
+  misp-db-data:
+    external: true
+  misp-web-data:
+    external: true
+
+networks:
+  misp-net:
+    driver: bridge

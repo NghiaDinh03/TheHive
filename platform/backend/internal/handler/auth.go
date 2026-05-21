@@ -23,8 +23,9 @@ import (
 )
 
 type updateMeRequest struct {
-	Name   string  `json:"name" validate:"required,min=1"`
-	Avatar *string `json:"avatar"`
+	Name                 string  `json:"name" validate:"required,min=1"`
+	Avatar               *string `json:"avatar"`
+	SessionDurationHours *int    `json:"session_duration_hours"`
 }
 
 type AuthHandler struct {
@@ -61,6 +62,7 @@ type loginResponse struct {
 	Login              string    `json:"login"`
 	ExpiresAt          time.Time `json:"expires_at"`
 	MustChangePassword bool      `json:"must_change_password"`
+	Force2FA           bool      `json:"force_2fa"`
 }
 
 type dbUser struct {
@@ -71,10 +73,19 @@ type dbUser struct {
 	Permissions        pq.StringArray `db:"permissions"`
 	PasswordHash       string         `db:"password_hash"`
 	Locked             bool           `db:"locked"`
+	LockedUntil        *time.Time     `db:"locked_until"`
+	FailedAttempts     int            `db:"failed_attempts"`
 	MustChangePassword bool           `db:"must_change_password"`
 	Avatar             sql.NullString `db:"avatar"`
-	TotpEnabled        bool           `db:"totp_enabled"`
-	TotpSecret         sql.NullString `db:"totp_secret"`
+	TotpEnabled          bool           `db:"totp_enabled"`
+	TotpSecret           sql.NullString `db:"totp_secret"`
+	SessionDurationHours int            `db:"session_duration_hours"`
+	Force2FA             bool           `db:"force_2fa"`
+}
+
+type unlockRequest struct {
+	Login string `json:"login" validate:"required"`
+	Code  string `json:"code" validate:"required,min=6,max=6"`
 }
 
 type currentUser struct {
@@ -83,9 +94,11 @@ type currentUser struct {
 	Organisation       string   `json:"organisation"`
 	Profile            string   `json:"profile"`
 	Permissions        []string `json:"permissions"`
-	MustChangePassword bool     `json:"must_change_password"`
-	Avatar             string   `json:"avatar"`
-	TotpEnabled        bool     `json:"totp_enabled"`
+	MustChangePassword   bool     `json:"must_change_password"`
+	Avatar               string   `json:"avatar"`
+	TotpEnabled          bool     `json:"totp_enabled"`
+	Force2FA             bool     `json:"force_2fa"`
+	SessionDurationHours int      `json:"session_duration_hours"`
 }
 
 type sessionSummary struct {
@@ -121,24 +134,24 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return apierr.New(http.StatusBadRequest, err.Error())
 	}
 	user, err := h.findUser(c.Request().Context(), req.Login)
-	if err != nil || user.Locked || user.PasswordHash == "" {
+	if err != nil || user.PasswordHash == "" {
 		return apierr.New(http.StatusUnauthorized, "invalid credentials")
 	}
+	if user.Locked {
+		return apierr.New(http.StatusForbidden, "account_locked")
+	}
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+		return apierr.New(http.StatusForbidden, "account_locked")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		h.handleFailedAttempt(c, user.Login, user.FailedAttempts)
 		return apierr.New(http.StatusUnauthorized, "invalid credentials")
 	}
 
-	// Check if global force_2fa is enabled
-	var force2faStr string
-	h.db.GetContext(c.Request().Context(), &force2faStr, `SELECT value->>0 FROM ui_settings WHERE key = 'force_2fa'`)
-	force2fa := force2faStr == "true"
-
-	if user.TotpEnabled || force2fa {
-		// Even if force2fa is true but totp_enabled is false, we must prompt them to setup TOTP
-		// The frontend will see totp_required, but if they don't have it setup, they can't login!
-		// Wait, if force2fa is true and user hasn't setup TOTP, how do they setup? 
-		// For now, if TOTP is enabled, return totp_required.
-		// If force_2fa is true and they don't have it enabled, we return a special status or just totp_required.
+	// We removed the hardcoded ncs.fushion_admin check since it's deleted.
+	// We no longer block login for force2fa here. We let them log in, but tell UI to force 2FA setup.
+	if user.TotpEnabled {
 		return apierr.New(http.StatusUnauthorized, "totp_required")
 	}
 
@@ -154,32 +167,98 @@ func (h *AuthHandler) LoginTOTP(c echo.Context) error {
 		return apierr.New(http.StatusBadRequest, err.Error())
 	}
 	user, err := h.findUser(c.Request().Context(), req.Login)
-	if err != nil || user.Locked || user.PasswordHash == "" {
+	if err != nil || user.PasswordHash == "" {
 		return apierr.New(http.StatusUnauthorized, "invalid credentials")
 	}
+	if user.Locked {
+		return apierr.New(http.StatusForbidden, "account_locked")
+	}
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+		return apierr.New(http.StatusForbidden, "account_locked")
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
+		h.handleFailedAttempt(c, user.Login, user.FailedAttempts)
 		return apierr.New(http.StatusUnauthorized, "invalid credentials")
 	}
 	if !user.TotpEnabled || user.TotpSecret.String == "" {
 		return apierr.New(http.StatusBadRequest, "TOTP is not enabled for this account")
 	}
-	if !verifyTOTPCode(user.TotpSecret.String, req.Code) {
+	if !VerifyTOTPCode(user.TotpSecret.String, req.Code) {
 		return apierr.New(http.StatusUnauthorized, "invalid TOTP code")
 	}
 	return h.completeLogin(c, user)
 }
 
 func (h *AuthHandler) completeLogin(c echo.Context, user dbUser) error {
-	token, tokenID, expiresAt, err := authjwt.Sign(h.jwtSecret, h.jwtExpiry, user.Login, user.Organisation, user.Profile, []string(user.Permissions))
+	// Calculate dynamic expiry based on user's preference
+	expiry := time.Duration(user.SessionDurationHours) * time.Hour
+	if expiry <= 0 {
+		expiry = h.jwtExpiry // Fallback
+	}
+
+	token, tokenID, expiresAt, err := authjwt.Sign(h.jwtSecret, expiry, user.Login, user.Organisation, user.Profile, []string(user.Permissions))
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "token signing failed")
 	}
-	_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET last_login_at = now(), updated_at = now() WHERE login = $1", user.Login)
+	_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET last_login_at = now(), updated_at = now(), failed_attempts = 0, locked_until = NULL WHERE login = $1", user.Login)
 	_, _ = h.db.ExecContext(c.Request().Context(), "INSERT INTO auth_sessions (token_id, login, expires_at) VALUES ($1, $2, $3)", tokenID, user.Login, expiresAt)
 	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), "auth.login", "user", user.Login, echo.Map{"login": user.Login})
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login", "user", user.Login, nil, echo.Map{"login": user.Login}))
 	}
-	return c.JSON(http.StatusOK, loginResponse{Token: token, Login: user.Login, ExpiresAt: expiresAt, MustChangePassword: user.MustChangePassword})
+	return c.JSON(http.StatusOK, loginResponse{Token: token, Login: user.Login, ExpiresAt: expiresAt, MustChangePassword: user.MustChangePassword, Force2FA: user.Force2FA})
+}
+
+func (h *AuthHandler) handleFailedAttempt(c echo.Context, login string, currentAttempts int) {
+	// Log the failed attempt to audit_logs
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login.failed", "user", login, nil, echo.Map{"login": login}))
+	}
+
+	// Note: We removed the special handling for ncs.fushion_admin since it was a typo/garbage user.
+	// Other users: 5 fails in 1 minute -> lock indefinitely
+		var count int
+		err := h.db.GetContext(c.Request().Context(), &count, `
+			SELECT COUNT(*) FROM audit_logs 
+			WHERE action = 'auth.login.failed' AND lower(entity_id) = lower($1) AND created_at >= NOW() - INTERVAL '1 minute'
+		`, login)
+		
+		if err == nil && count >= 5 {
+			_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET locked = true, updated_at = now() WHERE lower(login) = lower($1)", login)
+		} else {
+			_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET failed_attempts = failed_attempts + 1, updated_at = now() WHERE lower(login) = lower($1)", login)
+		}
+}
+
+func (h *AuthHandler) UnlockWith2FA(c echo.Context) error {
+	var req unlockRequest
+	if err := c.Bind(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, "invalid request body")
+	}
+	if err := c.Validate(&req); err != nil {
+		return apierr.New(http.StatusBadRequest, err.Error())
+	}
+	user, err := h.findUser(c.Request().Context(), req.Login)
+	if err != nil {
+		return apierr.New(http.StatusUnauthorized, "user not found")
+	}
+	// Note: user.Locked might be true, but findUser returns it.
+	if !user.TotpEnabled || user.TotpSecret.String == "" {
+		return apierr.New(http.StatusBadRequest, "TOTP is not enabled. Please contact administrator to unlock account.")
+	}
+	if !VerifyTOTPCode(user.TotpSecret.String, req.Code) {
+		return apierr.New(http.StatusUnauthorized, "invalid TOTP code")
+	}
+	
+	// Unlock user
+	_, err = h.db.ExecContext(c.Request().Context(), "UPDATE users SET locked = false, locked_until = NULL, failed_attempts = 0, updated_at = now() WHERE lower(login) = lower($1)", user.Login)
+	if err != nil {
+		return apierr.New(http.StatusInternalServerError, "failed to unlock account")
+	}
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.unlock.2fa", "user", user.Login, nil, echo.Map{"login": user.Login}))
+	}
+	return c.JSON(http.StatusOK, echo.Map{"status": "unlocked"})
 }
 
 func (h *AuthHandler) Register(c echo.Context) error {
@@ -419,8 +498,11 @@ func (h *AuthHandler) UpdateMe(c echo.Context) error {
 		return apierr.New(http.StatusBadRequest, err.Error())
 	}
 	if _, err := h.db.ExecContext(c.Request().Context(), `
-		UPDATE users SET name = $1, avatar = COALESCE($2, avatar), updated_at = now() WHERE lower(login) = lower($3)`,
-		strings.TrimSpace(req.Name), req.Avatar, claims.Login); err != nil {
+		UPDATE users SET name = $1,
+			avatar = CASE WHEN $2 IS NULL THEN avatar WHEN $2 = '' THEN NULL ELSE $2 END,
+			session_duration_hours = COALESCE($3, session_duration_hours),
+			updated_at = now() WHERE lower(login) = lower($4)`,
+		strings.TrimSpace(req.Name), req.Avatar, req.SessionDurationHours, claims.Login); err != nil {
 		return apierr.New(http.StatusInternalServerError, "profile update failed")
 	}
 	if h.audit != nil {
@@ -470,7 +552,7 @@ func (h *AuthHandler) Me(c echo.Context) error {
 	if err != nil {
 		return apierr.New(http.StatusUnauthorized, "user not found")
 	}
-	return c.JSON(http.StatusOK, currentUser{Login: user.Login, Name: user.Name, Organisation: user.Organisation, Profile: user.Profile, Permissions: []string(user.Permissions), MustChangePassword: user.MustChangePassword, Avatar: user.Avatar.String, TotpEnabled: user.TotpEnabled})
+	return c.JSON(http.StatusOK, currentUser{Login: user.Login, Name: user.Name, Organisation: user.Organisation, Profile: user.Profile, Permissions: []string(user.Permissions), MustChangePassword: user.MustChangePassword, Avatar: user.Avatar.String, TotpEnabled: user.TotpEnabled, Force2FA: user.Force2FA, SessionDurationHours: user.SessionDurationHours})
 }
 
 func (h *AuthHandler) createPasswordResetToken(ctx context.Context, login string, requestedBy string, purpose string, revealToken bool) (passwordResetIssue, error) {
@@ -511,8 +593,8 @@ func (h *AuthHandler) findUser(ctx context.Context, login string) (dbUser, error
 	user := dbUser{}
 	err := h.db.GetContext(ctx, &user, `
 		SELECT u.login, u.name, COALESCE(o.name, '') AS organisation, COALESCE(p.name, '') AS profile,
-			COALESCE(p.permissions, '{}') AS permissions, u.password_hash, u.locked, u.must_change_password, u.avatar,
-			u.totp_enabled, u.totp_secret
+			COALESCE(p.permissions, '{}') AS permissions, u.password_hash, u.locked, u.locked_until, u.failed_attempts, u.must_change_password, u.avatar,
+			u.totp_enabled, u.totp_secret, COALESCE(u.session_duration_hours, 4) AS session_duration_hours, COALESCE(u.force_2fa, false) AS force_2fa
 		FROM users u
 		LEFT JOIN organisations o ON o.id = u.organisation_id
 		LEFT JOIN profiles p ON p.id = u.profile_id
@@ -563,4 +645,25 @@ func validatePasswordPolicy(password string) error {
 		return apierr.New(http.StatusBadRequest, "password must include lowercase, uppercase, digit, and symbol")
 	}
 	return nil
+}
+
+func (h *AuthHandler) SearchUsers(c echo.Context) error {
+	query := strings.TrimSpace(c.QueryParam("query"))
+	rows := []struct {
+		Login string `db:"login" json:"login"`
+		Name  string `db:"name" json:"name"`
+	}{}
+	
+	q := "SELECT login, name FROM users WHERE status = 'Ok' AND locked = false"
+	args := []interface{}{}
+	if query != "" {
+		q += " AND (login ILIKE $1 OR name ILIKE $1)"
+		args = append(args, "%"+query+"%")
+	}
+	q += " ORDER BY login LIMIT 20"
+	
+	if err := h.db.SelectContext(c.Request().Context(), &rows, q, args...); err != nil {
+		return apierr.New(http.StatusInternalServerError, "user search failed")
+	}
+	return c.JSON(http.StatusOK, rows)
 }

@@ -10,10 +10,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Activity, Eye, Link, Play, Share2, Star, StarOff, ToggleLeft, ToggleRight, Trash2, Unlink } from '@/components/FaIcon';
+import { Activity, Eye, Link, Share2, Star, StarOff, ToggleLeft, ToggleRight, Trash2, Unlink } from '@/components/FaIcon';
 import { AttachmentPanel } from '@/components/AttachmentPanel';
 import { ObservableFlags, TagList, Tlp } from '@/components/Badges';
-import { ObservableReportModal, type CortexReport } from '@/components/ObservableReportModal';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { apiFetch } from '@/lib/api';
@@ -32,14 +31,9 @@ type SimilarObservable = {
   tags: string[]; case_id: string; case_number: number; case_title: string;
   start_date?: string; created_at: string;
 };
-type CortexJob = {
-  id: string; analyzer_id: string; status: string;
-  report?: string; started_at?: string; finished_at?: string; created_at: string;
-};
-type CortexAnalyzer = { id: string; analyzer_id: string; name: string; version: string; data_types: string[]; enabled: boolean };
-type ObservableDetail = { observable: ObservableItem; jobs: CortexJob[] };
+type ObservableDetail = { observable: ObservableItem };
 
-const TABS = ['Summary', 'Analyzers', 'Sharing', 'Attachments'] as const;
+const TABS = ['Summary', 'Sharing', 'Attachments'] as const;
 type TabName = typeof TABS[number];
 
 function tlpLabel(tlp: number) {
@@ -52,12 +46,27 @@ export default function ObservableDetailPage() {
   const params = useParams<{ id: string }>();
   const [authedLogin, setAuthedLogin] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('Summary');
-  const [selectedAnalyzer, setSelectedAnalyzer] = useState('');
   const [editTags, setEditTags] = useState('');
   const [editMessage, setEditMessage] = useState('');
   const [editingMeta, setEditingMeta] = useState(false);
-  const [reportJob, setReportJob] = useState<CortexReport | null>(null);
-  const [showReport, setShowReport] = useState(false);
+  const [syncingMISP, setSyncingMISP] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  const triggerMISPSync = async () => {
+    if (!obs?.case_id) return;
+    setSyncingMISP(true);
+    setSyncMessage(null);
+    try {
+      const res = await apiFetch<{ message: string }>(`/api/v1/cases/${obs.case_id}/sync-misp`, { method: 'POST' });
+      setSyncMessage(res.message || 'Đã kích hoạt đồng bộ hóa IOC sang MISP thành công!');
+      setTimeout(() => setSyncMessage(null), 5000);
+    } catch (err: any) {
+      setSyncMessage(err.message || 'Lỗi kích hoạt đồng bộ hóa!');
+      setTimeout(() => setSyncMessage(null), 5000);
+    } finally {
+      setSyncingMISP(false);
+    }
+  };
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
@@ -72,7 +81,6 @@ export default function ObservableDetailPage() {
     enabled: !!authedLogin && !!params.id,
   });
   const obs = detail.data?.observable;
-  const jobs = detail.data?.jobs ?? [];
 
   // Similar observables — mirrors legacy observable detail "Links" panel
   const similar = useQuery({
@@ -81,12 +89,6 @@ export default function ObservableDetailPage() {
     enabled: !!authedLogin && !!params.id && !(obs?.ignore_similarity),
   });
   const similarObs = similar.data?.values ?? [];
-
-  const analyzers = useQuery({
-    queryKey: ['cortex-analyzers', obs?.data_type],
-    queryFn: () => apiFetch<CortexAnalyzer[]>(`/api/v1/cortex/analyzers?data_type=${obs?.data_type}`),
-    enabled: !!obs?.data_type,
-  });
 
   useEffect(() => {
     if (obs) {
@@ -99,7 +101,6 @@ export default function ObservableDetailPage() {
 
   const canEdit = canUse(me.data, 'observableUpdate');
   const canDelete = canUse(me.data, 'observableDelete');
-  const canAnalyze = canUse(me.data, 'observableAnalyze') || canUse(me.data, 'manageAnalyse');
 
   const patchObs = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -112,13 +113,7 @@ export default function ObservableDetailPage() {
     onSuccess: () => router.replace('/investigation?tab=observables'),
   });
 
-  const analyzeMut = useMutation({
-    mutationFn: (analyzerID: string) =>
-      apiFetch(`/api/v1/observables/${params.id}/analyze`, { method: 'POST', json: { analyzer_id: analyzerID } }),
-    onSuccess: refetch,
-  });
-
-  const actionError = [patchObs, deleteObs, analyzeMut]
+  const actionError = [patchObs, deleteObs]
     .map(m => (m.error as Error | undefined)?.message)
     .find(Boolean);
 
@@ -207,7 +202,6 @@ export default function ObservableDetailPage() {
                         onClick={() => setActiveTab(tab)}
                       >
                         {tab}
-                        {tab === 'Analyzers' && <span className="px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 text-[10px]">{jobs.length}</span>}
                       </button>
                     ))}
                   </div>
@@ -365,90 +359,6 @@ export default function ObservableDetailPage() {
                       </div>
                     )}
 
-                    {/* ── Analyzers tab ── */}
-                    {activeTab === 'Analyzers' && (
-                      <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        {canAnalyze && (
-                          <div className="bg-slate-900/50 rounded-lg border border-slate-700 p-5 mb-6">
-                            <h3 className="text-slate-200 font-medium mb-4 flex items-center gap-2"><Play size={14} className="text-blue-500" /> Run analyzer</h3>
-                            <div className="flex flex-col md:flex-row gap-3 items-end">
-                              <div className="flex-1 w-full">
-                                <label className="block text-slate-500 text-xs mb-1.5 uppercase tracking-wider font-semibold">Select Analyzer</label>
-                                <select
-                                  className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                  value={selectedAnalyzer}
-                                  onChange={e => setSelectedAnalyzer(e.target.value)}
-                                >
-                                  <option value="">Select analyzer…</option>
-                                  {(analyzers.data ?? []).map(a => (
-                                    <option key={a.analyzer_id} value={a.analyzer_id}>
-                                      {a.name} ({a.version})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <button
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm disabled:opacity-50 w-full md:w-auto h-[38px] flex items-center justify-center whitespace-nowrap"
-                                disabled={!selectedAnalyzer || analyzeMut.isPending}
-                                onClick={() => analyzeMut.mutate(selectedAnalyzer)}
-                              >
-                                {analyzeMut.isPending ? 'Submitting…' : 'Run Analyzer'}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-900/30">
-                          <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
-                            <thead>
-                              <tr className="bg-slate-800/80 border-b border-slate-700 text-slate-400">
-                                <th className="px-4 py-3 font-medium">Analyzer</th>
-                                <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium">Started</th>
-                                <th className="px-4 py-3 font-medium">Finished</th>
-                                <th className="px-4 py-3 font-medium w-full">Summary</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800/50">
-                              {jobs.map(j => (
-                                <tr key={j.id} className="hover:bg-slate-800/50 transition-colors cursor-pointer" onClick={() => { setReportJob(j); setShowReport(true); }}>
-                                  <td className="px-4 py-3 text-slate-200 font-medium">{j.analyzer_id}</td>
-                                  <td className="px-4 py-3">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] uppercase tracking-wider border ${
-                                      j.status === 'Success' ? 'bg-green-900/50 text-green-400 border-green-700/50' :
-                                      j.status === 'Failure' ? 'bg-red-900/50 text-red-400 border-red-700/50' :
-                                      j.status === 'InProgress' ? 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50' :
-                                      'bg-slate-700 text-slate-300 border-slate-600'
-                                    }`}>{j.status}</span>
-                                  </td>
-                                  <td className="px-4 py-3 text-slate-400">{j.started_at ? new Date(j.started_at).toLocaleString() : '—'}</td>
-                                  <td className="px-4 py-3 text-slate-400">{j.finished_at ? new Date(j.finished_at).toLocaleString() : '—'}</td>
-                                  <td className="px-4 py-3 text-slate-300 whitespace-normal text-xs font-mono">
-                                    {j.report ? (() => {
-                                      try {
-                                        const r = JSON.parse(j.report);
-                                        return r?.summary?.taxonomies?.map((t: { level: string; namespace: string; predicate: string; value: string }, i: number) => (
-                                          <span key={i} className={`inline-block mr-1 mb-1 px-1.5 py-0.5 rounded border ${
-                                            t.level === 'malicious' ? 'bg-red-900/50 text-red-400 border-red-700/50' : 
-                                            t.level === 'suspicious' ? 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50' : 
-                                            'bg-blue-900/50 text-blue-400 border-blue-700/50'
-                                          }`}>
-                                            {t.namespace}:{t.predicate}={t.value}
-                                          </span>
-                                        )) ?? j.report.slice(0, 200);
-                                      } catch { return j.report.slice(0, 200); }
-                                    })() : '—'}
-                                  </td>
-                                </tr>
-                              ))}
-                              {!jobs.length && (
-                                <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500 border-t border-dashed border-slate-700">No analyzer reports yet.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
 
                     {/* ── Sharing tab ── */}
                     {activeTab === 'Sharing' && (
@@ -524,7 +434,24 @@ export default function ObservableDetailPage() {
                       <span className="flex items-center gap-2">{obs?.ignore_similarity ? <Unlink size={14} /> : <Link size={14} />} {obs?.ignore_similarity ? 'Ignore similarity' : 'Similarity on'}</span>
                     </button>
 
-                    <div className="h-px bg-slate-700 my-1" />
+                    <button
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-md border border-blue-700/50 bg-blue-950/20 text-blue-400 hover:bg-blue-900/40 text-sm transition-colors mt-2"
+                      disabled={syncingMISP || !obs?.case_id}
+                      onClick={triggerMISPSync}
+                    >
+                      <span className="flex items-center gap-2">
+                        <Activity size={14} className={syncingMISP ? 'animate-spin' : ''} /> 
+                        {syncingMISP ? 'Đang đồng bộ...' : 'Đồng bộ MISP'}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-blue-900/50 rounded border border-blue-700/30">Manual</span>
+                    </button>
+                    {syncMessage && (
+                      <div className="text-[11px] p-2 bg-slate-900/85 rounded border border-blue-700/40 text-blue-300 animate-pulse mt-1">
+                        {syncMessage}
+                      </div>
+                    )}
+
+                    <div className="h-px bg-slate-700 my-2" />
                     
                     <div className="flex flex-col gap-2">
                       <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">TLP</span>
@@ -595,7 +522,6 @@ export default function ObservableDetailPage() {
           </div>
         </main>
       </div>
-      <ObservableReportModal open={showReport} job={reportJob} onClose={() => { setShowReport(false); setReportJob(null); }} />
     </div>
   );
 }

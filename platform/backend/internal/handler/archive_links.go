@@ -53,6 +53,16 @@ func (h *ArchiveLinkHandler) Get(c echo.Context) error {
 	return c.JSON(http.StatusOK, row)
 }
 
+func (h *ArchiveLinkHandler) List(c echo.Context) error {
+	rows := []archiveLinkRow{}
+	if err := h.db.SelectContext(c.Request().Context(), &rows,
+		`SELECT id::text, entity_type, entity_id::text, legacy_url, legacy_id, created_at, created_by
+		 FROM archive_links ORDER BY created_at DESC`); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to list archive links"})
+	}
+	return c.JSON(http.StatusOK, rows)
+}
+
 func (h *ArchiveLinkHandler) Create(c echo.Context) error {
 	var req createArchiveLinkRequest
 	if err := c.Bind(&req); err != nil {

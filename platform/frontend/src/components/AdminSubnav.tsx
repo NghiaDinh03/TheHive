@@ -32,10 +32,8 @@ const TABS = [
   { href: '/admin/observable-types', label: 'Observable types', icon: Database, match: /^\/admin\/observable-types/ },
   { href: '/admin/taxonomy', label: 'Taxonomies', icon: Tags, match: /^\/admin\/taxonomy/ },
   { href: '/admin/attack', label: 'MITRE ATT&CK', icon: Crosshair, match: /^\/admin\/attack/ },
-  { href: '/admin/analyzer-templates', label: 'Analyzer templates', icon: FileCode2, match: /^\/admin\/analyzer-templates/ },
   { href: '/admin/ui-settings', label: 'UI settings', icon: Settings, match: /^\/admin\/ui-settings/ },
   { href: '/admin/platform-status', label: 'Platform status', icon: Activity, match: /^\/admin\/platform-status/ },
-  { href: '/admin/cortex', label: 'Cortex Analyzer', icon: Link2, match: /^\/admin\/cortex/ },
   { href: '/admin/misp', label: 'MISP', icon: Link2, match: /^\/admin\/misp/ },
 ];
 

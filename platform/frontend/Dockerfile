@@ -13,7 +13,7 @@ RUN apk add --no-cache libc6-compat
 
 COPY package.json package-lock.json* ./
 RUN --mount=type=cache,target=/root/.npm \
-    if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+	npm install --no-audit --no-fund
 
 ############################
 # Stage 2: builder

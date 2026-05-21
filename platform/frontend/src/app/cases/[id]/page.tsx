@@ -99,6 +99,8 @@ export default function CaseDetailPage() {
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [closeForm, setCloseForm] = useState({ impact_status: 'NoImpact', resolution_status: 'TruePositive', summary: '' });
+  const [impactDropdownOpen, setImpactDropdownOpen] = useState(false);
+  const [resolutionDropdownOpen, setResolutionDropdownOpen] = useState(false);
   const [dupCaseId, setDupCaseId] = useState('');
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeSearchType, setMergeSearchType] = useState<'title' | 'number'>('title');
@@ -376,28 +378,280 @@ export default function CaseDetailPage() {
             )}
 
             {/* Overlays */}
-            {showCloseDialog && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-                <div className="w-full max-w-md p-6 border-t-2 border-blue-500 bg-slate-900 rounded-md shadow-2xl">
-                  <h4 className="mb-3 text-base text-blue-400/80 font-medium">Close case</h4>
-                  <label className="block text-sm text-slate-400 mb-1 mt-2">Impact</label>
-                  <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={closeForm.impact_status} onChange={e => setCloseForm(f => ({ ...f, impact_status: e.target.value }))}>
-                    <option value="NoImpact">No Impact</option><option value="WithImpact">With Impact</option><option value="NotApplicable">Not Applicable</option>
-                  </select>
-                  <label className="block text-sm text-slate-400 mb-1 mt-3">Resolution</label>
-                  <select className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" value={closeForm.resolution_status} onChange={e => setCloseForm(f => ({ ...f, resolution_status: e.target.value }))}>
-                    <option value="TruePositive">True Positive</option><option value="FalsePositive">False Positive</option>
-                    <option value="Indeterminate">Indeterminate</option><option value="Other">Other</option>
-                  </select>
-                  <label className="block text-sm text-slate-400 mb-1 mt-3">Summary</label>
-                  <textarea className="w-full bg-slate-800 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" rows={3} value={closeForm.summary} onChange={e => setCloseForm(f => ({ ...f, summary: e.target.value }))} placeholder="Case closure summary..." />
-                  <div className="flex gap-3 mt-6">
-                    <button className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors" disabled={closeCase.isPending} onClick={() => closeCase.mutate()}>{closeCase.isPending ? 'Closing…' : 'Confirm close'}</button>
-                    <button className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-md text-sm transition-colors" onClick={() => setShowCloseDialog(false)}>Cancel</button>
+            {showCloseDialog && (() => {
+              const isUnassigned = !item?.assignee || item.assignee.trim() === "";
+              
+              const impactOptions = [
+                {
+                  value: 'NoImpact',
+                  label: 'No Impact',
+                  desc: 'No impact on business operations',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-green-400">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                  )
+                },
+                {
+                  value: 'WithImpact',
+                  label: 'With Impact',
+                  desc: 'Negative business impact experienced',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-red-400">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                      <line x1="12" y1="9" x2="12" y2="13"></line>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                  )
+                },
+                {
+                  value: 'NotApplicable',
+                  label: 'Not Applicable',
+                  desc: 'Impact assessment is not applicable',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-slate-400">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
+                    </svg>
+                  )
+                }
+              ];
+
+              const resolutionOptions = [
+                {
+                  value: 'FalsePositive',
+                  label: 'False positive',
+                  desc: 'False alarm due to benign activity or test logs',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-slate-400">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="15" y1="9" x2="9" y2="15"></line>
+                      <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                  )
+                },
+                {
+                  value: 'TruePositive',
+                  label: 'True positive',
+                  desc: 'Confirmed security incident or policy violation',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-green-400">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                  )
+                },
+                {
+                  value: 'Indeterminate',
+                  label: 'Indeterminate',
+                  desc: 'Undetermined or inconclusive forensic triage',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-orange-400">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                  )
+                },
+                {
+                  value: 'Other',
+                  label: 'Other',
+                  desc: 'Other reason not covered by standard resolution',
+                  icon: (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-blue-400">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="12" y1="16" x2="12" y2="12"></line>
+                      <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                  )
+                }
+              ];
+
+              const selectedImpact = impactOptions.find(opt => opt.value === closeForm.impact_status) || impactOptions[0];
+              const selectedResolution = resolutionOptions.find(opt => opt.value === closeForm.resolution_status) || resolutionOptions[1];
+
+              return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                  <div className="w-full max-w-[460px] p-6 bg-slate-900/95 border border-slate-700/60 rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-700/30 backdrop-blur-xl animate-in zoom-in-95 duration-200 text-slate-300">
+                    <div className="flex items-center gap-2 mb-4">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5 text-red-400">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                      </svg>
+                      <h4 className="text-lg font-bold text-slate-100">Close Case</h4>
+                    </div>
+
+                    <div className="grid gap-4 py-1">
+                      {/* Impact Dropdown */}
+                      <div className="grid gap-1.5 relative">
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Impact Status</label>
+                        <button
+                          type="button"
+                          onClick={() => { setImpactDropdownOpen(!impactDropdownOpen); setResolutionDropdownOpen(false); }}
+                          className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-500/40 shadow-inner"
+                        >
+                          <div className="flex items-center gap-3">
+                            {selectedImpact.icon}
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-200 tracking-wide">{selectedImpact.label}</span>
+                              <span className="text-[10px] text-slate-400/80">{selectedImpact.desc}</span>
+                            </div>
+                          </div>
+                          <span className={`text-slate-400 transition-transform duration-200 ${impactDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                        </button>
+
+                        {impactDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-[150]" onClick={() => setImpactDropdownOpen(false)} />
+                            <div className="absolute z-[200] w-full mt-12 bg-slate-950 border border-slate-800 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                              {impactOptions.map((opt) => {
+                                const isCurrent = opt.value === closeForm.impact_status;
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => {
+                                      setCloseForm(f => ({ ...f, impact_status: opt.value }));
+                                      setImpactDropdownOpen(false);
+                                    }}
+                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-left transition-all duration-150 hover:bg-slate-900 ${
+                                      isCurrent ? 'bg-blue-600/10 border border-blue-500/20 text-blue-400 font-semibold' : 'text-slate-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {opt.icon}
+                                      <div className="flex flex-col">
+                                        <span className={`text-xs font-bold tracking-wide ${isCurrent ? 'text-blue-400 font-semibold' : ''}`}>
+                                          {opt.label}
+                                        </span>
+                                        <span className="text-[10.5px] text-slate-400/90">{opt.desc}</span>
+                                      </div>
+                                    </div>
+                                    {isCurrent && (
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5 text-blue-400">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                      </svg>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Resolution Dropdown */}
+                      <div className="grid gap-1.5 relative">
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution Status</label>
+                        <button
+                          type="button"
+                          onClick={() => { setResolutionDropdownOpen(!resolutionDropdownOpen); setImpactDropdownOpen(false); }}
+                          className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-500/40 shadow-inner"
+                        >
+                          <div className="flex items-center gap-3">
+                            {selectedResolution.icon}
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-200 tracking-wide">{selectedResolution.label}</span>
+                              <span className="text-[10px] text-slate-400/80">{selectedResolution.desc}</span>
+                            </div>
+                          </div>
+                          <span className={`text-slate-400 transition-transform duration-200 ${resolutionDropdownOpen ? 'rotate-180' : ''}`}>▼</span>
+                        </button>
+
+                        {resolutionDropdownOpen && (
+                          <>
+                            <div className="fixed inset-0 z-[150]" onClick={() => setResolutionDropdownOpen(false)} />
+                            <div className="absolute z-[200] w-full mt-12 bg-slate-950 border border-slate-800 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                              {resolutionOptions.map((opt) => {
+                                const isCurrent = opt.value === closeForm.resolution_status;
+                                return (
+                                  <button
+                                    key={opt.value}
+                                    type="button"
+                                    onClick={() => {
+                                      setCloseForm(f => ({ ...f, resolution_status: opt.value }));
+                                      setResolutionDropdownOpen(false);
+                                    }}
+                                    className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-left transition-all duration-150 hover:bg-slate-900 ${
+                                      isCurrent ? 'bg-blue-600/10 border border-blue-500/20 text-blue-400 font-semibold' : 'text-slate-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {opt.icon}
+                                      <div className="flex flex-col">
+                                        <span className={`text-xs font-bold tracking-wide ${isCurrent ? 'text-blue-400 font-semibold' : ''}`}>
+                                          {opt.label}
+                                        </span>
+                                        <span className="text-[10.5px] text-slate-400/90">{opt.desc}</span>
+                                      </div>
+                                    </div>
+                                    {isCurrent && (
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5 text-blue-400">
+                                        <polyline points="20 6 9 17 4 12"></polyline>
+                                      </svg>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Summary */}
+                      <div className="grid gap-1.5">
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution Summary</label>
+                        <textarea 
+                          className="glass-input py-3 px-4 w-full h-24 text-xs resize-none focus:bg-slate-800/80 transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-700" 
+                          placeholder="Enter closure details, containment actions, or remediation analysis summary..." 
+                          value={closeForm.summary} 
+                          onChange={e => setCloseForm(f => ({ ...f, summary: e.target.value }))} 
+                        />
+                      </div>
+
+                      {/* Warning if case is unassigned */}
+                      {isUnassigned && (
+                        <div className="p-3 mt-1 rounded-xl bg-red-950/40 border border-red-900/50 text-red-300 text-xs flex items-start gap-2.5 leading-relaxed shadow-inner">
+                          <span className="text-sm mt-0.5">⚠️</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-bold text-red-200 tracking-wide uppercase text-[10px]">Action Required</span>
+                            <span>This case is currently unassigned. You must assign an assignee first before closing this case.</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-3 mt-5">
+                      <button 
+                        className="flex-1 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 rounded-xl text-xs font-bold transition-all" 
+                        onClick={() => { setShowCloseDialog(false); setCloseForm({ impact_status: 'NoImpact', resolution_status: 'TruePositive', summary: '' }); }}
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        className={`flex-1 px-4 py-2.5 text-xs font-bold transition-all duration-300 flex items-center justify-center gap-1.5 border border-transparent rounded-xl ${
+                          isUnassigned
+                            ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed opacity-50 border-slate-900/40'
+                            : closeForm.resolution_status === 'FalsePositive' 
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-[0_0_12px_rgba(148,163,184,0.1)]' 
+                            : closeForm.resolution_status === 'TruePositive'
+                            ? 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.35)]'
+                            : closeForm.resolution_status === 'Indeterminate'
+                            ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.35)]'
+                            : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]'
+                        }`}
+                        disabled={closeCase.isPending || isUnassigned} 
+                        onClick={() => closeCase.mutate()}
+                      >
+                        {closeCase.isPending ? 'Closing…' : 'Confirm Close'}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             
             {showMergeDialog && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -833,6 +1087,21 @@ function ObservablesTab({ observables, canWrite, obsForm, setObsForm, createObs,
   const [showModal, setShowModal] = useState(false);
   const [drawerObs, setDrawerObs] = useState<Observable | null>(null);
   const [drawerTab, setDrawerTab] = useState<'parsed' | 'raw'>('parsed');
+  const [syncingMISP, setSyncingMISP] = useState(false);
+  const params = useParams<{ id: string }>();
+
+  const handleMISPSync = async () => {
+    setSyncingMISP(true);
+    try {
+      const res = await apiFetch<{ message: string }>(`/api/v1/cases/${params.id}/sync-misp`, { method: 'POST' });
+      alert(res.message || 'Đã kích hoạt đồng bộ hóa IOC sang MISP trong nền thành công!');
+    } catch (err: any) {
+      alert(err.message || 'Lỗi kích hoạt đồng bộ hóa!');
+    } finally {
+      setSyncingMISP(false);
+    }
+  };
+
   const types = ['ip', 'domain', 'url', 'mail', 'hash', 'filename', 'fqdn', 'uri_path', 'user-agent', 'regexp', 'file', 'other'];
   const knownTags = Array.from(new Set(observables.flatMap((o) => o.tags))).sort();
 
@@ -853,7 +1122,17 @@ function ObservablesTab({ observables, canWrite, obsForm, setObsForm, createObs,
   return (<>
     <div className="flex justify-between items-center mb-4">
       <h3 className="text-blue-400/80 font-medium text-sm m-0">Observables ({observables.length})</h3>
-      {canWrite && <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm flex items-center gap-1.5" onClick={() => setShowModal(true)}><i className="fa fa-plus" /> New observable(s)</button>}
+      <div className="flex gap-2">
+        <button 
+          onClick={handleMISPSync} 
+          disabled={syncingMISP}
+          className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 rounded-md text-sm transition-colors shadow-sm flex items-center gap-1.5"
+        >
+          <i className={`fa fa-refresh ${syncingMISP ? 'fa-spin' : ''}`} /> 
+          {syncingMISP ? 'Đang đồng bộ...' : 'Đồng bộ MISP'}
+        </button>
+        {canWrite && <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors shadow-sm flex items-center gap-1.5" onClick={() => setShowModal(true)}><i className="fa fa-plus" /> New observable(s)</button>}
+      </div>
     </div>
     <ObservableCreationModal
       open={showModal}
@@ -1161,8 +1440,14 @@ function Info({ label, value }: { label: string; value: unknown }) {
 
 function SeverityInline({ value }: { value: number }) {
   const labels: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical', 4: 'Critical' };
-  const klass: Record<number, string> = { 0: 'bg-blue-900/50 text-blue-400 border-blue-700/50', 1: 'bg-blue-900/50 text-blue-400 border-blue-700/50', 2: 'bg-yellow-900/50 text-yellow-400 border-yellow-700/50', 3: 'bg-red-900/50 text-red-400 border-red-700/50', 4: 'bg-red-900/50 text-red-400 border-red-700/50' };
-  return <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider border ${klass[value] ?? 'bg-slate-700 text-slate-300 border-slate-600'}`}>{labels[value] ?? `S${value}`}</span>;
+  const klass: Record<number, string> = { 
+    0: 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-[0_0_8px_rgba(59,130,246,0.15)]', 
+    1: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_8px_rgba(234,179,8,0.15)]', 
+    2: 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]', 
+    3: 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold shadow-[0_0_12px_rgba(239,68,68,0.3)]', 
+    4: 'bg-red-600 text-white border border-red-500 font-extrabold shadow-[0_0_16px_rgba(239,68,68,0.6)]' 
+  };
+  return <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${klass[value] ?? 'bg-slate-700 text-slate-300 border border-slate-600'}`}>{labels[value] ?? `S${value}`}</span>;
 }
 
 function statusLabelClass(status: string | undefined): string {

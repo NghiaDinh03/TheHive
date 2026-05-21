@@ -80,7 +80,12 @@ export default function AdminPage() {
     const token = response.token || response.invite_token;
     const delivery = response.delivery || response.invite_delivery || 'email-placeholder';
     const expires = response.expires_at || response.invite_expires_at;
-    reportSuccess(token ? `${prefix}. Delivery: ${delivery}. Token: ${token}. Expires: ${formatDate(expires)}` : `${prefix}. Delivery: ${delivery}.`);
+    if (token) {
+      const resetUrl = `${window.location.origin}/reset-password?token=${token}`;
+      reportSuccess(`${prefix}. Đường dẫn reset mật khẩu (Local): ${resetUrl} (Vui lòng copy đường dẫn này gửi cho người dùng). Hết hạn lúc: ${formatDate(expires)}`);
+    } else {
+      reportSuccess(`${prefix}. Phương thức gửi: ${delivery}.`);
+    }
   }
 
   const lockMutation = useMutation({ mutationFn: ({ login, locked }: { login: string; locked: boolean }) => stepUpFetch(`/api/v1/admin/users/${encodeURIComponent(login)}/${locked ? 'lock' : 'unlock'}`, { method: 'POST' }, `${locked ? 'Khóa' : 'Mở khóa'} User ${login}`), onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ['admin-users'] }); reportSuccess('User lock state updated.'); }, onError: reportError });

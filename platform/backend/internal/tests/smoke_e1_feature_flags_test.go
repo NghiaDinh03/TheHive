@@ -26,7 +26,7 @@ func TestE1_FeatureFlagCRUD(t *testing.T) {
 		"scope":       "global",
 	}
 	body, _ := json.Marshal(createReq)
-	req, _ := http.NewRequest("POST", baseURL+"/api/v1/feature-flags", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/admin/feature-flags", bytes.NewBuffer(body))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
@@ -48,7 +48,7 @@ func TestE1_FeatureFlagCRUD(t *testing.T) {
 	t.Logf("Feature flag created: %s (enabled=%v)", flag.Name, flag.Enabled)
 
 	// Get feature flag
-	req2, _ := http.NewRequest("GET", baseURL+"/api/v1/feature-flags/new-dashboard-ui", nil)
+	req2, _ := http.NewRequest("GET", baseURL+"/api/v1/admin/feature-flags/new-dashboard-ui", nil)
 	req2.Header.Set("Authorization", "Bearer "+adminToken)
 	resp2, err := http.DefaultClient.Do(req2)
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestE1_FeatureFlagCRUD(t *testing.T) {
 		"enabled": true,
 	}
 	body3, _ := json.Marshal(enableReq)
-	req3, _ := http.NewRequest("PATCH", baseURL+"/api/v1/feature-flags/new-dashboard-ui", bytes.NewBuffer(body3))
+	req3, _ := http.NewRequest("PATCH", baseURL+"/api/v1/admin/feature-flags/new-dashboard-ui", bytes.NewBuffer(body3))
 	req3.Header.Set("Authorization", "Bearer "+adminToken)
 	req3.Header.Set("Content-Type", "application/json")
 	resp3, err := http.DefaultClient.Do(req3)
@@ -73,7 +73,7 @@ func TestE1_FeatureFlagCRUD(t *testing.T) {
 	t.Log("Feature flag enabled successfully")
 
 	// List feature flags
-	req4, _ := http.NewRequest("GET", baseURL+"/api/v1/feature-flags", nil)
+	req4, _ := http.NewRequest("GET", baseURL+"/api/v1/admin/feature-flags", nil)
 	req4.Header.Set("Authorization", "Bearer "+adminToken)
 	resp4, err := http.DefaultClient.Do(req4)
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestE1_FeatureFlagCRUD(t *testing.T) {
 	t.Log("Feature flags listed successfully")
 
 	// Delete feature flag
-	req5, _ := http.NewRequest("DELETE", baseURL+"/api/v1/feature-flags/new-dashboard-ui", nil)
+	req5, _ := http.NewRequest("DELETE", baseURL+"/api/v1/admin/feature-flags/new-dashboard-ui", nil)
 	req5.Header.Set("Authorization", "Bearer "+adminToken)
 	resp5, err := http.DefaultClient.Do(req5)
 	require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestE1_FeatureFlagOrgScope(t *testing.T) {
 		"scope_id":    "admin",
 	}
 	body, _ := json.Marshal(createReq)
-	req, _ := http.NewRequest("POST", baseURL+"/api/v1/feature-flags", bytes.NewBuffer(body))
+	req, _ := http.NewRequest("POST", baseURL+"/api/v1/admin/feature-flags", bytes.NewBuffer(body))
 	req.Header.Set("Authorization", "Bearer "+adminToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := http.DefaultClient.Do(req)
@@ -118,7 +118,7 @@ func TestE1_FeatureFlagOrgScope(t *testing.T) {
 	t.Log("Org-scoped feature flag created successfully")
 
 	// Cleanup
-	req2, _ := http.NewRequest("DELETE", baseURL+"/api/v1/feature-flags/org-pilot-feature", nil)
+	req2, _ := http.NewRequest("DELETE", baseURL+"/api/v1/admin/feature-flags/org-pilot-feature", nil)
 	req2.Header.Set("Authorization", "Bearer "+adminToken)
 	resp2, _ := http.DefaultClient.Do(req2)
 	resp2.Body.Close()

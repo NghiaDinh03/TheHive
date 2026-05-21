@@ -82,6 +82,9 @@ func (s *Server) routes() {
 	s.registerIntegrationRoutes(api, authRequired)
 	s.registerContentRoutes(api, authRequired)
 	s.registerSearchRoutes(api, authRequired)
+
+	authAPIKey := AuthenticateAPIKey(s.db)
+	s.registerN8NRoutes(api, authAPIKey)
 }
 
 func (s *Server) registerStatusRoutes(api *echo.Group) {

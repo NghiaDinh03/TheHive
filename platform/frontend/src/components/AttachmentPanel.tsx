@@ -113,7 +113,7 @@ export function AttachmentPanel({ user, initialAttachments = [], caseId = '', ob
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    setMessage('ZIP downloaded. TheHive 4 password convention applies (default: malware).');
+    setMessage('ZIP downloaded. NCS Fusion Center password convention applies (default: malware).');
   }
 
   const error = (upload.error as Error | undefined)?.message ?? (attachments.error as Error | undefined)?.message;
@@ -172,7 +172,7 @@ export function AttachmentPanel({ user, initialAttachments = [], caseId = '', ob
                     className={`px-3 py-1 bg-slate-800 hover:bg-slate-700 text-orange-400 border border-slate-600 rounded text-xs transition-colors disabled:opacity-50`}
                     disabled={!canDownload}
                     onClick={() => void downloadZip(attachment.id)}
-                    title="Download as TheHive 4 password-protected ZIP (default password: malware)"
+                    title="Download as NCS Fusion Center password-protected ZIP (default password: malware)"
                   >
                     ZIP
                   </button>

@@ -46,11 +46,7 @@ func (s *Server) configureNotificationWorker() {
 		BatchSize:    s.cfg.NotificationWorkerBatchSize,
 	})
 	nw.RegisterAdapter(notification.NewWebhookAdapter())
-	if s.cfg.MailEnabled {
-		nw.RegisterAdapter(notification.NewEmailAdapter(
-			s.cfg.MailHost, s.cfg.MailPort, s.cfg.MailFrom, s.cfg.MailUsername, s.cfg.MailPassword,
-		))
-	}
+	nw.RegisterAdapter(notification.NewEmailAdapter(s.db))
 	s.notifWorker = nw
 	s.log.Info("notification worker configured")
 }

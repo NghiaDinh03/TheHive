@@ -380,11 +380,11 @@ body {
   padding: 2px 6px;
 }
 
-.severity-0 { background-color: #00a65a; }
-.severity-1 { background-color: #f39c12; }
-.severity-2 { background-color: #dd4b39; }
+.severity-0 { background-color: #2563eb; }
+.severity-1 { background-color: #eab308; }
+.severity-2 { background-color: #f97316; }
 .severity-3,
-.severity-4 { background-color: #a94442; }
+.severity-4 { background-color: #ef4444; }
 
 .thehive-tabs {
   display: inline-flex;
@@ -5644,10 +5644,10 @@ select.thehive-input { appearance: auto; }
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.severity-0, .severity-low { background: rgba(34,197,94,0.15); color: #4ade80; }
-.severity-1, .severity-medium { background: rgba(245,158,11,0.15); color: #fbbf24; }
-.severity-2, .severity-high { background: rgba(239,68,68,0.15); color: #f87171; }
-.severity-3, .severity-4, .severity-critical { background: rgba(168,85,247,0.15); color: #c084fc; }
+.severity-0, .severity-low { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.severity-1, .severity-medium { background: rgba(234,179,8,0.15); color: #facc15; }
+.severity-2, .severity-high { background: rgba(249,115,22,0.15); color: #fb923c; }
+.severity-3, .severity-4, .severity-critical { background: rgba(239,68,68,0.15); color: #f87171; }
 
 /* ─── TLP color strip (left border on case rows) ──────────────────────────── */
 .bg-tlp-0 { background: #fff !important; }
@@ -5811,7 +5811,16 @@ a:hover { color: var(--ncs-primary); }
 .label-success { background: rgba(34,197,94,0.2); color: #4ade80; }
 .label-danger { background: rgba(239,68,68,0.2); color: #f87171; }
 .label-warning { background: rgba(245,158,11,0.2); color: #fbbf24; }
+.label-orange { background: rgba(249,115,22,0.2); color: #fb923c; }
 .label-info { background: rgba(6,182,212,0.2); color: #22d3ee; }
+
+@keyframes slide-left {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.anim-slide-left {
+  animation: slide-left 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
 
 /* ─── Button Icon (investigation alert actions) ───────────────────────────── */
 .btn-icon {
@@ -7354,85 +7363,44 @@ h1, h2, h3, h4, h5, h6 {
     --sidebar-ring: oklch(0.556 0 0);
   }
 }
-/* 
-  .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans);
-  }
-  :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
-  }
-  .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
-  }
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-  html {
-  }
+
+/* Color severity sync (Blue, Yellow, Orange, Red) */
+.severity-0, .severity-low, .severity-1 { 
+  background-color: rgba(59, 130, 246, 0.15) !important; 
+  color: #60a5fa !important; 
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
 }
-*/
+.severity-2, .severity-medium { 
+  background-color: rgba(234, 179, 8, 0.15) !important; 
+  color: #facc15 !important; 
+  border: 1px solid rgba(234, 179, 8, 0.3) !important;
+}
+.severity-3, .severity-high { 
+  background-color: rgba(249, 115, 22, 0.15) !important; 
+  color: #fb923c !important; 
+  border: 1px solid rgba(249, 115, 22, 0.3) !important;
+}
+.severity-4, .severity-critical { 
+  background-color: rgba(239, 68, 68, 0.15) !important; 
+  color: #f87171 !important; 
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+}
+
+/* Custom label support for bootstrap legacy */
+.label-primary, .label-low {
+  background-color: rgba(59, 130, 246, 0.15) !important;
+  color: #60a5fa !important;
+}
+.label-yellow, .label-medium {
+  background-color: rgba(234, 179, 8, 0.2) !important;
+  color: #facc15 !important;
+}
+.label-orange, .label-high {
+  background-color: rgba(249, 115, 22, 0.2) !important;
+  color: #fb923c !important;
+}
+.label-danger, .label-critical {
+  background-color: rgba(239, 68, 68, 0.2) !important;
+  color: #f87171 !important;
+  font-weight: bold !important;
+}

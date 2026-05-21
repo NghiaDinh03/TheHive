@@ -210,7 +210,7 @@ export default function DashboardsPage() {
                   <h3 className="box-title">Import Dashboard</h3>
                 </div>
                 <div className="box-body">
-                  <p className="text-muted text-sm">Select a JSON file exported from TheHive 4 or this platform.</p>
+                  <p className="text-muted text-sm">Select a JSON file exported from NCS Fusion Center or this platform.</p>
                   <input
                     type="file"
                     accept=".json"

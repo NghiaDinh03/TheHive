@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -10,8 +11,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/thehive-platform/backend/internal/apierr"
 	"github.com/thehive-platform/backend/internal/audit"
+	"github.com/thehive-platform/backend/internal/misp"
 	"github.com/thehive-platform/backend/internal/notification"
 	"github.com/thehive-platform/backend/internal/repository/workwrite"
+	"go.uber.org/zap"
 )
 
 type WorkWriteHandler struct {
@@ -403,6 +406,13 @@ func (h *WorkWriteHandler) withTx(c echo.Context, action string, entityType stri
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, action+" failed")
 	}
+	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu có tạo/cập nhật Observable là IOC
+	if action == "observable.create" || action == "observable.update" {
+		if obs, ok := after.(workwrite.ObservableResponse); ok && obs.IOC && obs.CaseID != "" {
+			go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), obs.CaseID)
+		}
+	}
+
 	// Emit notification trigger after successful commit
 	if h.notifEm != nil {
 		if trigger, ok := actionToTrigger[action]; ok {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -9,8 +10,10 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/thehive-platform/backend/internal/apierr"
 	"github.com/thehive-platform/backend/internal/audit"
+	"github.com/thehive-platform/backend/internal/misp"
 	"github.com/thehive-platform/backend/internal/notification"
 	"github.com/thehive-platform/backend/internal/repository/casewrite"
+	"go.uber.org/zap"
 )
 
 type CaseWriteHandler struct {
@@ -114,6 +117,9 @@ func (h *CaseWriteHandler) Create(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, "case create failed")
 	}
+	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu là Incident
+	go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), created.ID)
+
 	if h.notifEm != nil {
 		go h.notifEm.EmitCaseEvent(c.Request().Context(), notification.TriggerCaseCreated, created.ID, actorLogin(c), nil)
 	}
@@ -161,6 +167,9 @@ func (h *CaseWriteHandler) Patch(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, "case update failed")
 	}
+	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu có thay đổi hoặc là Incident
+	go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), updated.ID)
+
 	if h.notifEm != nil {
 		go h.notifEm.EmitCaseEvent(c.Request().Context(), notification.TriggerCaseUpdated, updated.ID, actorLogin(c), nil)
 	}
@@ -407,5 +416,25 @@ func (h *CaseWriteHandler) Merge(c echo.Context) error {
 		"case":        updated,
 		"target_case": req.TargetCaseID,
 		"status":      "merged",
+	})
+}
+
+// SyncMISP kích hoạt đồng bộ hóa IOC của Case sang máy chủ MISP thủ công từ UI
+func (h *CaseWriteHandler) SyncMISP(c echo.Context) error {
+	caseID := strings.TrimSpace(c.Param("id"))
+
+	var exists bool
+	err := h.db.GetContext(c.Request().Context(), &exists, `SELECT EXISTS(SELECT 1 FROM cases WHERE id = $1::uuid)`, caseID)
+	if err != nil || !exists {
+		return apierr.New(http.StatusNotFound, "Không tìm thấy Case tương ứng")
+	}
+
+	// Trigger cưỡng bức đồng bộ trong background
+	go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), caseID)
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"case_id": caseID,
+		"status":  "triggered",
+		"message": "Đã kích hoạt đồng bộ hóa IOC sang máy chủ MISP trong nền.",
 	})
 }

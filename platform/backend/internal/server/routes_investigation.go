@@ -41,6 +41,7 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	api.POST("/cases/:id/close", caseWrite.Close, authRequired, RequirePermission("manageCase"))
 	api.POST("/cases/:id/reopen", caseWrite.Reopen, authRequired, RequirePermission("manageCase"))
 	api.POST("/cases/:id/duplicate", caseWrite.MarkDuplicated, authRequired, RequirePermission("manageCase"))
+	api.POST("/cases/:id/sync-misp", caseWrite.SyncMISP, authRequired, RequirePermission("manageCase"))
 	api.POST("/cases/:id/logs", workWrite.AppendCaseLog, authRequired, RequirePermission("manageCase"))
 	api.GET("/cases/:id/tasks", detail.ListCaseTasks, authRequired, RequirePermission("manageCase"))
 	api.GET("/cases/:id/logs", detail.ListCaseLogs, authRequired, RequirePermission("manageCase"))

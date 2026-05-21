@@ -19,6 +19,7 @@ func (s *Server) registerAuthRoutes(api *echo.Group) {
 	authGrp := api.Group("/auth")
 	authGrp.POST("/login", authHandler.Login, authLimiter.Middleware("login"))
 	authGrp.POST("/totp/login", authHandler.LoginTOTP, authLimiter.Middleware("login"))
+	authGrp.POST("/unlock", authHandler.UnlockWith2FA, authLimiter.Middleware("login"))
 	authGrp.POST("/register", authHandler.Register, authLimiter.Middleware("register"))
 	authGrp.POST("/password-reset/request", authHandler.RequestPasswordReset, authLimiter.Middleware("password-reset-request"))
 	authGrp.POST("/password-reset/confirm", authHandler.ResetPassword, authLimiter.Middleware("password-reset-confirm"))
@@ -26,8 +27,8 @@ func (s *Server) registerAuthRoutes(api *echo.Group) {
 	authMiddleware := Authenticate(s.cfg.JWTSecret, s.db)
 	// TOTP setup and management (requires authentication)
 	authGrp.GET("/totp/setup", authHandler.SetupTOTP, authMiddleware)
-	authGrp.POST("/totp/verify", authHandler.VerifyAndEnableTOTP, authMiddleware)
-	authGrp.POST("/totp/disable", authHandler.DisableTOTP, authMiddleware)
+	authGrp.POST("/totp/verify", authHandler.VerifyAndEnableTOTP, authMiddleware, authLimiter.Middleware("totp-verify"))
+	authGrp.POST("/totp/disable", authHandler.DisableTOTP, authMiddleware, authLimiter.Middleware("totp-disable"))
 
 	authGrp.POST("/logout", authHandler.Logout, authMiddleware)
 	authGrp.GET("/me", authHandler.Me, authMiddleware)
@@ -42,6 +43,9 @@ func (s *Server) registerAuthRoutes(api *echo.Group) {
 	authGrp.POST("/totp/set", handler.TOTPSetSecret, authMiddleware)
 	authGrp.POST("/totp/unset", handler.TOTPUnsetSecret, authMiddleware)
 	authGrp.POST("/totp/unset/:user", handler.TOTPUnsetSecret, authMiddleware, RequirePermission("manageUser"))
+
+	usersGrp := api.Group("/users", authMiddleware)
+	usersGrp.GET("/search", authHandler.SearchUsers)
 }
 
 // registerAdminRoutes registers admin management routes under /api/v1/admin.
@@ -55,22 +59,22 @@ func (s *Server) registerAdminRoutes(api *echo.Group, authRequired echo.Middlewa
 	adminGrp.GET("/ui-config", admin.GetUISettings, RequirePermission("manageConfig"))
 	adminGrp.POST("/ui-config", admin.SaveUISettings, RequirePermission("manageConfig"))
 	adminGrp.GET("/users", admin.ListUsers, RequirePermission("manageUser"))
-	adminGrp.POST("/users", admin.CreateUser, RequirePermission("manageUser"))
-	adminGrp.PATCH("/users/:login", admin.UpdateUser, RequirePermission("manageUser"))
-	adminGrp.DELETE("/users/:login", admin.DeleteUser, RequirePermission("manageUser"))
-	adminGrp.POST("/users/:login/lock", admin.LockUser, RequirePermission("manageUser"))
-	adminGrp.POST("/users/:login/unlock", admin.UnlockUser, RequirePermission("manageUser"))
-	adminGrp.POST("/users/:login/reset-password", admin.ResetUserPassword, RequirePermission("manageUser"))
-	adminGrp.POST("/users/:login/reset-token", admin.GenerateResetToken, RequirePermission("manageUser"))
-	adminGrp.POST("/users/:login/approve", admin.ApproveUser, RequirePermission("manageUser"))
-	adminGrp.GET("/organisations", admin.ListOrganisations, RequirePermission("manageOrganisation"))
-	adminGrp.POST("/organisations", admin.UpsertOrganisation, RequirePermission("manageOrganisation"))
-	adminGrp.PATCH("/organisations/:id", admin.UpdateOrganisation, RequirePermission("manageOrganisation"))
-	adminGrp.DELETE("/organisations/:id", admin.DeleteOrganisation, RequirePermission("manageOrganisation"))
-	adminGrp.GET("/profiles", admin.ListProfiles, RequirePermission("manageProfile"))
-	adminGrp.POST("/profiles", admin.UpsertProfile, RequirePermission("manageProfile"))
-	adminGrp.PATCH("/profiles/:id", admin.UpdateProfile, RequirePermission("manageProfile"))
-	adminGrp.DELETE("/profiles/:id", admin.DeleteProfile, RequirePermission("manageProfile"))
+	adminGrp.POST("/users", admin.CreateUser, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.PATCH("/users/:login", admin.UpdateUser, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.DELETE("/users/:login", admin.DeleteUser, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.POST("/users/:login/lock", admin.LockUser, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.POST("/users/:login/unlock", admin.UnlockUser, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.POST("/users/:login/reset-password", admin.ResetUserPassword, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.POST("/users/:login/reset-token", admin.GenerateResetToken, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.POST("/users/:login/approve", admin.ApproveUser, RequirePermission("manageUser"), RequireStepUp2FA(s.db))
+	adminGrp.GET("/organisations", admin.ListOrganisations, RequireAnyPermission("manageOrganisation", "manageUser"))
+	adminGrp.POST("/organisations", admin.UpsertOrganisation, RequirePermission("manageOrganisation"), RequireStepUp2FA(s.db))
+	adminGrp.PATCH("/organisations/:id", admin.UpdateOrganisation, RequirePermission("manageOrganisation"), RequireStepUp2FA(s.db))
+	adminGrp.DELETE("/organisations/:id", admin.DeleteOrganisation, RequirePermission("manageOrganisation"), RequireStepUp2FA(s.db))
+	adminGrp.GET("/profiles", admin.ListProfiles, RequireAnyPermission("manageProfile", "manageUser"))
+	adminGrp.POST("/profiles", admin.UpsertProfile, RequirePermission("manageProfile"), RequireStepUp2FA(s.db))
+	adminGrp.PATCH("/profiles/:id", admin.UpdateProfile, RequirePermission("manageProfile"), RequireStepUp2FA(s.db))
+	adminGrp.DELETE("/profiles/:id", admin.DeleteProfile, RequirePermission("manageProfile"), RequireStepUp2FA(s.db))
 
 	// Custom field definition catalogue (legacy admin/custom-fields.html).
 	adminGrp.GET("/custom-fields", catalog.ListCustomFieldDefs, RequirePermission("manageCustomField"))
@@ -127,9 +131,8 @@ func (s *Server) registerAdminRoutes(api *echo.Group, authRequired echo.Middlewa
 	adminGrp.DELETE("/feature-flags/:name", featureFlagHandler.Delete, RequirePermission("managePlatform"))
 
 	// Legacy parity: Archive links management
-	adminGrp.GET("/archive-links", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, []map[string]interface{}{})
-	}, RequirePermission("managePlatform"))
+	archiveLinkHandler := handler.NewArchiveLinkHandler(s.db)
+	adminGrp.GET("/archive-links", archiveLinkHandler.List, RequirePermission("managePlatform"))
 }
 
 // registerAuditRoutes registers audit log routes under /api/v1/audit.
@@ -146,12 +149,6 @@ func (s *Server) newAuditRecorder() *audit.Recorder {
 
 func (s *Server) newMailSender() *mail.Sender {
 	return mail.NewSender(mail.Config{
-		Enabled:  s.cfg.MailEnabled,
-		Host:     s.cfg.MailHost,
-		Port:     s.cfg.MailPort,
-		Username: s.cfg.MailUsername,
-		Password: s.cfg.MailPassword,
-		From:     s.cfg.MailFrom,
 		BaseURL:  s.cfg.PublicBaseURL,
-	})
+	}, s.db)
 }

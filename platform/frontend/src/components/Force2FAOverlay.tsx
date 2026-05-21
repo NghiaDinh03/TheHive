@@ -56,12 +56,12 @@ export function Force2FAOverlay() {
       <div className="bg-gray-900 border border-red-500/50 shadow-2xl rounded-lg w-full max-w-[500px] overflow-hidden pointer-events-auto">
         <div className="bg-red-600 px-4 py-3 flex items-center gap-2 border-b border-red-700">
           <i className="fa fa-shield text-white text-lg"></i>
-          <h3 className="text-white font-medium m-0 text-base">Yêu cầu Bảo mật Bắt buộc</h3>
+          <h3 className="text-white font-medium m-0 text-base">Mandatory Security Requirement</h3>
         </div>
         <div className="p-6">
           <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 px-4 py-3 rounded mb-6 text-sm">
-            Quản trị viên đã kích hoạt yêu cầu <strong className="text-yellow-400 font-semibold">Bảo mật 2 Bước (2FA)</strong> cho tài khoản của bạn. 
-            Bạn bắt buộc phải thiết lập 2FA ngay bây giờ để có thể tiếp tục sử dụng hệ thống.
+            The administrator has enabled <strong className="text-yellow-400 font-semibold">Two-Factor Authentication (2FA)</strong> for your account. 
+            You must set up 2FA now to continue using the system.
           </div>
           
           {error && <div className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-3 rounded mb-6 text-sm">{error}</div>}
@@ -71,15 +71,15 @@ export function Force2FAOverlay() {
               {setupTotp.isPending ? (
                 <div className="flex flex-col items-center gap-3">
                   <div className="w-6 h-6 border-2 border-red-500 border-t-transparent rounded-full animate-spin"></div>
-                  <span>Đang khởi tạo mã QR...</span>
+                  <span>Initializing QR Code...</span>
                 </div>
-              ) : 'Không thể tải mã QR. Vui lòng tải lại trang.'}
+              ) : 'Unable to load QR Code. Please reload the page.'}
             </div>
           ) : (
             <div className="flex flex-col items-center">
               <p className="text-sm text-gray-300 mb-6 text-center">
-                1. Sử dụng ứng dụng Google Authenticator hoặc Authy để quét mã QR bên dưới.<br/>
-                2. Nhập mã 6 số hiện trên điện thoại vào ô xác nhận.
+                1. Scan the QR code below using Google Authenticator or Authy.<br/>
+                2. Enter the 6-digit code shown on your phone to verify.
               </p>
               
               <div className="bg-white p-4 rounded-xl shadow-inner mb-6 inline-block">
@@ -101,7 +101,7 @@ export function Force2FAOverlay() {
                   onClick={() => verifyTotp.mutate()}
                   disabled={totpVerifyCode.length !== 6 || verifyTotp.isPending}
                 >
-                  {verifyTotp.isPending ? 'Đang xử lý...' : 'Xác nhận & Bật'}
+                  {verifyTotp.isPending ? 'Verifying...' : 'Verify & Enable'}
                 </button>
               </div>
             </div>

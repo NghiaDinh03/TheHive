@@ -298,7 +298,7 @@ func (h *DetailHandler) GetCase(c echo.Context) error {
 	}
 	history, err := h.entityHistory(c, "case", id)
 	if err != nil {
-		return apierr.New(http.StatusInternalServerError, "case history failed")
+		return apierr.New(http.StatusInternalServerError, fmt.Sprintf("case history failed: %v", err))
 	}
 	relatedCases, err := h.relatedCases(c, id)
 	if err != nil {
@@ -333,7 +333,7 @@ func (h *DetailHandler) GetAlert(c echo.Context) error {
 	}
 	history, err := h.entityHistory(c, "alert", id)
 	if err != nil {
-		return apierr.New(http.StatusInternalServerError, "alert history failed")
+		return apierr.New(http.StatusInternalServerError, fmt.Sprintf("alert history failed: %v", err))
 	}
 	alertCustomFields, err := h.alertCustomFields(c, id)
 	if err != nil {
@@ -404,7 +404,7 @@ func (h *DetailHandler) GetTask(c echo.Context) error {
 	}
 	history, err := h.entityHistory(c, "task", id)
 	if err != nil {
-		return apierr.New(http.StatusInternalServerError, "task history failed")
+		return apierr.New(http.StatusInternalServerError, fmt.Sprintf("task history failed: %v", err))
 	}
 	return c.JSON(http.StatusOK, TaskDetail{Task: row, Logs: logs, Attachments: attachments, History: history})
 }
@@ -563,7 +563,7 @@ func (h *DetailHandler) similarAlerts(c echo.Context, alert detailAlert) ([]deta
 func (h *DetailHandler) entityHistory(c echo.Context, entityType string, entityID string) ([]detailHistory, error) {
 	rows := []detailHistory{}
 	query := `SELECT a.action, COALESCE(u.login, a.actor_id::text, '') AS actor_id, a.entity_type, a.created_at, a.before_json::text, a.after_json::text 
-	          FROM audit_logs a LEFT JOIN users u ON a.actor_id = u.id 
+	          FROM audit_logs a LEFT JOIN users u ON a.actor_id = u.id::text 
 	          WHERE a.entity_type = $1 AND a.entity_id = $2 
 	          ORDER BY a.created_at DESC LIMIT 100`
 
@@ -571,7 +571,7 @@ func (h *DetailHandler) entityHistory(c echo.Context, entityType string, entityI
 		query = `
 			SELECT a.action, COALESCE(u.login, a.actor_id::text, '') AS actor_id, a.entity_type, a.created_at, a.before_json::text, a.after_json::text
 			FROM audit_logs a
-			LEFT JOIN users u ON a.actor_id = u.id
+			LEFT JOIN users u ON a.actor_id = u.id::text
 			WHERE 
 				(a.entity_type = 'case' AND a.entity_id = $2)
 				OR (a.entity_type = 'task' AND a.entity_id IN (SELECT id::text FROM task_items WHERE case_id = $2::uuid))

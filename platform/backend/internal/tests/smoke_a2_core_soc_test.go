@@ -28,7 +28,7 @@ var (
 // TestA2_LoginAndAuth verifies login profile loading
 func TestA2_LoginAndAuth(t *testing.T) {
 	loginReq := map[string]string{
-		"login":    "admin@thehive.local",
+		"login":    "ncs_admin@ncsgroup.vn",
 		"password": "12345@",
 	}
 
@@ -79,7 +79,7 @@ func TestA2_CaseCreate(t *testing.T) {
 		"tlp":         2,
 		"pap":         2,
 		"tags":        []string{"smoke-test", "a2"},
-		"owner":       "admin@thehive.local",
+		"owner":       "ncs_admin@ncsgroup.vn",
 	}
 
 	body, _ := json.Marshal(caseReq)

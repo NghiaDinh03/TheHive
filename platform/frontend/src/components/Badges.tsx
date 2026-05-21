@@ -1,15 +1,15 @@
 'use client';
 
-// AdminLTE/TheHive4 badge components ported from frontend/app/views/directives/
+// AdminLTE/NCS Fusion Center badge components ported from frontend/app/views/directives/
 // severity.html, tlp.html, tag-item.html, tag-list.html, task-flags.html,
 // observable-flags.html. Visual classes follow legacy Bootstrap labels.
 
 import { ReactNode } from 'react';
 
 const SEVERITY_LABELS: Record<number, { letter: string; klass: string; full: string }> = {
-  1: { letter: 'L', klass: 'label-info', full: 'Low' },
-  2: { letter: 'M', klass: 'label-warning', full: 'Medium' },
-  3: { letter: 'H', klass: 'label-danger', full: 'High' },
+  1: { letter: 'L', klass: 'label-primary', full: 'Low' },
+  2: { letter: 'M', klass: 'label-yellow', full: 'Medium' },
+  3: { letter: 'H', klass: 'label-orange', full: 'High' },
   4: { letter: 'C', klass: 'label-critical', full: 'Critical' },
 };
 

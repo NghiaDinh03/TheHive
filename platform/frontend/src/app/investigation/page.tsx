@@ -1,10 +1,10 @@
 'use client';
 
 import type { ChangeEvent } from 'react';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Briefcase, CheckCircle2, Clock3, Eye, Filter, Flag, Search, Tag, Info } from '@/components/FaIcon';
+import { AlertTriangle, Briefcase, CheckCircle2, Clock3, Eye, Filter, Flag, Search, Tag, Info, ChevronDown, ChevronUp, Copy, CheckCircle, SlidersHorizontal, List, Mail, MailOpen, FileText, Link, Times } from '@/components/FaIcon';
 import { Sidebar } from '@/components/Sidebar';
 import { Topbar } from '@/components/Topbar';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ type CaseSummary = { id: string; number: number; title: string; severity: number
 type AlertSummary = { id: string; title: string; type: string; source: string; source_ref: string; severity: number; tlp: number; pap?: number; status: string; read: boolean; follow?: boolean; flag?: boolean; external_link?: string; organisation_id?: string; case_template?: string; case_number?: number; observable_count: number; tags: string[]; last_sync_date?: string; created_at: string };
 type ObservableSummary = { id: string; data_type: string; data: string; message: string; tlp: number; ioc: boolean; sighted: boolean; ignore_similarity?: boolean; attachment_id?: string; tags: string[]; case_id?: string; case_number: number; case_title: string; created_by: string; created_at: string };
 type User = { login: string; name: string; permissions?: string[] };
-type Tab = 'cases' | 'alerts' | 'observables';
+type Tab = 'cases' | 'alerts' | 'observables' | 'fields';
 
 export default function InvestigationPage() {
   return <Suspense fallback={<div className="thehive-empty m-4">Loading investigation workspace...</div>}><InvestigationWorkspace /></Suspense>;
@@ -28,6 +28,42 @@ export default function InvestigationPage() {
 const severityLabels: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical', 4: 'Critical' };
 const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+const availableFields = [
+  { key: 'number', label: 'Case ID' },
+  { key: 'title', label: 'Title' },
+  { key: 'status', label: 'Status' },
+  { key: 'severity', label: 'Severity' },
+  { key: 'tlp', label: 'TLP' },
+  { key: 'pap', label: 'PAP' },
+  { key: 'owner', label: 'Owner' },
+  { key: 'assignee', label: 'Assignee' },
+  { key: 'tags', label: 'Tags' },
+  { key: 'summary', label: 'Summary' },
+  { key: 'case_template', label: 'Case Template' },
+  { key: 'impact_status', label: 'Impact' },
+  { key: 'resolution_status', label: 'Resolution' },
+  { key: 'created_at', label: 'Created At' },
+  { key: 'updated_at', label: 'Updated At' }
+];
+
+const fieldWidths: Record<string, number> = {
+  number: 110,
+  title: 350,
+  status: 130,
+  severity: 110,
+  tlp: 100,
+  pap: 100,
+  owner: 150,
+  assignee: 150,
+  tags: 220,
+  summary: 350,
+  case_template: 180,
+  impact_status: 130,
+  resolution_status: 160,
+  created_at: 160,
+  updated_at: 160
+};
+
 function InvestigationWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,7 +71,22 @@ function InvestigationWorkspace() {
   const [authedLogin, setAuthedLogin] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('cases');
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('thehive.visible_columns');
+      return saved ? JSON.parse(saved) : ['status', 'title', 'severity', 'details', 'assignee', 'updated'];
+    }
+    return ['status', 'title', 'severity', 'details', 'assignee', 'updated'];
+  });
+  const [selectedFields, setSelectedFields] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('thehive.selected_fields');
+      return saved ? JSON.parse(saved) : ['number', 'title', 'status', 'severity', 'tlp', 'tags'];
+    }
+    return ['number', 'title', 'status', 'severity', 'tlp', 'tags'];
+  });
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<SortSpec>({ field: 'updated_at', order: 'DESC' });
@@ -47,7 +98,49 @@ function InvestigationWorkspace() {
   const [pageSize, setPageSize] = useState(10);
   const [showBulkClose, setShowBulkClose] = useState(false);
   const [bulkCloseStatus, setBulkCloseStatus] = useState('TruePositive');
+  const [fieldSearch, setFieldSearch] = useState('');
   const [bulkCloseReason, setBulkCloseReason] = useState('');
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const [prevEntity, setPrevEntity] = useState<string>('cases');
+
+  const [colWidths, setColWidths] = useState<Record<string, number>>({
+    status: 120,
+    title: 400,
+    severity: 100,
+    details: 180,
+    assignee: 150,
+    updated: 140
+  });
+
+  const startResize = useCallback((columnKey: string, startEvent: React.MouseEvent) => {
+    startEvent.preventDefault();
+    const startX = startEvent.clientX;
+    const startWidth = colWidths[columnKey] || 150;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = Math.max(80, startWidth + (e.clientX - startX));
+      setColWidths(prev => ({
+        ...prev,
+        [columnKey]: newWidth
+      }));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [colWidths]);
+
+  useEffect(() => {
+    localStorage.setItem('thehive.visible_columns', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
+
+  useEffect(() => {
+    localStorage.setItem('thehive.selected_fields', JSON.stringify(selectedFields));
+  }, [selectedFields]);
 
   useEffect(() => {
     const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
@@ -60,11 +153,15 @@ function InvestigationWorkspace() {
   }, [searchParams]);
 
   useEffect(() => {
-    setPage(0);
-    setSelectedIds([]);
-    setSort({ field: activeTab === 'cases' ? 'number' : 'created_at', order: 'DESC' });
-    setFilters(activeTab === 'cases' ? { status: '_active' } : {});
-  }, [activeTab]);
+    const currentEntity = activeTab === 'fields' ? 'cases' : activeTab;
+    if (currentEntity !== prevEntity) {
+      setPage(0);
+      setSelectedIds([]);
+      setSort({ field: currentEntity === 'cases' ? 'number' : 'created_at', order: 'DESC' });
+      setFilters(currentEntity === 'cases' ? { status: '_active' } : {});
+      setPrevEntity(currentEntity);
+    }
+  }, [activeTab, prevEntity]);
 
   const params = useMemo(() => buildParams(page, pageSize, sort, filters), [page, pageSize, sort, filters]);
   const me = useQuery({ queryKey: ['me'], queryFn: () => apiFetch<User>('/api/v1/auth/me'), enabled: !!authedLogin });
@@ -83,7 +180,7 @@ function InvestigationWorkspace() {
 
   const activeCollection = activeTab === 'cases' ? cases.data : activeTab === 'alerts' ? alerts.data : observables.data;
   const activeTotal = activeCollection?.total ?? 0;
-  const activeValues = activeTab === 'cases' ? filteredCases.length : activeTab === 'alerts' ? filteredAlerts.length : filteredObservables.length;
+  const activeValues = activeTab === 'cases' || activeTab === 'fields' ? filteredCases.length : activeTab === 'alerts' ? filteredAlerts.length : filteredObservables.length;
   const mode = activeCollection?.mode ?? cases.data?.mode ?? alerts.data?.mode ?? observables.data?.mode ?? 'demo-read-only';
   const canBulk = hasAnyPermission(me.data, ['manageCase', 'manageAlert', 'manageObservable']);
   const selectedRows = selectedIds.length;
@@ -177,7 +274,11 @@ function InvestigationWorkspace() {
 
   if (!authedLogin) return null;
 
-  const activeItems = activeTab === 'cases' ? filteredCases : activeTab === 'alerts' ? filteredAlerts : filteredObservables;
+  const activeItems = activeTab === 'cases' || activeTab === 'fields' ? filteredCases : activeTab === 'alerts' ? filteredAlerts : filteredObservables;
+
+  const hasUnassignedCase = activeTab === 'cases' && filteredCases
+    .filter(c => selectedIds.includes(c.id))
+    .some(c => !c.assignee || c.assignee.trim() === "");
 
   return (
     <div className="flex min-h-screen bg-transparent relative">
@@ -192,7 +293,7 @@ function InvestigationWorkspace() {
             <div className="flex flex-col gap-6">
               
               {/* === FRAME 1 (TOP): Header & Advanced Filters === */}
-              <div className="glass-panel flex flex-col rounded-xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.4)] border border-slate-700/80 anim-fade-in bg-slate-800/20">
+              <div className="glass-panel flex flex-col rounded-xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.4)] anim-fade-in bg-slate-900/10">
                 {/* Header: Title + Tabs + Search */}
                 <div className="px-5 py-3 flex flex-wrap gap-2 justify-between items-center bg-slate-800/40">
                   <h3 className="text-blue-400 font-medium text-lg flex items-center gap-2">
@@ -200,146 +301,327 @@ function InvestigationWorkspace() {
                     {activeTab === 'cases' && <>Cases <span className="ml-2 px-2.5 py-0.5 text-xs glass-surface text-slate-300 rounded-full">{activeValues}/{activeTotal}</span></>}
                     {activeTab === 'alerts' && <>Alerts <span className="ml-2 px-2.5 py-0.5 text-xs glass-surface text-slate-300 rounded-full">{activeValues}/{activeTotal}</span></>}
                     {activeTab === 'observables' && <>Observables <span className="ml-2 px-2.5 py-0.5 text-xs glass-surface text-slate-300 rounded-full">{activeValues}/{activeTotal}</span></>}
+                    {activeTab === 'fields' && <>Flat SIEM Fields <span className="ml-2 px-2.5 py-0.5 text-xs glass-surface text-slate-300 rounded-full">{activeValues}/{activeTotal}</span></>}
                   </h3>
                   <div className="flex items-center gap-3">
                     <div className="flex glass-surface rounded-lg p-1">
                       <button className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 font-medium ${activeTab === 'cases' ? 'bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`} onClick={() => switchTab('cases')}><Briefcase size={14} /> Cases</button>
                       <button className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 font-medium ${activeTab === 'alerts' ? 'bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`} onClick={() => switchTab('alerts')}><AlertTriangle size={14} /> Alerts</button>
                       <button className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 font-medium ${activeTab === 'observables' ? 'bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`} onClick={() => switchTab('observables')}><Eye size={14} /> Observables</button>
+                      <button className={`px-3 py-1.5 text-sm rounded-md transition-all flex items-center gap-2 font-medium ${activeTab === 'fields' ? 'bg-blue-600 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`} onClick={() => switchTab('fields')}><List size={14} /> SIEM Fields</button>
                     </div>
-                    <button className={`px-3 py-1.5 text-sm rounded-lg transition-all flex items-center gap-2 font-medium border ${showFilters ? 'bg-blue-600 border-blue-500 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'glass-surface text-slate-400 hover:text-slate-200'}`} onClick={() => setShowFilters((v) => !v)} title="Toggle advanced filter panel"><Filter size={14} /> Filters</button>
+                    {(activeTab === 'cases' || activeTab === 'fields') && (
+                      <button 
+                        className={`px-3 py-1.5 text-sm rounded-lg transition-all flex items-center gap-2 font-medium border ${showColumnDropdown ? 'bg-blue-600 border-blue-500 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'glass-surface text-slate-400 hover:text-slate-200 border-slate-900/60'}`}
+                        onClick={() => setShowColumnDropdown(true)}
+                        title={activeTab === 'cases' ? "Select visible columns" : "Select SIEM fields"}
+                      >
+                        <SlidersHorizontal size={14} /> {activeTab === 'cases' ? 'Columns' : 'Fields'}
+                      </button>
+                    )}
+                    {activeTab !== 'fields' && (
+                      <button className={`px-3 py-1.5 text-sm rounded-lg transition-all flex items-center gap-2 font-medium border ${showFilters ? 'bg-blue-600 border-blue-500 shadow-[0_0_12px_rgba(37,99,235,0.3)] text-white' : 'glass-surface text-slate-400 hover:text-slate-200 border-slate-900/60'}`} onClick={() => setShowFilters((v) => !v)} title="Toggle advanced filters"><Filter size={14} /> Filters</button>
+                    )}
                     <div className="relative">
                       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                      <input className="glass-input w-64 pl-9 pr-4 py-2" placeholder={`Search ${activeTab}...`} value={query} onChange={(event: ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)} />
+                      <input className="glass-input w-64 pl-9 pr-4 py-2" placeholder={`Search...`} value={query} onChange={(event: ChangeEvent<HTMLInputElement>) => setQuery(event.target.value)} />
                     </div>
                   </div>
                 </div>
 
                 {/* Advanced Filter Frame */}
-                <div className="flex flex-col bg-slate-900/40">
-                  <div 
-                    className="px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition-colors select-none"
-                    onClick={() => setShowFilters(!showFilters)}
-                  >
-                    <div className="flex items-center gap-2 text-blue-400">
-                      <Filter size={16} />
-                      <span className="font-bold text-base text-slate-200">Advanced filters</span>
-                      {Object.keys(filters).length > 0 && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold shadow-[0_0_8px_rgba(59,130,246,0.2)]">
-                          {Object.keys(filters).length} active
-                        </span>
-                      )}
+                {activeTab !== 'fields' && (
+                  <div className="flex flex-col bg-slate-900/40">
+                    <div 
+                      className="px-5 py-4 flex items-center justify-between cursor-pointer hover:bg-slate-800/60 transition-colors select-none"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      <div className="flex items-center gap-2 text-blue-400">
+                        <Filter size={16} />
+                        <span className="font-bold text-base text-slate-200">Advanced Filters</span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {Object.keys(filters).length > 0 && (
+                          <button 
+                            className="px-3 py-1 glass-surface hover:bg-white/10 rounded-md text-slate-300 text-xs font-medium transition-colors"
+                            onClick={(e) => { e.stopPropagation(); clearAllFilters(); }}
+                          >
+                            Clear Filters
+                          </button>
+                        )}
+                        {showFilters ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      {Object.keys(filters).length > 0 && (
-                        <button 
-                          className="px-3 py-1 glass-surface hover:bg-white/10 rounded-md text-slate-300 text-xs font-medium transition-colors"
-                          onClick={(e) => { e.stopPropagation(); clearAllFilters(); }}
-                        >
-                          Clear all
-                        </button>
-                      )}
-                      <i className={`fa fa-chevron-${showFilters ? 'up' : 'down'} text-slate-500 text-xs`}></i>
-                    </div>
+                    
+                    {showFilters && (
+                      <div className="px-5 py-5 glass-surface anim-slide-up">
+                        <FilterPanel activeTab={activeTab} filters={filters} onChange={updateFilter} />
+                      </div>
+                    )}
                   </div>
-                  
-                  {showFilters && (
-                    <div className="px-5 py-5 glass-surface anim-slide-up">
-                      <FilterPanel activeTab={activeTab} filters={filters} onChange={updateFilter} />
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* === FRAME 2 (BOTTOM): Action Toolbar & Data Table === */}
-              <div className="glass-panel flex flex-col rounded-xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.4)] border border-slate-700/80 anim-slide-up bg-slate-900/40">
+              <div className="glass-panel flex flex-col rounded-xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.4)] anim-slide-up bg-slate-950/20">
                 
                 {/* Unified Action Toolbar */}
-                <div className="bg-slate-800/40 px-5 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-4 text-sm text-slate-300">
-                  <div className="flex flex-wrap items-center gap-3 flex-1">
-                    <span className="font-medium text-slate-200">{activeValues} shown <span className="mx-2 text-slate-600">|</span> <span className={selectedRows > 0 ? "text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.2)]" : "text-slate-500"}>{selectedRows} selected</span></span>
+                {activeTab !== 'fields' && (
+                  <div className="bg-slate-800/40 px-5 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-4 text-sm text-slate-300">
+                    <div className="flex flex-wrap items-center gap-3 flex-1">
+                      <span className="font-medium text-slate-200">Showing {activeValues} rows <span className="mx-2 text-slate-600">|</span> <span className={selectedRows > 0 ? "text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.2)]" : "text-slate-500"}>{selectedRows} selected</span></span>
+                      
+                      {Object.keys(filters).filter((k) => filters[k] && !k.startsWith('_')).length > 0 && (
+                        <>
+                          <span className="text-slate-600 mx-1 hidden sm:inline">|</span>
+                          <div className="flex flex-wrap gap-2 items-center">
+                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Filters:</span>
+                            {Object.entries(filters).filter(([k, v]) => v && !k.startsWith('_')).map(([k, v]) => (
+                              <span key={k} className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-blue-500/20 border border-blue-500/30 text-blue-200 rounded-full font-medium shadow-[0_0_8px_rgba(59,130,246,0.15)]">
+                                {k}: {v} <button className="hover:text-white ml-0.5" onClick={() => clearFilter(k)}>×</button>
+                              </span>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                     
-                    {Object.keys(filters).filter((k) => filters[k] && !k.startsWith('_')).length > 0 && (
-                      <>
-                        <span className="text-slate-600 mx-1 hidden sm:inline">|</span>
-                        <div className="flex flex-wrap gap-2 items-center">
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active:</span>
-                          {Object.entries(filters).filter(([k, v]) => v && !k.startsWith('_')).map(([k, v]) => (
-                            <span key={k} className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-blue-500/20 border border-blue-500/30 text-blue-200 rounded-full font-medium shadow-[0_0_8px_rgba(59,130,246,0.15)]">
-                              {k}: {v} <button className="hover:text-white ml-0.5" onClick={() => clearFilter(k)}>×</button>
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-slate-800/50 border-slate-900/60 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={!canBulk || selectedRows === 0 || bulkClose.isPending} onClick={() => setShowBulkClose(true)} title="Close selected items">
+                        {bulkClose.isPending ? 'Closing...' : 'Close Cases'}
+                      </Button>
+                      <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'bg-slate-800/50 border-slate-900/60 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={!canBulk || selectedRows === 0} onClick={() => { if (!bulkAssignee) setBulkAssignee(authedLogin || ''); setShowBulkAssign(true); }} title="Assign selected items">Assign</Button>
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-slate-800/50 border-slate-700/50 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={!canBulk || selectedRows === 0 || bulkClose.isPending} onClick={() => setShowBulkClose(true)} title="Close selected items">
-                      {bulkClose.isPending ? 'Closing…' : 'Close'}
-                    </Button>
-                    <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'bg-slate-800/50 border-slate-700/50 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={!canBulk || selectedRows === 0} onClick={() => { if (!bulkAssignee) setBulkAssignee(authedLogin || ''); setShowBulkAssign(true); }} title="Assign selected items to a user">Assign</Button>
-                    <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-slate-700/80 hover:bg-slate-600 border-slate-500 text-white' : 'bg-slate-800/50 border-slate-700/50 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={selectedRows === 0} onClick={() => void bulkExport()} title="Export selected items as JSON">Export</Button>
-                  </div>
-                </div>
+                )}
 
                 {/* Bulk Close Dialog */}
                 <Dialog open={showBulkClose} onOpenChange={setShowBulkClose}>
-                  <DialogContent className="bg-slate-900 border-slate-700/50 text-slate-300 sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle className="text-red-400">Close {selectedRows} {activeTab}</DialogTitle>
-                      <DialogDescription className="text-slate-400">
-                        Select a resolution status and provide a summary reason.
+                  <DialogContent showCloseButton={false} className="bg-slate-900/95 border border-slate-600/50 text-slate-300 sm:max-w-[460px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-700/30 p-6 anim-fade-in backdrop-blur-xl">
+                    <button 
+                      type="button" 
+                      onClick={() => { setShowBulkClose(false); setBulkCloseReason(''); }} 
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 transition-all p-1.5 rounded-lg hover:bg-white/5 focus:outline-none"
+                    >
+                      <Times size={14} />
+                    </button>
+                    <DialogHeader className="mb-1">
+                      <DialogTitle className="text-lg font-bold text-red-400 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
+                          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                          <line x1="9" y1="9" x2="15" y2="15"></line>
+                          <line x1="15" y1="9" x2="9" y2="15"></line>
+                        </svg>
+                        Close {selectedRows} case{selectedRows > 1 ? 's' : ''}
+                      </DialogTitle>
+                      <DialogDescription className="text-slate-400 text-xs">
+                        Please select a resolution status and enter a summary.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
+                    <div className="grid gap-4 py-2">
                       <div className="grid gap-2">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</label>
-                        <select className="glass-select py-2 w-full" value={bulkCloseStatus} onChange={e => setBulkCloseStatus(e.target.value)}>
-                          <option value="True positive">True positive</option>
-                          <option value="False positive">False positive</option>
-                        </select>
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution Status</label>
+                        {(() => {
+                          const resolutionOptions = [
+                            {
+                              value: 'FalsePositive',
+                              label: 'False positive',
+                              desc: 'False alarm due to benign activity or test logs',
+                              icon: (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-slate-400">
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <line x1="15" y1="9" x2="9" y2="15"></line>
+                                  <line x1="9" y1="9" x2="15" y2="15"></line>
+                                </svg>
+                              )
+                            },
+                            {
+                              value: 'TruePositive',
+                              label: 'True positive',
+                              desc: 'Confirmed security incident or policy violation',
+                              icon: (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-green-400">
+                                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                  <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                              )
+                            },
+                            {
+                              value: 'NeedConfirm',
+                              label: 'Need confirm',
+                              desc: 'Suspicious event requiring further forensic triage',
+                              icon: (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-orange-400">
+                                  <circle cx="12" cy="12" r="10"></circle>
+                                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                              )
+                            },
+                            {
+                              value: 'Incident',
+                              label: 'Incidents',
+                              desc: 'Immediate containment or incident response needed',
+                              icon: (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-red-400">
+                                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                              )
+                            }
+                          ];
+                          const selectedOption = resolutionOptions.find(opt => opt.value === bulkCloseStatus) || resolutionOptions[1];
+                          
+                          return (
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
+                                className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-500/40 shadow-inner"
+                              >
+                                <div className="flex items-center gap-3">
+                                  {selectedOption.icon}
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-bold text-slate-200 tracking-wide">{selectedOption.label}</span>
+                                    <span className="text-[10px] text-slate-400/80">{selectedOption.desc}</span>
+                                  </div>
+                                </div>
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${statusDropdownOpen ? 'rotate-180' : ''}`} />
+                              </button>
+
+                              {statusDropdownOpen && (
+                                <>
+                                  <div className="fixed inset-0 z-[150]" onClick={() => setStatusDropdownOpen(false)} />
+                                  <div className="absolute z-[200] w-full mt-2 bg-slate-950 border border-slate-800 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
+                                    {resolutionOptions.map((opt) => {
+                                      const isCurrent = opt.value === bulkCloseStatus;
+                                      return (
+                                        <button
+                                          key={opt.value}
+                                          type="button"
+                                          onClick={() => {
+                                            setBulkCloseStatus(opt.value);
+                                            setStatusDropdownOpen(false);
+                                          }}
+                                          className={`flex items-center justify-between w-full px-3.5 py-2.5 rounded-lg text-left transition-all duration-150 hover:bg-slate-900 ${
+                                            isCurrent ? 'bg-blue-600/10 border border-blue-500/20 text-blue-400 font-semibold' : 'text-slate-300'
+                                          }`}
+                                        >
+                                          <div className="flex items-center gap-3">
+                                            {opt.icon}
+                                            <div className="flex flex-col">
+                                              <span className={`text-xs font-bold tracking-wide ${isCurrent ? 'text-blue-400 font-semibold' : ''}`}>
+                                                {opt.label}
+                                              </span>
+                                              <span className="text-[10.5px] text-slate-400/90">{opt.desc}</span>
+                                            </div>
+                                          </div>
+                                          {isCurrent && (
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3.5 h-3.5 text-blue-400">
+                                              <polyline points="20 6 9 17 4 12"></polyline>
+                                            </svg>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                       <div className="grid gap-2">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reason (Summary)</label>
-                        <input className="glass-input py-2 w-full" placeholder="Resolution summary" value={bulkCloseReason} onChange={e => setBulkCloseReason(e.target.value)} />
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution Summary</label>
+                        <textarea 
+                          className="glass-input py-3 px-4 w-full h-24 text-xs resize-none focus:bg-slate-800/80 transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-700" 
+                          placeholder="Enter closure details, containment actions, or remediation analysis summary..." 
+                          value={bulkCloseReason} 
+                          onChange={e => setBulkCloseReason(e.target.value)} 
+                        />
                       </div>
+                      {hasUnassignedCase && (
+                        <div className="p-3 mb-2 rounded-xl bg-red-950/40 border border-red-900/50 text-red-300 text-xs flex items-start gap-2.5 leading-relaxed shadow-inner">
+                          <span className="text-sm mt-0.5">⚠️</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-bold text-red-200 tracking-wide uppercase text-[10px]">Action Required</span>
+                            <span>One or more selected cases do not have an assignee. Please assign an assignee to all selected cases before closing them.</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <DialogFooter>
-                      <Button variant="ghost" onClick={() => { setShowBulkClose(false); setBulkCloseReason(''); }} className="text-slate-400 hover:text-slate-300 hover:bg-white/10">Cancel</Button>
-                      <Button variant="default" className="bg-red-600 hover:bg-red-700 text-white shadow-sm" disabled={bulkClose.isPending} onClick={() => { bulkClose.mutate(); setShowBulkClose(false); }}>
-                        {bulkClose.isPending ? 'Processing…' : 'Confirm Close'}
+                    <div className="mt-6 flex items-center justify-end gap-3">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => { setShowBulkClose(false); setBulkCloseReason(''); }} 
+                        className="text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-slate-800 hover:border-slate-700 rounded-xl px-5 py-2.5 text-xs font-bold transition-all duration-200"
+                      >
+                        Cancel
                       </Button>
-                    </DialogFooter>
+                      <Button 
+                        variant="default" 
+                        className={`rounded-xl px-6 py-2.5 text-xs font-bold transition-all duration-300 flex items-center gap-1.5 border border-transparent ${
+                          hasUnassignedCase
+                            ? 'bg-slate-800/40 text-slate-500 cursor-not-allowed opacity-50 border-slate-900/40'
+                            : bulkCloseStatus === 'FalsePositive' 
+                            ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 shadow-[0_0_12px_rgba(148,163,184,0.1)]' 
+                            : bulkCloseStatus === 'TruePositive'
+                            ? 'bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.35)] font-bold'
+                            : bulkCloseStatus === 'NeedConfirm'
+                            ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.35)] font-bold'
+                            : 'bg-red-600 hover:bg-red-700 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)] font-bold'
+                        }`} 
+                        disabled={bulkClose.isPending || hasUnassignedCase} 
+                        onClick={() => { bulkClose.mutate(); setShowBulkClose(false); }}
+                      >
+                        {bulkClose.isPending ? 'Closing...' : 'Confirm Close'}
+                      </Button>
+                    </div>
                   </DialogContent>
                 </Dialog>
 
                 {/* Bulk Assign Dialog */}
                 <Dialog open={showBulkAssign} onOpenChange={setShowBulkAssign}>
-                  <DialogContent className="bg-slate-900 border-slate-700/50 text-slate-300 sm:max-w-[425px]">
-                    <DialogHeader>
-                      <DialogTitle className="text-blue-400">Assign {selectedRows} {activeTab}</DialogTitle>
-                      <DialogDescription className="text-slate-400">
-                        Enter the user login to assign these items to.
+                  <DialogContent showCloseButton={false} className="bg-slate-900/95 border border-slate-700/60 text-slate-300 sm:max-w-[425px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-700/30 p-6 anim-fade-in backdrop-blur-xl">
+                    <button 
+                      type="button" 
+                      onClick={() => setShowBulkAssign(false)} 
+                      className="absolute top-4 right-4 text-slate-400 hover:text-slate-200 transition-all p-1.5 rounded-lg hover:bg-white/5 focus:outline-none"
+                    >
+                      <Times size={14} />
+                    </button>
+                    <DialogHeader className="mb-1">
+                      <DialogTitle className="text-lg font-bold text-blue-400 flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5 h-5">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                          <circle cx="8.5" cy="7" r="4"></circle>
+                          <line x1="20" y1="8" x2="20" y2="14"></line>
+                          <line x1="23" y1="11" x2="17" y2="11"></line>
+                        </svg>
+                        Assign {selectedRows} {activeTab === 'cases' ? 'cases' : 'tasks'}
+                      </DialogTitle>
+                      <DialogDescription className="text-slate-400 text-xs">
+                        Enter the login of the SOC analyst to assign these items.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
+                    <div className="grid gap-4 py-2">
                       <div className="grid gap-2 relative">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Assignee Login</label>
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Assignee Login</label>
                         <input 
-                          className="glass-input py-2 w-full" 
-                          placeholder="User login (e.g. admin@ncsgroup.vn)" 
+                          className="glass-input py-2.5 px-4 w-full text-xs transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-700 focus:bg-slate-800/80" 
+                          placeholder="Username (e.g. admin@ncsgroup.vn)" 
                           value={bulkAssignee} 
                           onChange={e => { setBulkAssignee(e.target.value); setShowUserDropdown(true); }}
                           onFocus={() => setShowUserDropdown(true)}
                           onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
                         />
                         {showUserDropdown && suggestedUsers.length > 0 && (
-                          <div className="absolute top-[100%] left-0 w-full mt-1 bg-slate-800 border border-slate-700/80 rounded-md shadow-[0_4px_20px_rgba(0,0,0,0.5)] z-[100] max-h-48 overflow-y-auto glass-scroll py-1">
+                          <div className="absolute top-[100%] left-0 w-full mt-2 bg-slate-950 border border-slate-800 rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] z-[100] max-h-48 overflow-y-auto glass-scroll p-1.5 animate-in fade-in slide-in-from-top-2 duration-150">
                             {suggestedUsers.map(u => (
                               <div
                                 key={u}
-                                className="px-3 py-2 text-sm text-slate-300 hover:bg-blue-600/30 hover:text-blue-300 cursor-pointer transition-colors"
+                                className="px-3.5 py-2 rounded-lg text-xs text-slate-300 hover:bg-blue-600/10 hover:text-blue-400 cursor-pointer transition-colors font-medium"
                                 onMouseDown={(e) => { e.preventDefault(); setBulkAssignee(u); setShowUserDropdown(false); }}
                               >
                                 {u}
@@ -349,12 +631,23 @@ function InvestigationWorkspace() {
                         )}
                       </div>
                     </div>
-                    <DialogFooter>
-                      <Button variant="ghost" onClick={() => setShowBulkAssign(false)} className="text-slate-400 hover:text-slate-300 hover:bg-white/10">Cancel</Button>
-                      <Button variant="default" className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm" disabled={!bulkAssignee.trim() || bulkAssign.isPending} onClick={() => { bulkAssign.mutate(); setShowBulkAssign(false); }}>
-                        {bulkAssign.isPending ? 'Assigning…' : 'Confirm Assign'}
+                    <div className="mt-6 flex items-center justify-end gap-3">
+                      <Button 
+                        variant="ghost" 
+                        onClick={() => setShowBulkAssign(false)} 
+                        className="text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-slate-800 hover:border-slate-700 rounded-xl px-5 py-2.5 text-xs font-bold transition-all duration-200"
+                      >
+                        Cancel
                       </Button>
-                    </DialogFooter>
+                      <Button 
+                        variant="default" 
+                        className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-6 py-2.5 text-xs font-bold transition-all duration-300 shadow-[0_0_15px_rgba(59,130,246,0.35)]" 
+                        disabled={!bulkAssignee.trim() || bulkAssign.isPending} 
+                        onClick={() => { bulkAssign.mutate(); setShowBulkAssign(true); }}
+                      >
+                        {bulkAssign.isPending ? 'Assigning...' : 'Confirm'}
+                      </Button>
+                    </div>
                   </DialogContent>
                 </Dialog>
                 
@@ -372,7 +665,7 @@ function InvestigationWorkspace() {
                       {activeTab === 'cases' && (
                         cases.isLoading ? <div className="thehive-empty m-4">Loading cases...</div>
                         : cases.isError ? <LoadError entity="cases" error={cases.error} />
-                        : <CaseTable values={filteredCases} selectedIds={selectedIds} onToggle={toggleSelected} onToggleAll={() => toggleSelectAll(filteredCases)} onSort={toggleSort} sortSpec={sort} />
+                        : <CaseTable values={filteredCases} selectedIds={selectedIds} onToggle={toggleSelected} onToggleAll={() => toggleSelectAll(filteredCases)} onSort={toggleSort} sortSpec={sort} visibleColumns={visibleColumns} colWidths={colWidths} onStartResize={startResize} />
                       )}
                       {activeTab === 'alerts' && (
                         alerts.isLoading ? <div className="thehive-empty m-4">Loading alerts...</div>
@@ -384,18 +677,23 @@ function InvestigationWorkspace() {
                         : observables.isError ? <LoadError entity="observables" error={observables.error} />
                         : <ObservableTable values={filteredObservables} selectedIds={selectedIds} onToggle={toggleSelected} onToggleAll={() => toggleSelectAll(filteredObservables)} onSort={toggleSort} sortSpec={sort} />
                       )}
+                      {activeTab === 'fields' && (
+                        cases.isLoading ? <div className="thehive-empty m-4">Loading field data...</div>
+                        : cases.isError ? <LoadError entity="field data" error={cases.error} />
+                        : <FieldsViewPanel values={filteredCases} selectedFields={selectedFields} />
+                      )}
                     </div>
 
                     {/* Pagination footer */}
                     {activeItems.length > 0 && (
-                      <div className="px-5 py-3 bg-slate-900/60 flex justify-between items-center">
+                      <div className="px-5 py-3 bg-slate-900/60 flex justify-between items-center border-t border-slate-900/80">
                         <span className="text-sm text-slate-500 font-medium">Page {page + 1}</span>
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
                             <select className="glass-select py-1 pl-2 pr-6" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(0); }}>
-                              <option value={10}>10</option>
-                              <option value={20}>20</option>
-                              <option value={50}>50</option>
+                              <option value={10}>10 rows</option>
+                              <option value={20}>20 rows</option>
+                              <option value={50}>50 rows</option>
                             </select>
                           </div>
                           <div className="flex glass-surface rounded-md overflow-hidden">
@@ -410,6 +708,167 @@ function InvestigationWorkspace() {
             </div>
           </section>
         </main>
+           {/* Right-side Column/Field Selection Drawer */}
+        {showColumnDropdown && (
+          <div className="fixed inset-0 z-[9999] flex justify-end">
+            {/* Backdrop overlay */}
+            <div 
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300"
+              onClick={() => setShowColumnDropdown(false)}
+            />
+            
+            {/* Drawer Panel */}
+            <div className="relative w-85 max-w-full bg-slate-900/95 border-l border-slate-900/80 shadow-2xl h-full flex flex-col z-10 anim-slide-left p-6 text-slate-300">
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-900/50 pb-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="text-blue-400" size={18} />
+                  <span className="font-bold text-lg text-slate-100">
+                    {activeTab === 'cases' ? 'Visible Columns' : 'SIEM Fields Settings'}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setShowColumnDropdown(false)}
+                  className="text-slate-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-800/50 text-xl font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {activeTab === 'cases' ? (
+                <>
+                  {/* Cases Columns Config */}
+                  <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3">
+                    <p className="text-xs text-slate-400 mb-2 leading-relaxed">Configure which columns are displayed in the Case Table view. Toggle the checkboxes below to customize your layout.</p>
+                    {['status', 'title', 'severity', 'details', 'assignee', 'updated'].map((col) => {
+                      const labels: Record<string, string> = {
+                        status: 'Status',
+                        title: 'Case & Title',
+                        severity: 'Severity',
+                        details: 'Details',
+                        assignee: 'Assignee',
+                        updated: 'Updated'
+                      };
+                      const active = visibleColumns.includes(col);
+                      return (
+                        <label 
+                          key={col} 
+                          className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border ${active ? 'bg-blue-600/10 border-blue-500/30 text-blue-300' : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 bg-slate-950 border-slate-900 rounded text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                              checked={active}
+                              onChange={() => {
+                                setVisibleColumns(prev => 
+                                  prev.includes(col) 
+                                    ? prev.filter(c => c !== col) 
+                                    : [...prev, col]
+                                );
+                              }}
+                            />
+                            <span className="font-semibold text-sm select-none">{labels[col]}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {/* Footer buttons */}
+                  <div className="border-t border-slate-900/50 pt-6 mt-6 flex gap-3">
+                    <button 
+                      className="flex-1 py-2 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-755 text-slate-300 border border-slate-900/60 transition-colors"
+                      onClick={() => setVisibleColumns(['status', 'title', 'severity', 'details', 'assignee', 'updated'])}
+                    >
+                      Reset Default
+                    </button>
+                    <button 
+                      className="flex-1 py-2 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-[0_0_12px_rgba(37,99,235,0.3)]"
+                      onClick={() => setShowColumnDropdown(false)}
+                    >
+                      Apply Layout
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* SIEM Fields Config */}
+                  <p className="text-xs text-slate-400 mb-3 leading-relaxed">Select which fields to flatten and display in the SIEM Grid view. Use the search to find fields quickly.</p>
+                  
+                  {/* Search box inside drawer */}
+                  <div className="relative mb-4">
+                    <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input 
+                      className="w-full bg-slate-950 border border-slate-900/50 rounded-md py-1.5 px-3 pl-8 text-xs text-slate-300 focus:border-blue-500/50 outline-none transition-all"
+                      placeholder="Search fields..."
+                      value={fieldSearch}
+                      onChange={e => setFieldSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Scrollable checklist */}
+                  <div className="flex-1 overflow-y-auto glass-scroll flex flex-col gap-2 pr-1 mb-4">
+                    {availableFields
+                      .filter(f => f.key.toLowerCase().includes(fieldSearch.toLowerCase()) || f.label.toLowerCase().includes(fieldSearch.toLowerCase()))
+                      .map(f => {
+                        const active = selectedFields.includes(f.key);
+                        return (
+                          <label 
+                            key={f.key} 
+                            className={`flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-all border ${active ? 'bg-blue-600/10 border-blue-500/30 text-blue-300' : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <input 
+                                type="checkbox" 
+                                className="w-4 h-4 bg-slate-950 border-slate-900 rounded text-blue-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                                checked={active}
+                                onChange={() => {
+                                  setSelectedFields(prev => 
+                                    prev.includes(f.key) 
+                                      ? prev.filter(key => key !== f.key) 
+                                      : [...prev, f.key]
+                                  );
+                                }}
+                              />
+                              <span className="font-semibold text-xs select-none">{f.label}</span>
+                            </div>
+                            <span className="text-[10px] font-mono text-slate-500 select-all">{f.key}</span>
+                          </label>
+                        );
+                      })}
+                  </div>
+
+                  {/* Footer buttons with Clean All */}
+                  <div className="border-t border-slate-900/50 pt-4 mt-auto flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button 
+                        className="flex-1 py-2 text-xs font-semibold rounded-md bg-red-950/40 hover:bg-red-900/40 text-red-300 border border-red-900/30 transition-colors"
+                        onClick={() => setSelectedFields([])}
+                        title="Deselect all fields"
+                      >
+                        Clean All
+                      </button>
+                      <button 
+                        className="flex-1 py-2 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-755 text-slate-300 border border-slate-900/60 transition-colors"
+                        onClick={() => setSelectedFields(['number', 'title', 'status', 'severity', 'tlp', 'tags'])}
+                        title="Reset to default fields"
+                      >
+                        Reset Default
+                      </button>
+                    </div>
+                    <button 
+                      className="w-full py-2 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-[0_0_12px_rgba(37,99,235,0.3)]"
+                      onClick={() => setShowColumnDropdown(false)}
+                    >
+                      Apply Fields ({selectedFields.length})
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         </TooltipProvider>
       </div>
     </div>
@@ -463,79 +922,144 @@ function FilterPanel({ activeTab, filters, onChange }: {
 }
 
 function TextFilter({ label, name, value, tooltip, onChange }: { label: string; name: string; value: string; tooltip?: string; onChange: (key: string, value: string) => void }) {
-  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><input className="glass-input bg-slate-900/50 border-slate-700/50 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" placeholder={label} value={value} onChange={(e) => onChange(name, e.target.value)} /></label>;
+  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><input className="glass-input bg-slate-900/50 border-slate-900/60 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" placeholder={label} value={value} onChange={(e) => onChange(name, e.target.value)} /></label>;
 }
 function DateFilter({ label, name, value, tooltip, onChange }: { label: string; name: string; value: string; tooltip?: string; onChange: (key: string, value: string) => void }) {
-  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><input type="datetime-local" className="glass-input bg-slate-900/50 border-slate-700/50 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={toLocalDateInput(value)} onChange={(e) => onChange(name, e.target.value ? new Date(e.target.value).toISOString() : '')} /></label>;
+  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><input type="datetime-local" className="glass-input bg-slate-900/50 border-slate-900/60 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={toLocalDateInput(value)} onChange={(e) => onChange(name, e.target.value ? new Date(e.target.value).toISOString() : '')} /></label>;
 }
 function SelectFilter({ label, name, value, options, tooltip, onChange }: { label: string; name: string; value: string; tooltip?: string; options: Array<string | [string, string]>; onChange: (key: string, value: string) => void }) {
-  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><select className="glass-select bg-slate-900/50 border-slate-700/50 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={value} onChange={(e) => onChange(name, e.target.value)}><option value="">Any</option>{options.map((o) => { const pair = Array.isArray(o) ? o : [o, o]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select></label>;
+  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><select className="glass-select bg-slate-900/50 border-slate-900/60 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={value} onChange={(e) => onChange(name, e.target.value)}><option value="">Any</option>{options.map((o) => { const pair = Array.isArray(o) ? o : [o, o]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select></label>;
 }
 
 /* ─── Case table — mirrors case.list.html ───────────────────────────────────── */
-function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpec }: {
+function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpec, visibleColumns, colWidths, onStartResize }: {
   values: CaseSummary[]; selectedIds: string[];
   onToggle: (id: string) => void; onToggleAll: () => void;
-  onSort: (field: string) => void; sortSpec: SortSpec;
+  onSort: (field: string) => void; sortSpec: SortSpec; visibleColumns: string[];
+  colWidths: Record<string, number>;
+  onStartResize: (columnKey: string, startEvent: React.MouseEvent) => void;
 }) {
-  if (values.length === 0) return <div className="text-center py-10 text-slate-500">No records</div>;
+  if (values.length === 0) return <div className="text-center py-10 text-slate-500 font-medium">No cases found</div>;
   const allSelected = values.length > 0 && selectedIds.length === values.length;
+  
+  const showStatus = visibleColumns.includes('status');
+  const showTitle = visibleColumns.includes('title');
+  const showSeverity = visibleColumns.includes('severity');
+  const showDetails = visibleColumns.includes('details');
+  const showAssignee = visibleColumns.includes('assignee');
+  const showUpdated = visibleColumns.includes('updated');
+
+  const totalWidth = 6 + 48 
+    + (showStatus ? (colWidths.status ?? 120) : 0)
+    + (showTitle ? (colWidths.title ?? 400) : 0)
+    + (showSeverity ? (colWidths.severity ?? 100) : 0)
+    + (showDetails ? (colWidths.details ?? 180) : 0)
+    + (showAssignee ? (colWidths.assignee ?? 150) : 0)
+    + (showUpdated ? (colWidths.updated ?? 140) : 0);
+
   return (
-    <div className="w-full">
-      <table className="w-full text-left border-collapse min-w-[1000px]">
+    <div className="ring-1 ring-slate-950 bg-slate-950/40 rounded-xl overflow-x-auto glass-scroll shadow-2xl">
+      <table className="text-left border-collapse table-fixed" style={{ width: totalWidth, minWidth: '100%' }}>
+        <colgroup>
+          <col style={{ width: 6 }} />
+          <col style={{ width: 48 }} />
+          {showStatus && <col style={{ width: colWidths.status ?? 120 }} />}
+          {showTitle && <col style={{ width: colWidths.title ?? 400 }} />}
+          {showSeverity && <col style={{ width: colWidths.severity ?? 100 }} />}
+          {showDetails && <col style={{ width: colWidths.details ?? 180 }} />}
+          {showAssignee && <col style={{ width: colWidths.assignee ?? 150 }} />}
+          {showUpdated && <col style={{ width: colWidths.updated ?? 140 }} />}
+        </colgroup>
         <thead>
-          <tr className="bg-slate-950/60 border-b-0 text-slate-300 text-sm font-bold uppercase tracking-wider">
-            <th className="w-1.5 p-0"></th>
-            <th className="w-12 px-4 py-4"><input type="checkbox" className="bg-slate-800/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={allSelected} onChange={onToggleAll} /></th>
-            <th className="w-32 px-4 py-4"><SortBtn field="status" label="Status" tooltip="Current SOC workflow phase" spec={sortSpec} onSort={onSort} /></th>
-            <th className="px-4 py-4 min-w-[300px]">
-              <div className="flex items-center gap-1.5">
-                <SortBtn field="number" label="# Number" tooltip="Unique case identifier" spec={sortSpec} onSort={onSort} />
-                <span className="text-slate-600">/</span>
-                <SortBtn field="title" label="Title" tooltip="Brief incident description" spec={sortSpec} onSort={onSort} />
-              </div>
-            </th>
-            <th className="w-24 px-4 py-4 text-center"><SortBtn field="severity" label="Severity" tooltip="Potential impact level" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-48 px-4 py-4">Details <InfoTooltip content="Tasks, observables, and impact summary"><span className="cursor-help inline-flex ml-0.5"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
-            <th className="w-40 px-4 py-4"><SortBtn field="assignee" label="Assignee" tooltip="SOC Analyst handling this case" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-32 px-4 py-4 text-right">
-              <SortBtn field="updated_at" label="Updated" tooltip="Last modification timestamp" spec={sortSpec} onSort={onSort} />
-            </th>
+          <tr className="bg-slate-950/60 text-slate-300 text-sm font-bold uppercase tracking-wider">
+            <th className="p-0"></th>
+            <th className="px-4 py-4"><input type="checkbox" className="bg-slate-800/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={allSelected} onChange={onToggleAll} /></th>
+            {showStatus && (
+              <th className="px-4 py-4 relative">
+                <SortBtn field="status" label="Status" tooltip="SOC workflow status" spec={sortSpec} onSort={onSort} />
+                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('status', e)} onClick={(e) => e.stopPropagation()} />
+              </th>
+            )}
+            {showTitle && (
+              <th className="px-4 py-4 relative">
+                <div className="flex items-center gap-1.5">
+                  <SortBtn field="number" label="# Case ID" tooltip="Unique case ID" spec={sortSpec} onSort={onSort} />
+                  <span className="text-slate-600">/</span>
+                  <SortBtn field="title" label="Case Title" tooltip="Short description of the case" spec={sortSpec} onSort={onSort} />
+                </div>
+                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('title', e)} onClick={(e) => e.stopPropagation()} />
+              </th>
+            )}
+            {showSeverity && (
+              <th className="px-4 py-4 text-center relative">
+                <SortBtn field="severity" label="Severity" tooltip="Potential impact level" spec={sortSpec} onSort={onSort} />
+                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('severity', e)} onClick={(e) => e.stopPropagation()} />
+              </th>
+            )}
+            {showDetails && (
+              <th className="px-4 py-4 relative">
+                <div className="flex items-center">
+                  <span>Case Details</span>
+                  <InfoTooltip content="Number of tasks, observables, and alerts"><span className="cursor-help inline-flex ml-1"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>
+                </div>
+                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('details', e)} onClick={(e) => e.stopPropagation()} />
+              </th>
+            )}
+            {showAssignee && (
+              <th className="px-4 py-4 relative">
+                <SortBtn field="assignee" label="Assignee" tooltip="SOC analyst handling the case" spec={sortSpec} onSort={onSort} />
+                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('assignee', e)} onClick={(e) => e.stopPropagation()} />
+              </th>
+            )}
+            {showUpdated && (
+              <th className="px-4 py-4 text-right relative">
+                <SortBtn field="updated_at" label="Updated" tooltip="Last modification timestamp" spec={sortSpec} onSort={onSort} />
+                <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('updated', e)} onClick={(e) => e.stopPropagation()} />
+              </th>
+            )}
           </tr>
         </thead>
-        <tbody className="text-sm bg-slate-900/40">
+        <tbody className="text-sm bg-slate-900/10">
           {values.map((item) => (
-            <tr key={item.id} className="hover:bg-slate-800/60 transition-colors group">
+            <tr key={item.id} className="hover:bg-slate-800/40 transition-colors group odd:bg-slate-950/5 even:bg-slate-900/5">
               <td className={`p-0 bg-tlp-${item.tlp} w-1.5`}></td>
               <td className="px-4 py-4"><input type="checkbox" className="bg-slate-900/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={selectedIds.includes(item.id)} onChange={() => onToggle(item.id)} /></td>
-              <td className="px-4 py-4">
-                <span className={caseStatusClass(item.status)}>{item.status}</span>
-                <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-2"><Clock3 size={12} /> {ageLabel(item.updated_at)}</div>
-              </td>
-              <td className="px-4 py-4 whitespace-normal">
-                <div className="font-semibold text-base text-blue-400 hover:text-blue-300 transition-colors">
-                  <a href={`/cases/${item.id}`}>
-                    {item.flag && <Flag size={14} className="inline text-red-500 mr-1.5" />}
-                    #{String(item.number).padStart(7, '0')} - {item.title}
-                  </a>
-                </div>
-                <div className="text-slate-400 text-xs mt-1.5">
-                  <span className="font-medium text-slate-300">{item.owning_organisation || 'Default Tenant'}</span>
-                </div>
-                {item.summary && <div className="text-slate-400 text-xs mt-1.5 line-clamp-2 leading-relaxed">{item.summary}</div>}
-                <div className="mt-2"><TagList tags={item.tags} /></div>
-              </td>
-              <td className="px-4 py-4 text-center"><Severity value={item.severity} /></td>
-              <td className="px-4 py-4 text-slate-400">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-slate-300 font-medium">{item.task_count} tasks · {item.observable_count} obs · {item.alert_count} alerts</span>
-                  <span className="text-xs text-slate-500">{item.impact_status ?? 'NoImpact'} / {item.resolution_status ?? 'Indeterminate'}</span>
-                </div>
-              </td>
-              <td className="px-4 py-4 text-slate-300">{item.assignee || item.owner || <em className="text-slate-500">None</em>}</td>
-              <td className="px-4 py-4 text-right text-slate-400 whitespace-nowrap">
-                {formatDate(item.updated_at)}
-              </td>
+              {showStatus && (
+                <td className="px-4 py-4">
+                  <span className={caseStatusClass(item.status)}>{item.status}</span>
+                  <div className="flex items-center gap-1.5 text-slate-500 text-xs mt-2"><Clock3 size={12} /> {ageLabel(item.updated_at)}</div>
+                </td>
+              )}
+              {showTitle && (
+                <td className="px-4 py-4 whitespace-normal">
+                  <div className="font-semibold text-base text-blue-400 hover:text-blue-300 transition-colors">
+                    <a href={`/cases/${item.id}`}>
+                      {item.flag && <Flag size={14} className="inline text-red-500 mr-1.5" />}
+                      #{String(item.number).padStart(7, '0')} - {item.title}
+                    </a>
+                  </div>
+                  <div className="text-slate-400 text-xs mt-1.5">
+                    <span className="font-medium text-slate-300">{item.owning_organisation || 'Default Organisation'}</span>
+                  </div>
+                  {item.summary && <div className="text-slate-400 text-xs mt-1.5 line-clamp-2 leading-relaxed">{item.summary}</div>}
+                  <div className="mt-2"><TagList tags={item.tags} /></div>
+                </td>
+              )}
+              {showSeverity && <td className="px-4 py-4 text-center"><Severity value={item.severity} /></td>}
+              {showDetails && (
+                <td className="px-4 py-4 text-slate-400">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-slate-300 font-medium">{item.task_count} tasks · {item.observable_count} obs · {item.alert_count} alerts</span>
+                    <span className="text-xs text-slate-500">{item.impact_status ?? 'NoImpact'} / {item.resolution_status ?? 'Undefined'}</span>
+                  </div>
+                </td>
+              )}
+              {showAssignee && <td className="px-4 py-4 text-slate-300">{item.assignee || item.owner || <em className="text-slate-500">Unassigned</em>}</td>}
+              {showUpdated && (
+                <td className="px-4 py-4 text-right text-slate-400 whitespace-nowrap">
+                  {formatDate(item.updated_at)}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -544,37 +1068,37 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
   );
 }
 
-/* ─── Alert table — mirrors alert/list.html ─────────────────────────────────── */
+/* ─── Alert table ───────────────────────────────────────────────────────────── */
 function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpec, canManage }: {
   values: AlertSummary[]; selectedIds: string[];
   onToggle: (id: string) => void; onToggleAll: () => void;
   onSort: (field: string) => void; sortSpec: SortSpec; canManage: boolean;
 }) {
-  if (values.length === 0) return <div className="text-center py-10 text-slate-500">No records</div>;
+  if (values.length === 0) return <div className="text-center py-10 text-slate-500 font-medium">No alerts found</div>;
   const allSelected = values.length > 0 && selectedIds.length === values.length;
   return (
-    <div className="w-full">
+    <div className="ring-1 ring-slate-950 bg-slate-950/40 rounded-xl overflow-hidden shadow-2xl">
       <table className="w-full text-left border-collapse min-w-[1000px]">
         <thead>
-          <tr className="bg-slate-950/60 border-b-0 text-slate-300 text-sm font-bold uppercase tracking-wider">
+          <tr className="bg-slate-950/60 text-slate-300 text-sm font-bold uppercase tracking-wider">
             {canManage && <th className="w-12 px-4 py-4"><input type="checkbox" className="bg-slate-800/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={allSelected} onChange={onToggleAll} /></th>}
             <th className="w-24 px-4 py-4 text-center"><SortBtn field="severity" label="Severity" spec={sortSpec} onSort={onSort} /></th>
             <th className="w-20 px-4 py-4 text-center"><SortBtn field="read" label="Read" spec={sortSpec} onSort={onSort} /></th>
-            <th className="px-4 py-4 min-w-[200px]">Title</th>
-            <th className="w-28 px-4 py-4 text-center"># Case</th>
+            <th className="px-4 py-4 min-w-[200px]">Alert Title</th>
+            <th className="w-28 px-4 py-4 text-center">Case ID</th>
             <th className="w-32 px-4 py-4"><SortBtn field="type" label="Type" spec={sortSpec} onSort={onSort} /></th>
             <th className="w-36 px-4 py-4"><SortBtn field="source" label="Source" spec={sortSpec} onSort={onSort} /></th>
             <th className="w-48 px-4 py-4"><SortBtn field="sourceRef" label="Reference" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-28 px-4 py-4 text-center">Observables</th>
+            <th className="w-28 px-4 py-4 text-center">Obs</th>
             <th className="w-32 px-4 py-4 text-right">
-              <SortBtn field="created_at" label="Created" spec={sortSpec} onSort={onSort} />
+              <SortBtn field="created_at" label="Created At" spec={sortSpec} onSort={onSort} />
             </th>
             <th className="w-28 px-4 py-4"></th>
           </tr>
         </thead>
-        <tbody className="text-sm bg-slate-900/40">
+        <tbody className="text-sm bg-slate-900/10">
           {values.map((item) => (
-            <tr key={item.id} className="hover:bg-slate-800/60 transition-colors group">
+            <tr key={item.id} className="hover:bg-slate-800/40 transition-colors group odd:bg-slate-950/5 even:bg-slate-900/5">
               {canManage && <td className="px-4 py-4"><input type="checkbox" className="bg-slate-900/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={selectedIds.includes(item.id)} onChange={() => onToggle(item.id)} /></td>}
               <td className="px-4 py-4 text-center"><Severity value={item.severity} /></td>
               <td className="px-4 py-4 text-center">
@@ -591,20 +1115,18 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
               <td className="px-4 py-4 text-center">
                 {item.case_number
                   ? <a href="#" className="text-blue-400 hover:text-blue-300 font-medium">#{String(item.case_number).padStart(7, '0')}</a>
-                  : <span className="glass-badge px-2 py-0.5">None</span>
+                  : <span className="glass-badge px-2 py-0.5 text-slate-500">Empty</span>
                 }
               </td>
               <td className="px-4 py-4 text-slate-300"><a href="#" className="hover:text-blue-400">{item.type}</a></td>
               <td className="px-4 py-4 text-slate-300"><a href="#" className="hover:text-blue-400">{item.source}</a></td>
               <td className="px-4 py-4 whitespace-normal">
-                <strong className="text-slate-200 font-medium break-all">
+                <strong className="text-slate-200 font-medium break-all flex items-center gap-1.5">
                   {item.source_ref}
                   {item.external_link && (
-                    <span className="ml-2">
-                      <a href={item.external_link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-400" title="Open alert external link">
-                        <i className="fa fa-external-link text-base"></i>
-                      </a>
-                    </span>
+                    <a href={item.external_link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-400" title="Open external link">
+                      <Link size={14} />
+                    </a>
                   )}
                 </strong>
               </td>
@@ -616,17 +1138,17 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
                 <div className="flex items-center justify-end gap-3">
                   {canManage && (
                     <>
-                      <button className="text-slate-400 hover:text-blue-400 transition-colors" title={item.follow ? 'Ignore new updates' : 'Track new updates'}>
+                      <button className="text-slate-400 hover:text-blue-400 transition-colors" title={item.follow ? 'Unfollow updates' : 'Follow updates'}>
                         {item.follow ? <Eye size={16} className="text-blue-500 drop-shadow-[0_0_4px_rgba(59,130,246,0.5)]" /> : <Eye size={16} />}
                       </button>
                       {item.read
-                        ? <button className="text-slate-400 hover:text-blue-400 transition-colors" title="Mark as unread"><i className="fa fa-envelope-open-o text-base"></i></button>
-                        : <button className="text-slate-400 hover:text-blue-400 transition-colors" title="Mark as read"><i className="fa fa-envelope text-base"></i></button>
+                        ? <button className="text-slate-400 hover:text-blue-400 transition-colors" title="Mark as unread"><MailOpen size={16} /></button>
+                        : <button className="text-slate-400 hover:text-blue-400 transition-colors" title="Mark as read"><Mail size={16} /></button>
                       }
                     </>
                   )}
-                  <a className="text-slate-400 hover:text-blue-400 transition-colors" href={`/alerts/${item.id}`} title={item.case_number ? 'Preview' : 'Preview and Import'}>
-                    <i className="fa fa-file-text-o text-base"></i>
+                  <a className="text-slate-400 hover:text-blue-400 transition-colors" href={`/alerts/${item.id}`} title={item.case_number ? 'Preview' : 'Preview & Import Case'}>
+                    <FileText size={16} />
                   </a>
                 </div>
               </td>
@@ -637,45 +1159,44 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
     </div>
   );
 }
-
 /* ─── Observable table ──────────────────────────────────────────────────────── */
 function ObservableTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpec }: {
   values: ObservableSummary[]; selectedIds: string[];
   onToggle: (id: string) => void; onToggleAll: () => void;
   onSort: (field: string) => void; sortSpec: SortSpec;
 }) {
-  if (values.length === 0) return <div className="text-center py-10 text-slate-500">No records</div>;
+  if (values.length === 0) return <div className="text-center py-10 text-slate-500 font-medium">No observables found</div>;
   const allSelected = values.length > 0 && selectedIds.length === values.length;
   return (
-    <div className="w-full">
+    <div className="ring-1 ring-slate-950 bg-slate-950/40 rounded-xl overflow-hidden shadow-2xl">
       <table className="w-full text-left border-collapse min-w-[1000px]">
         <thead>
-          <tr className="bg-slate-950/60 border-b-0 text-slate-300 text-sm font-bold uppercase tracking-wider">
+          <tr className="bg-slate-950/60 text-slate-300 text-sm font-bold uppercase tracking-wider">
             <th className="w-12 px-4 py-4"><input type="checkbox" className="bg-slate-800/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={allSelected} onChange={onToggleAll} /></th>
             <th className="w-20 px-4 py-4 text-center"><SortBtn field="tlp" label="TLP" tooltip="Traffic Light Protocol" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-32 px-4 py-4 flex items-center gap-1.5">Flags <InfoTooltip content="Indicator properties"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
-            <th className="w-32 px-4 py-4"><SortBtn field="data_type" label="Type" tooltip="Data category" spec={sortSpec} onSort={onSort} /></th>
-            <th className="px-4 py-4 min-w-[250px]"><SortBtn field="data" label="Value" tooltip="The actual observable data" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-48 px-4 py-4 flex items-center gap-1.5">Case <InfoTooltip content="Linked investigation case"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
-            <th className="w-32 px-4 py-4"><SortBtn field="created_by" label="Created by" tooltip="User who submitted it" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-40 px-4 py-4 text-right"><SortBtn field="created_at" label="Dates" tooltip="Creation timestamp" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-32 px-4 py-4 flex items-center gap-1.5">Attributes <InfoTooltip content="Detection indicator attributes"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
+            <th className="w-36 px-4 py-4"><SortBtn field="data_type" label="Data Type" tooltip="Data type category" spec={sortSpec} onSort={onSort} /></th>
+            <th className="px-4 py-4 min-w-[250px]"><SortBtn field="data" label="Value" tooltip="Actual observable data" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-48 px-4 py-4 flex items-center gap-1.5">Linked Case <InfoTooltip content="Linked investigation case"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
+            <th className="w-32 px-4 py-4"><SortBtn field="created_by" label="Created By" tooltip="SOC analyst who created" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-40 px-4 py-4 text-right"><SortBtn field="created_at" label="Created At" tooltip="Record creation timestamp" spec={sortSpec} onSort={onSort} /></th>
           </tr>
         </thead>
-        <tbody className="text-sm bg-slate-900/40">
+        <tbody className="text-sm bg-slate-900/10">
           {values.map((item) => (
-            <tr key={item.id} className="hover:bg-slate-800/60 transition-colors group">
+            <tr key={item.id} className="hover:bg-slate-800/40 transition-colors group odd:bg-slate-950/5 even:bg-slate-900/5">
               <td className="px-4 py-4"><input type="checkbox" className="bg-slate-900/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={selectedIds.includes(item.id)} onChange={() => onToggle(item.id)} /></td>
               <td className="px-4 py-4 text-center"><span className={`inline-block w-4 h-4 rounded-full bg-tlp-${item.tlp} shadow-[0_0_6px_rgba(255,255,255,0.1)] border border-white/10`} /></td>
               <td className="px-4 py-4 text-xs text-slate-400">
                 <div className="flex flex-col gap-1.5">
-                  <span className="flex items-center gap-1.5 font-medium">{item.ioc ? <CheckCircle2 size={14} className="text-yellow-500 drop-shadow-[0_0_3px_rgba(234,179,8,0.5)]" /> : null}{item.ioc ? 'IOC' : 'Non IOC'}</span>
-                  <span>{item.sighted ? 'Sighted' : 'Not sighted'}</span>
-                  <span>{item.ignore_similarity ? 'Ignore similarity' : 'Similarity on'}</span>
+                  <span className="flex items-center gap-1.5 font-medium">{item.ioc ? <CheckCircle2 size={14} className="text-yellow-500 drop-shadow-[0_0_3px_rgba(234,179,8,0.5)]" /> : null}{item.ioc ? 'IOC Indicator' : 'Standard Info'}</span>
+                  <span>{item.sighted ? 'Sighted' : 'Never Sighted'}</span>
+                  <span>{item.ignore_similarity ? 'Ignore Similarity' : 'Match Similarity'}</span>
                 </div>
               </td>
               <td className="px-4 py-4">
                 <a href={`/observables/${item.id}`} className="text-blue-400 hover:text-blue-300 font-semibold text-base transition-colors">{item.data_type}</a>
-                {item.attachment_id && <div className="mt-2"><span className="glass-badge px-2 py-0.5">file</span></div>}
+                {item.attachment_id && <div className="mt-2"><span className="glass-badge px-2 py-0.5">Attachment</span></div>}
               </td>
               <td className="px-4 py-4 whitespace-normal">
                 <div className="font-mono text-slate-200 break-all">{item.data}</div>
@@ -687,7 +1208,7 @@ function ObservableTable({ values, selectedIds, onToggle, onToggleAll, onSort, s
                 <div className="text-slate-400 text-xs mt-1.5 truncate max-w-[200px]">{item.case_title}</div>
               </td>
               <td className="px-4 py-4 text-slate-300">{item.created_by}</td>
-              <td className="px-4 py-4 text-right text-sm text-slate-400 whitespace-nowrap"><div>C. {formatDate(item.created_at)}</div></td>
+              <td className="px-4 py-4 text-right text-sm text-slate-400 whitespace-nowrap"><div>{formatDate(item.created_at)}</div></td>
             </tr>
           ))}
         </tbody>
@@ -722,8 +1243,8 @@ function SortBtn({ field, label, tooltip, spec, onSort }: { field: string; label
 
 function Severity({ value }: { value: number }) {
   const classes: Record<number, string> = {
-    0: 'bg-slate-800/80 text-slate-400 border border-slate-700',
-    1: 'bg-green-500/20 text-green-400 border border-green-500/30 shadow-[0_0_8px_rgba(34,197,94,0.15)]',
+    0: 'bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-[0_0_8px_rgba(59,130,246,0.15)]',
+    1: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 shadow-[0_0_8px_rgba(234,179,8,0.15)]',
     2: 'bg-orange-500/20 text-orange-400 border border-orange-500/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]',
     3: 'bg-red-500/20 text-red-400 border border-red-500/40 font-bold shadow-[0_0_12px_rgba(239,68,68,0.3)]',
     4: 'bg-red-600 text-white border border-red-500 font-extrabold shadow-[0_0_16px_rgba(239,68,68,0.6)]',
@@ -744,15 +1265,10 @@ function TagList({ tags }: { tags: string[] }) {
 
 function caseStatusClass(status: string) {
   const s = status.toLowerCase();
-  // Khách báo không thực hiện -> Incident -> Mở (Open - Red)
   if (s === 'open' || s === 'incidents') return 'glass-status-pill glass-pill-danger shadow-[0_0_8px_rgba(239,68,68,0.2)]';
-  // Khách cần xác nhận -> Need confirm -> Mở (Open - Orange)
   if (s === 'need confirm') return 'glass-status-pill glass-pill-warning shadow-[0_0_8px_rgba(245,158,11,0.2)]';
-  // Đang điều tra -> InProgress -> Xanh dương (Blue)
   if (s === 'inprogress') return 'glass-status-pill glass-pill-blue shadow-[0_0_8px_rgba(59,130,246,0.2)]';
-  // Các status khác như Duplicated -> Vàng xám
   if (s === 'duplicated') return 'glass-status-pill glass-pill-muted';
-  // Mặc định (Resolved, Closed, True positive, False positive) -> Đóng (Closed - Green)
   return 'glass-status-pill glass-pill-success';
 }
 
@@ -798,4 +1314,217 @@ function toLocalDateInput(value: string) {
 
 function hasAnyPermission(user: User | undefined, permissions: string[]) {
   return !!user?.permissions?.some((p) => permissions.includes(p) || p === 'managePlatform');
+}
+
+/* ─── ELK SIEM Fields View components ──────────────────────────────────────── */
+
+function renderCellValue(item: CaseSummary, field: string) {
+  const val = item[field as keyof CaseSummary];
+  if (val === undefined || val === null) return <span className="text-slate-500">-</span>;
+
+  switch (field) {
+    case 'number':
+      return <span className="font-mono text-slate-300">#{String(val).padStart(7, '0')}</span>;
+    case 'title':
+      return (
+        <a href={`/cases/${item.id}`} className="text-blue-400 hover:text-blue-300 hover:underline font-semibold block truncate max-w-md">
+          {item.flag && <Flag size={12} className="inline text-red-500 mr-1.5" />}
+          {String(val)}
+        </a>
+      );
+    case 'status':
+      return <span className={caseStatusClass(String(val))}>{String(val)}</span>;
+    case 'severity':
+      return <Severity value={Number(val)} />;
+    case 'tlp':
+      return <span className={`px-2 py-0.5 rounded text-xs font-bold text-white bg-tlp-${val}`}>TLP:{val}</span>;
+    case 'pap':
+      return <span className={`px-2 py-0.5 rounded text-xs font-bold text-white bg-tlp-${val}`}>PAP:{val}</span>;
+    case 'tags':
+      return <TagList tags={val as string[]} />;
+    case 'created_at':
+    case 'updated_at':
+      return <span className="text-xs text-slate-400 font-mono">{formatDate(String(val))}</span>;
+    default:
+      if (Array.isArray(val)) return <span className="text-slate-300">{val.join(', ')}</span>;
+      if (typeof val === 'boolean') return <span className={val ? "text-green-400 font-bold" : "text-slate-500"}>{val ? 'True' : 'False'}</span>;
+      return <span className="text-slate-300 truncate block max-w-xs">{String(val)}</span>;
+  }
+}
+
+function FieldsViewPanel({ values, selectedFields }: {
+  values: CaseSummary[];
+  selectedFields: string[];
+}) {
+  const [expandedRows, setExpandedRows] = useState<string[]>([]);
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => 
+      prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
+    );
+  };
+
+  const totalWidth = 48 + selectedFields.reduce((sum, fKey) => sum + (fieldWidths[fKey] ?? 150), 0);
+
+  return (
+    <div className="w-full min-h-[500px] flex flex-col">
+      {/* Flat Grid Table Container */}
+      <div className="flex-1 overflow-hidden flex flex-col bg-slate-950/20 ring-1 ring-slate-950 rounded-xl shadow-lg">
+        {values.length === 0 ? (
+          <div className="text-center py-16 text-slate-500 font-medium flex-1 flex items-center justify-center">No case data found</div>
+        ) : (
+          <div className="overflow-x-auto glass-scroll w-full flex-1">
+            <table className="text-left border-collapse table-fixed" style={{ width: totalWidth, minWidth: '100%' }}>
+              <colgroup>
+                <col style={{ width: 48 }} />
+                {selectedFields.map((fKey) => (
+                  <col key={fKey} style={{ width: fieldWidths[fKey] ?? 150 }} />
+                ))}
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-950/60 text-slate-300 text-sm font-bold uppercase tracking-wider">
+                  <th className="px-4 py-4 text-center">#</th>
+                  {selectedFields.map((fKey) => {
+                    const matched = availableFields.find(af => af.key === fKey);
+                    return (
+                      <th key={fKey} className="px-4 py-4 truncate">
+                        {matched ? matched.label : fKey}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody className="text-sm bg-slate-900/10">
+                {values.map((item, idx) => {
+                  const expanded = expandedRows.includes(item.id);
+                  return (
+                    <Fragment key={item.id}>
+                      <tr 
+                        className={`hover:bg-slate-800/40 transition-colors group cursor-pointer odd:bg-slate-950/5 even:bg-slate-900/5 ${expanded ? 'bg-slate-800/20' : ''}`} 
+                        onClick={() => toggleRow(item.id)}
+                      >
+                        <td className="px-4 py-4 text-center text-slate-500 font-medium" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            className="text-slate-400 hover:text-blue-400 transition-colors p-1"
+                            onClick={() => toggleRow(item.id)}
+                          >
+                            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </button>
+                        </td>
+                        {selectedFields.map((fKey, i) => (
+                          <td key={fKey} className={`px-4 py-4 truncate ${i === 0 ? 'font-semibold text-slate-200' : 'text-slate-300'}`}>
+                            {renderCellValue(item, fKey)}
+                          </td>
+                        ))}
+                      </tr>
+                      {expanded && (
+                        <tr>
+                          <td colSpan={selectedFields.length + 1} className="bg-slate-950/70 p-5">
+                            <RowDetailPanel item={item} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RowDetailPanel({ item }: { item: CaseSummary }) {
+  const [copiedJson, setCopiedJson] = useState(false);
+  const [copiedRaw, setCopiedRaw] = useState(false);
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(JSON.stringify(item, null, 2));
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 2000);
+  };
+
+  const handleCopyRawLog = () => {
+    const rawLog = item.summary || (item as any).message || (item as any).rawlog || (item as any).raw_log || JSON.stringify(item, null, 2);
+    navigator.clipboard.writeText(rawLog);
+    setCopiedRaw(true);
+    setTimeout(() => setCopiedRaw(false), 2000);
+  };
+
+  const mainDetails = [
+    { label: 'Case ID', value: `#${String(item.number).padStart(7, '0')}` },
+    { label: 'Title', value: item.title },
+    { label: 'Status', value: <span className={caseStatusClass(item.status)}>{item.status}</span> },
+    { label: 'Severity', value: <Severity value={item.severity} /> },
+    { label: 'TLP', value: <span className={`px-2 py-0.5 rounded text-xs font-bold text-white bg-tlp-${item.tlp}`}>TLP:{item.tlp}</span> },
+    { label: 'PAP', value: <span className={`px-2 py-0.5 rounded text-xs font-bold text-white bg-tlp-${item.pap}`}>PAP:{item.pap}</span> },
+    { label: 'Owner', value: item.owner || '-' },
+    { label: 'Assignee', value: item.assignee || '-' },
+    { label: 'Tags', value: <TagList tags={item.tags} /> },
+    { label: 'Created At', value: formatDate(item.created_at) },
+    { label: 'Updated At', value: formatDate(item.updated_at) }
+  ];
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full items-stretch">
+      {/* Khung Trái: Thông tin chi tiết */}
+      <div className="flex flex-col gap-4 p-6 bg-slate-950/60 rounded-2xl shadow-[inset_0_2px_12px_rgba(0,0,0,0.85)] h-full">
+        <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
+          <List size={14} /> Thông tin chi tiết
+        </h4>
+        <div className="overflow-hidden rounded-xl bg-slate-950/20 shadow-md">
+          <table className="w-full text-left border-collapse">
+            <tbody>
+              {mainDetails.map((detail) => (
+                <tr key={detail.label} className="hover:bg-slate-900/30 transition-colors odd:bg-slate-950/15 even:bg-slate-900/5">
+                  <td className="px-4 py-3 text-xs font-semibold text-slate-400 w-32 select-none">{detail.label}</td>
+                  <td className="px-4 py-3 text-xs text-slate-200 break-words">{detail.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Khung Phải: Raw JSON Data */}
+      <div className="flex flex-col gap-4 p-6 bg-slate-950/60 rounded-2xl shadow-[inset_0_2px_12px_rgba(0,0,0,0.85)] h-full">
+        <div className="flex justify-between items-center shrink-0">
+          <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
+            <FileText size={14} /> Raw JSON Data
+          </h4>
+          <div className="flex gap-2">
+            <button 
+              onClick={handleCopyRawLog}
+              className="px-3 py-1.5 rounded-md text-[10px] font-semibold bg-blue-600/85 hover:bg-blue-500/85 active:bg-blue-700/85 text-white transition-all flex items-center gap-1.5 shadow-md"
+            >
+              {copiedRaw ? (
+                <span className="text-white">✓ Đã sao chép Raw Log</span>
+              ) : (
+                <>
+                  <Copy size={10} /> Sao chép Raw Log
+                </>
+              )}
+            </button>
+            <button 
+              onClick={handleCopyJson}
+              className="px-3 py-1.5 rounded-md text-[10px] font-semibold bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-900/80 text-slate-300 transition-all flex items-center gap-1.5 shadow-md"
+            >
+              {copiedJson ? (
+                <span className="text-green-400">✓ Đã sao chép JSON</span>
+              ) : (
+                <>
+                  <Copy size={10} /> Sao chép JSON
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+        <div className="bg-slate-950/90 p-5 rounded-xl font-mono text-[13px] leading-relaxed text-slate-100 flex-1 min-h-[440px] overflow-y-auto glass-scroll select-all shadow-inner border border-slate-900">
+          <pre className="whitespace-pre-wrap break-all">{JSON.stringify(item, null, 2)}</pre>
+        </div>
+      </div>
+    </div>
+  );
 }

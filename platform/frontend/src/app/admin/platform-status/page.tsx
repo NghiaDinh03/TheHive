@@ -96,8 +96,6 @@ export default function PlatformStatusPage() {
             <dd>{health.data?.build || status.data?.versions?.build || 'unknown'}</dd>
             <dt>Uptime</dt>
             <dd>{health.data?.uptime_seconds ? `${Math.round(health.data.uptime_seconds / 60)} minutes` : 'unknown'}</dd>
-            <dt>Cortex</dt>
-            <dd>{status.data?.versions?.Cortex || 'not configured'}</dd>
             <dt>MISP</dt>
             <dd>{status.data?.versions?.MISP || 'not configured'}</dd>
             <dt>Schema version</dt>
