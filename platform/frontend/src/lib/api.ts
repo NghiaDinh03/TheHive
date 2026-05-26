@@ -59,9 +59,28 @@ export async function apiFetch<T = unknown>(
 
   const reqId = crypto.randomUUID();
   headers.set('X-Request-ID', reqId);
-  if (!headers.has('Authorization') && typeof window !== 'undefined') {
+  if (typeof window !== 'undefined') {
     const { token } = getStoredAuth();
-    if (token) headers.set('Authorization', `Bearer ${token}`);
+    if (token) {
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      const method = (opts.method || 'GET').toUpperCase();
+      if (method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE') {
+        try {
+          const payloadPart = token.split('.')[1];
+          if (payloadPart) {
+            const base64 = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+            const claims = JSON.parse(window.atob(base64));
+            if (claims && claims.jti) {
+              headers.set('X-CSRF-Token', claims.jti);
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
   }
 
   const res = await fetch(path, { credentials: 'same-origin', ...opts, headers, body });

@@ -55,7 +55,7 @@ export default function LoginPage() {
   } = useForm<FormValues>({
     defaultValues: { login: '', password: '', name: '', organisation: 'NCS', totpCode: '' },
     mode: 'onChange',
-    resolver: async (data) => {
+    resolver: (async (data: any) => {
       try {
         let values;
         if (mode === 'register') {
@@ -79,7 +79,7 @@ export default function LoginPage() {
         }
         return { values: {}, errors: {} };
       }
-    }
+    }) as any
   });
 
   useEffect(() => {
@@ -157,7 +157,7 @@ export default function LoginPage() {
       <div className="ncs-login-card">
         <div className="ncs-login-header">
           <div className="ncs-login-logo">
-            <Image src="/logo-login.jpg" alt="NCS" width={100} height={100} priority className="ncs-login-logo-img" />
+            <Image src="/logo.png" alt="NCS" width={150} height={45} priority className="ncs-login-logo-img" style={{ objectFit: 'contain' }} />
           </div>
           <h1 className="ncs-login-title">NCS Fusion Center</h1>
           <p className="ncs-login-subtitle">Security Incident Response Platform</p>

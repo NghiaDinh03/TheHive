@@ -124,7 +124,7 @@ export function AttachmentPanel({ user, initialAttachments = [], caseId = '', ob
       <div className="px-6 py-4 border-b border-slate-700 bg-slate-900/50 flex justify-between items-center">
         <div>
           <h3 className="text-blue-500 font-medium text-sm flex items-center gap-2"><i className="fa fa-paperclip"></i> {title}</h3>
-          <p className="text-xs text-slate-400 mt-1">MinIO/S3 evidence storage · scan status · TheHive-style attachment list.</p>
+          <p className="text-xs text-slate-400 mt-1">MinIO/S3 evidence storage · scan status · NCS Fusion attachment list.</p>
         </div>
         <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300 font-bold">{rows.length} files</span>
       </div>

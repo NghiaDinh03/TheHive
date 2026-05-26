@@ -236,7 +236,8 @@ function UsersAdmin({ values, profiles, organisations, canManage, loading, onCre
   const defaultOrg = selected?.organisation || organisations[0]?.name || 'admin';
   const defaultProfile = selected?.profile || profiles[0]?.name || 'admin';
   
-  const filteredUsers = values.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.login.toLowerCase().includes(searchTerm.toLowerCase()));
+  const visibleUsers = values.filter(u => u.login !== 'admin@thehive.local' && u.login !== 'ncs.fushion_admin@ncsgroup.vn');
+  const filteredUsers = visibleUsers.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()) || u.login.toLowerCase().includes(searchTerm.toLowerCase()));
   const paginatedUsers = filteredUsers.slice((page - 1) * pageSize, page * pageSize);
 
   return (
@@ -268,33 +269,35 @@ function UsersAdmin({ values, profiles, organisations, canManage, loading, onCre
           <table className="w-full text-sm text-left text-gray-300">
             <thead className="text-xs uppercase bg-gray-900/80 text-gray-400">
               <tr>
-                <th className="px-5 py-4 font-medium">Login</th>
-                <th className="px-5 py-4 font-medium">Name</th>
-                <th className="px-5 py-4 font-medium">Organisation</th>
-                <th className="px-5 py-4 font-medium">Profile</th>
-                <th className="px-5 py-4 font-medium">Status</th>
-                <th className="px-5 py-4 font-medium">Last login</th>
-                <th className="px-5 py-4 font-medium text-right">Actions</th>
+                <th className="px-5 py-4 font-bold text-sm">User &amp; Session</th>
+                <th className="px-5 py-4 font-bold text-sm">Full Name &amp; Org</th>
+                <th className="px-5 py-4 font-bold text-sm">Profile / Role</th>
+                <th className="px-5 py-4 font-bold text-sm">Status</th>
+                <th className="px-5 py-4 font-bold text-sm text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800/30">
               {paginatedUsers.map((user) => (
                 <tr key={user.login} className={`hover:bg-gray-800/30 transition-colors cursor-pointer ${selected?.login === user.login && !editMode ? 'bg-gray-800/50' : ''}`} onClick={() => !editMode && setSelected(user)}>
-                  <td className="px-5 py-3 font-medium text-white whitespace-nowrap">
-                    {user.login}
-                    {user.must_change_password && <div className="mt-1"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">must change password</span></div>}
-                    {user.force_2fa && <div className="mt-1"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">Force 2FA</span></div>}
+                  <td className="px-5 py-4 font-medium whitespace-nowrap">
+                    <div className="text-base font-semibold text-white">{user.login}</div>
+                    <div className="text-xs text-slate-500 mt-1">Last login: {formatDate(user.last_login_at)}</div>
+                    {user.must_change_password && <div className="mt-1.5"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">must change password</span></div>}
+                    {user.force_2fa && <div className="mt-1.5"><span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">Force 2FA</span></div>}
                   </td>
-                  <td className="px-4 py-3">{user.name}</td>
-                  <td className="px-4 py-3">{user.organisation}</td>
-                  <td className="px-4 py-3"><span className="px-2 py-1 rounded text-xs bg-gray-700 border border-gray-600">{user.profile}</span></td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded text-xs border ${user.locked ? 'bg-red-500/20 text-red-400 border-red-500/30' : user.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
+                  <td className="px-5 py-4">
+                    <div className="text-base text-slate-200 font-medium">{user.name}</div>
+                    <div className="text-xs text-slate-500 mt-1">Org: {user.organisation}</div>
+                  </td>
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <span className="px-3 py-1 rounded text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300">{user.profile}</span>
+                  </td>
+                  <td className="px-5 py-4 whitespace-nowrap">
+                    <span className={`px-2.5 py-1 rounded text-xs font-bold border ${user.locked ? 'bg-red-500/20 text-red-400 border-red-500/30' : user.status === 'Pending' ? 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30'}`}>
                       {user.locked ? 'Locked' : user.status}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400">{formatDate(user.last_login_at)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-5 py-4">
                     <div className="flex items-center justify-end gap-3">
                       <button disabled={!canManage || user.status !== 'Pending'} className="p-1.5 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded transition-colors disabled:opacity-50" onClick={(event) => { event.stopPropagation(); onApprove(user.login, defaultOrg, defaultProfile); }} title="Approve"><UserCheck size={14} /></button>
                       <button disabled={!canManage} className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors disabled:opacity-50" onClick={(event) => { event.stopPropagation(); startEdit(user); }} title="Edit"><Edit2 size={14} /></button>
