@@ -948,7 +948,7 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
   const showAssignee = visibleColumns.includes('assignee');
   const showUpdated = visibleColumns.includes('updated');
 
-  const totalWidth = 6 + 48 
+  const totalWidth = 48 
     + (showStatus ? (colWidths.status ?? 120) : 0)
     + (showTitle ? (colWidths.title ?? 400) : 0)
     + (showSeverity ? (colWidths.severity ?? 100) : 0)
@@ -960,7 +960,6 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
     <div className="ring-1 ring-slate-950 bg-slate-950/40 rounded-xl overflow-x-auto glass-scroll shadow-2xl">
       <table className="text-left border-collapse table-fixed" style={{ width: totalWidth, minWidth: '100%' }}>
         <colgroup>
-          <col style={{ width: 6 }} />
           <col style={{ width: 48 }} />
           {showStatus && <col style={{ width: colWidths.status ?? 120 }} />}
           {showTitle && <col style={{ width: colWidths.title ?? 400 }} />}
@@ -971,7 +970,6 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
         </colgroup>
         <thead>
           <tr className="bg-slate-950/60 text-slate-300 text-sm font-bold uppercase tracking-wider">
-            <th className="p-0"></th>
             <th className="px-4 py-4"><input type="checkbox" className="bg-slate-800/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={allSelected} onChange={onToggleAll} /></th>
             {showStatus && (
               <th className="px-4 py-4 relative">
@@ -1021,7 +1019,6 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
         <tbody className="text-sm bg-slate-900/10">
           {values.map((item) => (
             <tr key={item.id} className="hover:bg-slate-800/40 transition-colors group odd:bg-slate-950/5 even:bg-slate-900/5">
-              <td className={`p-0 bg-tlp-${item.tlp} w-1.5`}></td>
               <td className="px-4 py-4"><input type="checkbox" className="bg-slate-900/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={selectedIds.includes(item.id)} onChange={() => onToggle(item.id)} /></td>
               {showStatus && (
                 <td className="px-4 py-4">
