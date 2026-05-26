@@ -21,8 +21,8 @@ func TestF3_NegativeAuthz_CaseAccessDenied(t *testing.T) {
 
 	// Create test case first
 	caseReq := map[string]interface{}{
-		"title":       "F3 Permission Test Case",
-		"description": "Testing permission denied scenarios",
+		"title":       "NCS SOC: Rà soát log hệ thống máy chủ xác thực VPN bất thường",
+		"description": "Kiểm tra giả lập xâm nhập và rà soát phân quyền truy cập luồng mạng giám sát VPN",
 		"severity":    1,
 		"tlp":         2,
 		"pap":         2,
@@ -59,8 +59,8 @@ func TestF3_NegativeAuthz_CaseAccessDenied(t *testing.T) {
 func TestF3_NegativeAuthz_CaseCreateDenied(t *testing.T) {
 	// Test: Try create case without auth token
 	caseReq := map[string]interface{}{
-		"title":       "F3 Unauthorized Case",
-		"description": "Should not created",
+		"title":       "NCS SOC: Phát hiện quét cổng và rà quét lỗ hổng dịch vụ từ IP lạ",
+		"description": "Cảnh báo tấn công quét cổng dịch vụ hướng máy chủ dữ liệu",
 		"severity":    1,
 		"tlp":         2,
 		"pap":         2,
@@ -148,7 +148,7 @@ func TestF3_PermissionMatrix_AllRoutes(t *testing.T) {
 		{"GET", "/api/v1/admin/users", "admin users"},
 		{"GET", "/api/v1/admin/organisations", "admin organisations"},
 		{"GET", "/api/v1/admin/profiles", "admin profiles"},
-		{"GET", "/api/v1/describe", "describe API"},
+		{"GET", "/api/v1/describe/_all", "describe API"},
 		{"GET", "/api/v1/tags", "tags list"},
 	}
 
@@ -173,8 +173,8 @@ func TestF3_ButtonVisibility_CaseActions(t *testing.T) {
 
 	// Create test case
 	caseReq := map[string]interface{}{
-		"title":       "F3 Button Visibility Test",
-		"description": "Testing button visibility",
+		"title":       "NCS SOC: Cập nhật cấu hình phân tách đặc quyền tài khoản SOC Analyst",
+		"description": "Kiểm thử hiển thị giao diện và cô lập nút quản trị nâng cao",
 		"severity":    1,
 		"tlp":         2,
 		"pap":         2,

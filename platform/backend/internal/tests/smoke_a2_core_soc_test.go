@@ -73,12 +73,12 @@ func TestA2_CaseCreate(t *testing.T) {
 	}
 
 	caseReq := map[string]interface{}{
-		"title":       "A2 Smoke Test Case",
-		"description": "Test case created by A2 smoke test",
+		"title":       "NCS SOC: Phát hiện lưu lượng mạng bất thường nghi vấn rò rỉ dữ liệu (Exfiltration)",
+		"description": "Hệ thống giám sát phát hiện kết nối HTTPS bất thường từ máy trạm kế toán đến IP lạ có dung lượng lớn",
 		"severity":    2,
 		"tlp":         2,
 		"pap":         2,
-		"tags":        []string{"smoke-test", "a2"},
+		"tags":        []string{"exfiltration", "ncs-soc"},
 		"owner":       "ncs_admin@ncsgroup.vn",
 	}
 
@@ -150,8 +150,8 @@ func TestA2_TaskLifecycle(t *testing.T) {
 
 	taskReq := map[string]interface{}{
 		"case_id":     testCaseID,
-		"title":       "A2 Smoke Test Task",
-		"description": "Test task",
+		"title":       "SOC Task: Cô lập máy trạm nghi vấn và thu thập log lưu lượng mạng",
+		"description": "Nhiệm vụ điều tra và ngăn chặn hành vi rò rỉ dữ liệu",
 		"group_name":  "smoke",
 	}
 

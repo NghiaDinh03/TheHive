@@ -168,8 +168,8 @@ func TestF5_PerformanceBaseline_CaseCreate(t *testing.T) {
 
 	for i := 0; i < iterations; i++ {
 		caseReq := map[string]interface{}{
-			"title":       fmt.Sprintf("F5 Performance Test Case %d", i),
-			"description": "Performance benchmark test",
+			"title":       fmt.Sprintf("NCS SOC: Sự cố mã độc mã hóa dữ liệu đầu cuối %d", i),
+			"description": "Đánh giá hiệu năng và phản hồi tự động hệ thống SOC đối với chuỗi tấn công ransomware giả lập",
 			"severity":    1,
 			"tlp":         2,
 			"pap":         2,

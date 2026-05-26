@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  frontend:
+    image: node:20-alpine
+    container_name: ncs-fusion-frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      NODE_ENV: development
+      NEXT_PUBLIC_API_PROXY_TARGET: http://backend:8080
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
+    command: sh -c "npm install && npm run dev"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/api/healthz"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s

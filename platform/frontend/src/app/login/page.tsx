@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
-import { Building2, LogIn, Lock, User, UserPlus } from '@/components/FaIcon';
+import { Building2, LogIn, Lock, User, UserPlus, Eye, EyeOff } from '@/components/FaIcon';
 import { apiFetch, ApiError } from '@/lib/api';
 
 const loginSchema = z.object({
@@ -43,18 +43,54 @@ export default function LoginPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [serverInfo, setServerInfo] = useState<string | null>(null);
   const [hasInvite, setHasInvite] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
     handleSubmit,
     reset,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<FormValues>({
     defaultValues: { login: '', password: '', name: '', organisation: 'NCS', totpCode: '' },
+    mode: 'onChange',
+    resolver: async (data) => {
+      try {
+        let values;
+        if (mode === 'register') {
+          values = registerSchema.parse(data);
+        } else if (mode === 'totp') {
+          values = totpSchema.parse(data);
+        } else {
+          values = loginSchema.parse(data);
+        }
+        return { values, errors: {} };
+      } catch (err: any) {
+        if (err instanceof z.ZodError) {
+          const fieldErrors: Record<string, any> = {};
+          err.issues.forEach((issue) => {
+            const path = issue.path[0];
+            if (!fieldErrors[path]) {
+              fieldErrors[path] = { type: 'validation', message: issue.message };
+            }
+          });
+          return { values: {}, errors: fieldErrors };
+        }
+        return { values: {}, errors: {} };
+      }
+    }
   });
 
   useEffect(() => {
+    // Secure session clearance on page load
+    sessionStorage.removeItem('thehive.token');
+    sessionStorage.removeItem('thehive.login');
+    localStorage.removeItem('thehive.token');
+    localStorage.removeItem('thehive.login');
+    // Clear HttpOnly cookies on load
+    fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {});
+
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       if (params.has('invite')) {
@@ -130,10 +166,10 @@ export default function LoginPage() {
         <div className="ncs-login-body">
           {hasInvite && (
             <div className="ncs-auth-tabs">
-              <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setServerError(null); }} type="button">
+              <button className={mode === 'login' ? 'active' : ''} onClick={() => { setMode('login'); setServerError(null); setServerInfo(null); reset({ login: '', password: '', name: '', organisation: 'NCS', totpCode: '' }); }} type="button">
                 <LogIn size={14} /> Sign in
               </button>
-              <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setServerError(null); }} type="button">
+              <button className={mode === 'register' ? 'active' : ''} onClick={() => { setMode('register'); setServerError(null); setServerInfo(null); reset({ login: '', password: '', name: '', organisation: 'NCS', totpCode: '' }); }} type="button">
                 <UserPlus size={14} /> Register
               </button>
             </div>
@@ -158,7 +194,7 @@ export default function LoginPage() {
                   <label htmlFor="login">Login</label>
                   <div className="ncs-input-wrap">
                     <User className="ncs-input-icon" size={16} aria-hidden="true" />
-                    <input id="login" type="text" autoComplete="username" disabled={submitting || (mode === 'register' && hasInvite)} placeholder="nghia.dinh@ncsgroup.vn" {...register('login')} />
+                    <input id="login" type="text" autoComplete="username" disabled={submitting || (mode === 'register' && hasInvite)} placeholder="username@ncsgroup.vn" {...register('login')} />
                   </div>
                   {errors.login && <p className="ncs-field-error">{errors.login.message}</p>}
                 </div>
@@ -176,9 +212,27 @@ export default function LoginPage() {
 
                 <div className="ncs-form-group">
                   <label htmlFor="password">Password</label>
-                  <div className="ncs-input-wrap">
+                  <div className="ncs-input-wrap relative flex items-center">
                     <Lock className="ncs-input-icon" size={16} aria-hidden="true" />
-                    <input id="password" type="password" autoComplete={mode === 'register' ? 'new-password' : 'current-password'} disabled={submitting} placeholder="••••••••" {...register('password')} />
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                      disabled={submitting}
+                      placeholder="••••••••"
+                      className="pr-10 w-full"
+                      {...register('password')}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      disabled={submitting}
+                      className="absolute right-3 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none flex items-center justify-center"
+                      style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                   {errors.password && <p className="ncs-field-error">{errors.password.message}</p>}
                 </div>
@@ -205,9 +259,16 @@ export default function LoginPage() {
             {serverInfo && <div className="ncs-alert ncs-alert-success">{serverInfo}</div>}
             {serverError && <div className="ncs-alert ncs-alert-danger">{serverError}</div>}
 
-            <button type="submit" disabled={submitting} className="ncs-btn-primary ncs-btn-block">
-              {mode === 'register' ? <UserPlus size={16} /> : <LogIn size={16} />}
-              {submitting ? 'Processing…' : (mode === 'register' ? 'Register' : mode === 'totp' ? 'Verify Code' : 'Sign in')}
+            <button type="submit" disabled={submitting} className="ncs-btn-primary ncs-btn-block flex items-center justify-center gap-2">
+              {submitting ? (
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" style={{ width: '16px', height: '16px' }}>
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                mode === 'register' ? <UserPlus size={16} /> : <LogIn size={16} />
+              )}
+              <span>{submitting ? 'Processing…' : (mode === 'register' ? 'Register' : mode === 'totp' ? 'Verify Code' : 'Sign in')}</span>
             </button>
           </form>
         </div>

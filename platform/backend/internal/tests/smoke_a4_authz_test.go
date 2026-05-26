@@ -80,12 +80,12 @@ func TestA4_CreateSharedCase(t *testing.T) {
 	}
 
 	caseReq := map[string]interface{}{
-		"title":       "A4 AuthZ Test Case",
-		"description": "Test case for authorization smoke testing",
+		"title":       "NCS SOC: Giám sát luồng dữ liệu truyền tải bất thường (Exfiltration) qua DNS",
+		"description": "Phát hiện hành vi exfiltration dữ liệu thông qua truy vấn DNS Tunneling giả lập",
 		"severity":    2,
 		"tlp":         2,
 		"pap":         2,
-		"tags":        []string{"authz-test", "a4"},
+		"tags":        []string{"dns-tunneling", "a4"},
 	}
 	body, _ := json.Marshal(caseReq)
 
@@ -135,7 +135,7 @@ func TestA4_OwnerCanUpdateCase(t *testing.T) {
 	}
 
 	patchReq := map[string]interface{}{
-		"title": "A4 AuthZ Test Case - Updated",
+		"title": "NCS SOC: Giám sát luồng dữ liệu truyền tải bất thường qua DNS - Đã Cập Nhật",
 	}
 	body, _ := json.Marshal(patchReq)
 
@@ -230,8 +230,8 @@ func TestA4_TaskAuthorization(t *testing.T) {
 	// Create task
 	taskReq := map[string]interface{}{
 		"case_id":     testCaseID,
-		"title":       "A4 AuthZ Test Task",
-		"description": "Test task for authz",
+		"title":       "SOC Task: Phân tích log truy vấn DNS chứa payload bất thường",
+		"description": "Nhiệm vụ kiểm tra phản hồi sự cố exfiltration mạng",
 		"group_name":  "authz",
 	}
 	body, _ := json.Marshal(taskReq)
@@ -254,7 +254,7 @@ func TestA4_TaskAuthorization(t *testing.T) {
 	if taskResp.ID != "" {
 		// Try to update task
 		patchReq := map[string]interface{}{
-			"title": "A4 AuthZ Test Task - Updated",
+			"title": "SOC Task: Phân tích log truy vấn DNS chứa payload bất thường - Đã Cập Nhật",
 		}
 		body, _ = json.Marshal(patchReq)
 

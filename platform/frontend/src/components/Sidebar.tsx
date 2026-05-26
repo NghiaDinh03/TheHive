@@ -13,6 +13,7 @@ import {
   FileText,
   LayoutDashboard,
   Link2,
+  MessageSquare,
   Radio,
   Search,
   Shield,
@@ -39,6 +40,7 @@ const NAV: NavSection[] = [
     section: 'SOC Center',
     items: [
       { label: 'Overview', href: '/dashboard', icon: LayoutDashboard, enabled: true },
+      { label: 'Live Chat', href: '/live-chat', icon: MessageSquare, enabled: true },
       { label: 'Search', href: '/search', icon: Search, enabled: true },
     ],
   },
@@ -115,7 +117,7 @@ export function Sidebar() {
     )}>
       {/* Logo */}
       <div className="flex items-center justify-center px-4 py-2 pt-3 mb-2">
-        <Image src="/logo-sidebar.png" alt="NCS Fusion Center" width={110} height={33} priority />
+        <Image src="/logo_ncs_nentrang.jpg" alt="NCS Fusion Center" width={110} height={33} priority />
       </div>
 
       {/* Nav */}

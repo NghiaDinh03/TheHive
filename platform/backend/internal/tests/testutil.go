@@ -9,7 +9,7 @@ import (
 // baseURL is the API base URL for smoke tests.
 // Duplicated here because testutil.go is a non-test file and cannot
 // reference consts from *_test.go files.
-const baseURL = "http://127.0.0.1:8080"
+const baseURL = "http://127.0.0.1:8089"
 
 // loginHelper performs login and returns admin token.
 // Used by F2-F6 tests to avoid depending on TestA2_LoginAndAuth ordering.

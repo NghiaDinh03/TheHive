@@ -58,10 +58,10 @@ export default function ObservableDetailPage() {
     setSyncMessage(null);
     try {
       const res = await apiFetch<{ message: string }>(`/api/v1/cases/${obs.case_id}/sync-misp`, { method: 'POST' });
-      setSyncMessage(res.message || 'Đã kích hoạt đồng bộ hóa IOC sang MISP thành công!');
+      setSyncMessage(res.message || 'Successfully triggered IOC synchronization to MISP!');
       setTimeout(() => setSyncMessage(null), 5000);
     } catch (err: any) {
-      setSyncMessage(err.message || 'Lỗi kích hoạt đồng bộ hóa!');
+      setSyncMessage(err.message || 'Failed to trigger synchronization!');
       setTimeout(() => setSyncMessage(null), 5000);
     } finally {
       setSyncingMISP(false);
@@ -441,7 +441,7 @@ export default function ObservableDetailPage() {
                     >
                       <span className="flex items-center gap-2">
                         <Activity size={14} className={syncingMISP ? 'animate-spin' : ''} /> 
-                        {syncingMISP ? 'Đang đồng bộ...' : 'Đồng bộ MISP'}
+                        {syncingMISP ? 'Syncing...' : 'MISP Sync'}
                       </span>
                       <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-blue-900/50 rounded border border-blue-700/30">Manual</span>
                     </button>

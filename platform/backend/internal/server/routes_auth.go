@@ -133,6 +133,15 @@ func (s *Server) registerAdminRoutes(api *echo.Group, authRequired echo.Middlewa
 	// Legacy parity: Archive links management
 	archiveLinkHandler := handler.NewArchiveLinkHandler(s.db)
 	adminGrp.GET("/archive-links", archiveLinkHandler.List, RequirePermission("managePlatform"))
+
+	// Autonomous Response management
+	autonomousHandler := handler.NewAutonomousHandler(s.db)
+	adminGrp.GET("/autonomous/rules", autonomousHandler.ListRules, RequirePermission("managePlatform"))
+	adminGrp.POST("/autonomous/rules", autonomousHandler.CreateRule, RequirePermission("managePlatform"))
+	adminGrp.GET("/autonomous/rules/:id", autonomousHandler.GetRule, RequirePermission("managePlatform"))
+	adminGrp.PUT("/autonomous/rules/:id", autonomousHandler.UpdateRule, RequirePermission("managePlatform"))
+	adminGrp.DELETE("/autonomous/rules/:id", autonomousHandler.DeleteRule, RequirePermission("managePlatform"))
+	adminGrp.GET("/autonomous/logs", autonomousHandler.ListLogs, RequirePermission("managePlatform"))
 }
 
 // registerAuditRoutes registers audit log routes under /api/v1/audit.

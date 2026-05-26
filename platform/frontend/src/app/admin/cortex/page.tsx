@@ -13,7 +13,7 @@ type User = { login: string; name: string; permissions?: string[] };
 
 export default function AdminCortexPage() {
   return (
-    <Suspense fallback={<div className="m-4 text-slate-400">Đang tải thông tin…</div>}>
+    <Suspense fallback={<div className="m-4 text-slate-400">Loading information…</div>}>
       <CortexWorkspace />
     </Suspense>
   );
@@ -49,11 +49,11 @@ function CortexWorkspace() {
             </div>
             
             <h2 className="text-xl font-bold text-slate-100 mb-3 tracking-wide">
-              Cortex Engine Đã Bị Vô Hiệu Hóa
+              Cortex Engine Is Disabled
             </h2>
             
             <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-              Hệ thống <strong>NCS Fusion Center</strong> đã loại bỏ tích hợp Cortex Server để tinh giản tài nguyên. Mọi hoạt động phân tích dữ liệu độc hại (IOC) và phản ứng sự cố hiện đã được chuyển giao và tự động hóa toàn diện qua <strong>n8n</strong>.
+              The <strong>NCS Fusion Center</strong> system has removed Cortex Server integration to optimize resources. All threat intelligence (IOC) analysis and incident response actions have been migrated and fully automated via <strong>n8n</strong>.
             </p>
             
             <div className="flex flex-col gap-3">
@@ -61,7 +61,7 @@ function CortexWorkspace() {
                 onClick={() => router.push('/investigation')}
                 className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-sm font-semibold transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 flex items-center justify-center gap-2"
               >
-                Quay lại Giám sát
+                Return to Dashboard
               </button>
             </div>
           </div>

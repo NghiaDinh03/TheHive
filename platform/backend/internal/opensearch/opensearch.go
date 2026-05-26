@@ -243,6 +243,7 @@ func (c *Client) Search(ctx context.Context, query string, entityTypes []string,
 	}
 
 	searchBody := map[string]interface{}{
+		"track_total_hits": true,
 		"query": map[string]interface{}{
 			"multi_match": map[string]interface{}{
 				"query":  query,

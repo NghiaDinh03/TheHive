@@ -1,0 +1,1 @@
+-- Down migration: no-op (seed data can be deleted/modified through UI)

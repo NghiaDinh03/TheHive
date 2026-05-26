@@ -26,10 +26,10 @@ export default function InvestigationPage() {
 }
 
 const severityLabels: Record<number, string> = { 0: 'Low', 1: 'Medium', 2: 'High', 3: 'Critical', 4: 'Critical' };
-const dateFormatter = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const dateFormatter = new Intl.DateTimeFormat('en-US', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 const availableFields = [
-  { key: 'number', label: 'Case ID' },
+  { key: 'number', label: 'Number' },
   { key: 'title', label: 'Title' },
   { key: 'status', label: 'Status' },
   { key: 'severity', label: 'Severity' },
@@ -39,11 +39,11 @@ const availableFields = [
   { key: 'assignee', label: 'Assignee' },
   { key: 'tags', label: 'Tags' },
   { key: 'summary', label: 'Summary' },
-  { key: 'case_template', label: 'Case Template' },
+  { key: 'case_template', label: 'Case template' },
   { key: 'impact_status', label: 'Impact' },
   { key: 'resolution_status', label: 'Resolution' },
-  { key: 'created_at', label: 'Created At' },
-  { key: 'updated_at', label: 'Updated At' }
+  { key: 'created_at', label: 'Created at' },
+  { key: 'updated_at', label: 'Updated at' }
 ];
 
 const fieldWidths: Record<string, number> = {
@@ -149,7 +149,7 @@ function InvestigationWorkspace() {
 
   useEffect(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'alerts' || tab === 'cases' || tab === 'observables') setActiveTab(tab);
+    if (tab === 'alerts' || tab === 'cases' || tab === 'observables' || tab === 'fields') setActiveTab(tab as Tab);
   }, [searchParams]);
 
   useEffect(() => {
@@ -236,7 +236,7 @@ function InvestigationWorkspace() {
       setSelectedIds([]);
       setShowBulkClose(false);
       setBulkCloseReason('');
-      setBulkMessage(`Bulk close: ${r.ok}/${r.total} succeeded.`);
+      setBulkMessage(`Bulk close: successfully closed ${r.ok}/${r.total} items.`);
     },
     onError: () => setBulkMessage('Bulk close failed.'),
   });
@@ -249,7 +249,7 @@ function InvestigationWorkspace() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `${activeTab}-export-${selectedIds.length}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-    setBulkMessage(`Exported ${selectedIds.length} ${activeTab}.`);
+    setBulkMessage(`Exported ${selectedIds.length} ${activeTab === 'cases' ? 'cases' : activeTab === 'alerts' ? 'alerts' : 'observables'}.`);
   }, [activeTab, selectedIds]);
 
   // Bulk assign
@@ -267,7 +267,7 @@ function InvestigationWorkspace() {
       setSelectedIds([]);
       setShowBulkAssign(false);
       setBulkAssignee('');
-      setBulkMessage(`Bulk assign: ${r.ok}/${r.total} succeeded.`);
+      setBulkMessage(`Bulk assign: successfully assigned ${r.ok}/${r.total} items.`);
     },
     onError: () => setBulkMessage('Bulk assign failed.'),
   });
@@ -338,7 +338,7 @@ function InvestigationWorkspace() {
                     >
                       <div className="flex items-center gap-2 text-blue-400">
                         <Filter size={16} />
-                        <span className="font-bold text-base text-slate-200">Advanced Filters</span>
+                        <span className="font-bold text-base text-slate-200">Advanced filters</span>
                       </div>
                       <div className="flex items-center gap-4">
                         {Object.keys(filters).length > 0 && (
@@ -346,7 +346,7 @@ function InvestigationWorkspace() {
                             className="px-3 py-1 glass-surface hover:bg-white/10 rounded-md text-slate-300 text-xs font-medium transition-colors"
                             onClick={(e) => { e.stopPropagation(); clearAllFilters(); }}
                           >
-                            Clear Filters
+                            Clear filters
                           </button>
                         )}
                         {showFilters ? <ChevronUp size={14} className="text-slate-500" /> : <ChevronDown size={14} className="text-slate-500" />}
@@ -369,13 +369,13 @@ function InvestigationWorkspace() {
                 {activeTab !== 'fields' && (
                   <div className="bg-slate-800/40 px-5 py-3 flex flex-col xl:flex-row xl:items-center justify-between gap-4 text-sm text-slate-300">
                     <div className="flex flex-wrap items-center gap-3 flex-1">
-                      <span className="font-medium text-slate-200">Showing {activeValues} rows <span className="mx-2 text-slate-600">|</span> <span className={selectedRows > 0 ? "text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.2)]" : "text-slate-500"}>{selectedRows} selected</span></span>
+                      <span className="font-medium text-slate-200">Showing {activeValues} rows <span className="mx-2 text-slate-600">|</span> <span className={selectedRows > 0 ? "text-blue-400 font-bold bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 shadow-[0_0_8px_rgba(59,130,246,0.2)]" : "text-slate-500"}>Selected {selectedRows} rows</span></span>
                       
                       {Object.keys(filters).filter((k) => filters[k] && !k.startsWith('_')).length > 0 && (
                         <>
                           <span className="text-slate-600 mx-1 hidden sm:inline">|</span>
                           <div className="flex flex-wrap gap-2 items-center">
-                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active Filters:</span>
+                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Active filters:</span>
                             {Object.entries(filters).filter(([k, v]) => v && !k.startsWith('_')).map(([k, v]) => (
                               <span key={k} className="flex items-center gap-1.5 px-2 py-0.5 text-xs bg-blue-500/20 border border-blue-500/30 text-blue-200 rounded-full font-medium shadow-[0_0_8px_rgba(59,130,246,0.15)]">
                                 {k}: {v} <button className="hover:text-white ml-0.5" onClick={() => clearFilter(k)}>×</button>
@@ -388,7 +388,7 @@ function InvestigationWorkspace() {
                     
                     <div className="flex items-center gap-2 shrink-0">
                       <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : 'bg-slate-800/50 border-slate-900/60 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={!canBulk || selectedRows === 0 || bulkClose.isPending} onClick={() => setShowBulkClose(true)} title="Close selected items">
-                        {bulkClose.isPending ? 'Closing...' : 'Close Cases'}
+                        {bulkClose.isPending ? 'Closing...' : 'Close cases'}
                       </Button>
                       <Button variant="outline" size="sm" className={`font-medium transition-all shadow-sm ${selectedRows > 0 ? 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300 shadow-[0_0_10px_rgba(59,130,246,0.2)]' : 'bg-slate-800/50 border-slate-900/60 text-slate-500 cursor-not-allowed opacity-60'}`} disabled={!canBulk || selectedRows === 0} onClick={() => { if (!bulkAssignee) setBulkAssignee(authedLogin || ''); setShowBulkAssign(true); }} title="Assign selected items">Assign</Button>
                     </div>
@@ -397,7 +397,7 @@ function InvestigationWorkspace() {
 
                 {/* Bulk Close Dialog */}
                 <Dialog open={showBulkClose} onOpenChange={setShowBulkClose}>
-                  <DialogContent showCloseButton={false} className="bg-slate-900/95 border border-slate-600/50 text-slate-300 sm:max-w-[460px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-700/30 p-6 anim-fade-in backdrop-blur-xl">
+                  <DialogContent showCloseButton={false} className="bg-slate-900/95 border border-slate-800/50 text-slate-300 sm:max-w-[460px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-800/30 p-6 anim-fade-in backdrop-blur-xl">
                     <button 
                       type="button" 
                       onClick={() => { setShowBulkClose(false); setBulkCloseReason(''); }} 
@@ -412,21 +412,21 @@ function InvestigationWorkspace() {
                           <line x1="9" y1="9" x2="15" y2="15"></line>
                           <line x1="15" y1="9" x2="9" y2="15"></line>
                         </svg>
-                        Close {selectedRows} case{selectedRows > 1 ? 's' : ''}
+                        Close {selectedRows} cases
                       </DialogTitle>
                       <DialogDescription className="text-slate-400 text-xs">
-                        Please select a resolution status and enter a summary.
+                        Please select a resolution status and enter a resolution summary.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-2">
                       <div className="grid gap-2">
-                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution Status</label>
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution status</label>
                         {(() => {
                           const resolutionOptions = [
                             {
                               value: 'FalsePositive',
-                              label: 'False positive',
-                              desc: 'False alarm due to benign activity or test logs',
+                              label: 'False Positive',
+                              desc: 'False alarm due to normal activity or testing log',
                               icon: (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-slate-400">
                                   <circle cx="12" cy="12" r="10"></circle>
@@ -437,7 +437,7 @@ function InvestigationWorkspace() {
                             },
                             {
                               value: 'TruePositive',
-                              label: 'True positive',
+                              label: 'True Positive',
                               desc: 'Confirmed security incident or policy violation',
                               icon: (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-green-400">
@@ -448,8 +448,8 @@ function InvestigationWorkspace() {
                             },
                             {
                               value: 'NeedConfirm',
-                              label: 'Need confirm',
-                              desc: 'Suspicious event requiring further forensic triage',
+                              label: 'Need Confirm',
+                              desc: 'Suspicious behavior requiring further investigation and deep analysis',
                               icon: (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-orange-400">
                                   <circle cx="12" cy="12" r="10"></circle>
@@ -460,8 +460,8 @@ function InvestigationWorkspace() {
                             },
                             {
                               value: 'Incident',
-                              label: 'Incidents',
-                              desc: 'Immediate containment or incident response needed',
+                              label: 'Incident',
+                              desc: 'Requires immediate containment or response process activation',
                               icon: (
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 text-red-400">
                                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -478,7 +478,7 @@ function InvestigationWorkspace() {
                               <button
                                 type="button"
                                 onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-                                className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl text-left transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-500/40 shadow-inner"
+                                className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-950/80 hover:bg-slate-950 border border-slate-800 hover:border-slate-800/80 rounded-xl text-left transition-all duration-200 focus:outline-none focus:ring-1 focus:ring-blue-500/40 shadow-inner"
                               >
                                 <div className="flex items-center gap-3">
                                   {selectedOption.icon}
@@ -533,10 +533,10 @@ function InvestigationWorkspace() {
                         })()}
                       </div>
                       <div className="grid gap-2">
-                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution Summary</label>
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Resolution summary</label>
                         <textarea 
-                          className="glass-input py-3 px-4 w-full h-24 text-xs resize-none focus:bg-slate-800/80 transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-700" 
-                          placeholder="Enter closure details, containment actions, or remediation analysis summary..." 
+                          className="glass-input py-3 px-4 w-full h-24 text-xs resize-none focus:bg-slate-800/80 transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-800/80" 
+                          placeholder="Enter details of the resolution process, containment measures, or investigation summary..." 
                           value={bulkCloseReason} 
                           onChange={e => setBulkCloseReason(e.target.value)} 
                         />
@@ -545,8 +545,8 @@ function InvestigationWorkspace() {
                         <div className="p-3 mb-2 rounded-xl bg-red-950/40 border border-red-900/50 text-red-300 text-xs flex items-start gap-2.5 leading-relaxed shadow-inner">
                           <span className="text-sm mt-0.5">⚠️</span>
                           <div className="flex flex-col gap-0.5">
-                            <span className="font-bold text-red-200 tracking-wide uppercase text-[10px]">Action Required</span>
-                            <span>One or more selected cases do not have an assignee. Please assign an assignee to all selected cases before closing them.</span>
+                            <span className="font-bold text-red-200 tracking-wide uppercase text-[10px]">Action required</span>
+                            <span>One or more selected cases are not assigned. Please assign an owner before closing cases.</span>
                           </div>
                         </div>
                       )}
@@ -555,7 +555,7 @@ function InvestigationWorkspace() {
                       <Button 
                         variant="ghost" 
                         onClick={() => { setShowBulkClose(false); setBulkCloseReason(''); }} 
-                        className="text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-slate-800 hover:border-slate-700 rounded-xl px-5 py-2.5 text-xs font-bold transition-all duration-200"
+                        className="text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-slate-800 hover:border-slate-850 rounded-xl px-5 py-2.5 text-xs font-bold transition-all duration-200"
                       >
                         Cancel
                       </Button>
@@ -583,7 +583,7 @@ function InvestigationWorkspace() {
 
                 {/* Bulk Assign Dialog */}
                 <Dialog open={showBulkAssign} onOpenChange={setShowBulkAssign}>
-                  <DialogContent showCloseButton={false} className="bg-slate-900/95 border border-slate-700/60 text-slate-300 sm:max-w-[425px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-700/30 p-6 anim-fade-in backdrop-blur-xl">
+                  <DialogContent showCloseButton={false} className="bg-slate-900/95 border border-slate-800/60 text-slate-300 sm:max-w-[425px] rounded-2xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.95)] ring-1 ring-slate-800/30 p-6 anim-fade-in backdrop-blur-xl">
                     <button 
                       type="button" 
                       onClick={() => setShowBulkAssign(false)} 
@@ -602,15 +602,15 @@ function InvestigationWorkspace() {
                         Assign {selectedRows} {activeTab === 'cases' ? 'cases' : 'tasks'}
                       </DialogTitle>
                       <DialogDescription className="text-slate-400 text-xs">
-                        Enter the login of the SOC analyst to assign these items.
+                        Enter SOC analyst login name to assign work.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-2">
                       <div className="grid gap-2 relative">
-                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Assignee Login</label>
+                        <label className="text-[10px] font-bold text-slate-400/90 uppercase tracking-wider select-none">Assignee login</label>
                         <input 
-                          className="glass-input py-2.5 px-4 w-full text-xs transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-700 focus:bg-slate-800/80" 
-                          placeholder="Username (e.g. admin@ncsgroup.vn)" 
+                          className="glass-input py-2.5 px-4 w-full text-xs transition-all rounded-xl leading-relaxed border border-slate-800 focus:border-slate-800/80 focus:bg-slate-800/80" 
+                          placeholder="Username (e.g. analyst@example.com)" 
                           value={bulkAssignee} 
                           onChange={e => { setBulkAssignee(e.target.value); setShowUserDropdown(true); }}
                           onFocus={() => setShowUserDropdown(true)}
@@ -635,7 +635,7 @@ function InvestigationWorkspace() {
                       <Button 
                         variant="ghost" 
                         onClick={() => setShowBulkAssign(false)} 
-                        className="text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-slate-800 hover:border-slate-700 rounded-xl px-5 py-2.5 text-xs font-bold transition-all duration-200"
+                        className="text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-slate-800 hover:border-slate-855 rounded-xl px-5 py-2.5 text-xs font-bold transition-all duration-200"
                       >
                         Cancel
                       </Button>
@@ -663,8 +663,8 @@ function InvestigationWorkspace() {
                   <div className="flex flex-col overflow-hidden">
                     <div className="overflow-x-auto glass-scroll flex-1">
                       {activeTab === 'cases' && (
-                        cases.isLoading ? <div className="thehive-empty m-4">Loading cases...</div>
-                        : cases.isError ? <LoadError entity="cases" error={cases.error} />
+                        cases.isLoading ? <div className="thehive-empty m-4">Loading cases list...</div>
+                        : cases.isError ? <LoadError entity="case" error={cases.error} />
                         : <CaseTable values={filteredCases} selectedIds={selectedIds} onToggle={toggleSelected} onToggleAll={() => toggleSelectAll(filteredCases)} onSort={toggleSort} sortSpec={sort} visibleColumns={visibleColumns} colWidths={colWidths} onStartResize={startResize} />
                       )}
                       {activeTab === 'alerts' && (
@@ -678,8 +678,8 @@ function InvestigationWorkspace() {
                         : <ObservableTable values={filteredObservables} selectedIds={selectedIds} onToggle={toggleSelected} onToggleAll={() => toggleSelectAll(filteredObservables)} onSort={toggleSort} sortSpec={sort} />
                       )}
                       {activeTab === 'fields' && (
-                        cases.isLoading ? <div className="thehive-empty m-4">Loading field data...</div>
-                        : cases.isError ? <LoadError entity="field data" error={cases.error} />
+                        cases.isLoading ? <div className="thehive-empty m-4">Loading fields...</div>
+                        : cases.isError ? <LoadError entity="SIEM fields" error={cases.error} />
                         : <FieldsViewPanel values={filteredCases} selectedFields={selectedFields} />
                       )}
                     </div>
@@ -697,7 +697,7 @@ function InvestigationWorkspace() {
                             </select>
                           </div>
                           <div className="flex glass-surface rounded-md overflow-hidden">
-                            <button className={`px-3 py-1.5 text-sm font-medium ${page === 0 ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} disabled={page === 0} onClick={() => setPage((v) => Math.max(0, v - 1))}>« Prev</button>
+                            <button className={`px-3 py-1.5 text-sm font-medium ${page === 0 ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} disabled={page === 0} onClick={() => setPage((v) => Math.max(0, v - 1))}>« Previous</button>
                             <button className={`px-3 py-1.5 text-sm font-medium border-l border-white/10 ${activeValues < pageSize ? 'text-slate-600 cursor-not-allowed opacity-50' : 'text-slate-300 hover:bg-white/10 hover:text-white'}`} disabled={activeValues < pageSize} onClick={() => setPage((v) => v + 1)}>Next »</button>
                           </div>
                         </div>
@@ -724,7 +724,7 @@ function InvestigationWorkspace() {
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="text-blue-400" size={18} />
                   <span className="font-bold text-lg text-slate-100">
-                    {activeTab === 'cases' ? 'Visible Columns' : 'SIEM Fields Settings'}
+                    {activeTab === 'cases' ? 'Configure columns' : 'Configure SIEM fields'}
                   </span>
                 </div>
                 <button 
@@ -739,15 +739,15 @@ function InvestigationWorkspace() {
                 <>
                   {/* Cases Columns Config */}
                   <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-3">
-                    <p className="text-xs text-slate-400 mb-2 leading-relaxed">Configure which columns are displayed in the Case Table view. Toggle the checkboxes below to customize your layout.</p>
+                    <p className="text-xs text-slate-400 mb-2 leading-relaxed">Configure the columns displayed in the case list table. Toggle checkboxes below to customize your interface.</p>
                     {['status', 'title', 'severity', 'details', 'assignee', 'updated'].map((col) => {
                       const labels: Record<string, string> = {
                         status: 'Status',
-                        title: 'Case & Title',
+                        title: 'ID & Case Title',
                         severity: 'Severity',
-                        details: 'Details',
+                        details: 'Tasks & Details',
                         assignee: 'Assignee',
-                        updated: 'Updated'
+                        updated: 'Updated At'
                       };
                       const active = visibleColumns.includes(col);
                       return (
@@ -781,27 +781,27 @@ function InvestigationWorkspace() {
                       className="flex-1 py-2 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-755 text-slate-300 border border-slate-900/60 transition-colors"
                       onClick={() => setVisibleColumns(['status', 'title', 'severity', 'details', 'assignee', 'updated'])}
                     >
-                      Reset Default
+                      Reset to default
                     </button>
                     <button 
                       className="flex-1 py-2 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-[0_0_12px_rgba(37,99,235,0.3)]"
                       onClick={() => setShowColumnDropdown(false)}
                     >
-                      Apply Layout
+                      Apply configuration
                     </button>
                   </div>
                 </>
               ) : (
                 <>
                   {/* SIEM Fields Config */}
-                  <p className="text-xs text-slate-400 mb-3 leading-relaxed">Select which fields to flatten and display in the SIEM Grid view. Use the search to find fields quickly.</p>
+                  <p className="text-xs text-slate-400 mb-3 leading-relaxed">Select data fields to flatten and display in SIEM Grid mode. Use search to find specific fields.</p>
                   
                   {/* Search box inside drawer */}
                   <div className="relative mb-4">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
                     <input 
                       className="w-full bg-slate-950 border border-slate-900/50 rounded-md py-1.5 px-3 pl-8 text-xs text-slate-300 focus:border-blue-500/50 outline-none transition-all"
-                      placeholder="Search fields..."
+                      placeholder="Search data field..."
                       value={fieldSearch}
                       onChange={e => setFieldSearch(e.target.value)}
                     />
@@ -847,21 +847,21 @@ function InvestigationWorkspace() {
                         onClick={() => setSelectedFields([])}
                         title="Deselect all fields"
                       >
-                        Clean All
+                        Deselect all
                       </button>
                       <button 
                         className="flex-1 py-2 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-755 text-slate-300 border border-slate-900/60 transition-colors"
                         onClick={() => setSelectedFields(['number', 'title', 'status', 'severity', 'tlp', 'tags'])}
-                        title="Reset to default fields"
+                        title="Restore default fields"
                       >
-                        Reset Default
+                        Restore default
                       </button>
                     </div>
                     <button 
                       className="w-full py-2 text-xs font-semibold rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors shadow-[0_0_12px_rgba(37,99,235,0.3)]"
                       onClick={() => setShowColumnDropdown(false)}
                     >
-                      Apply Fields ({selectedFields.length})
+                      Apply fields ({selectedFields.length})
                     </button>
                   </div>
                 </>
@@ -875,7 +875,6 @@ function InvestigationWorkspace() {
   );
 }
 
-/* ─── Filter panel ─────────────────────────────────────────────────────────── */
 function FilterPanel({ activeTab, filters, onChange }: {
   activeTab: Tab; filters: Record<string, string>;
   onChange: (key: string, value: string) => void;
@@ -884,29 +883,29 @@ function FilterPanel({ activeTab, filters, onChange }: {
     <div>
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-6 gap-y-6">
         {activeTab === 'cases' && <>
-          <SelectFilter label="Status" name="status" tooltip="Filter by current SOC workflow state" value={filters.status ?? ''} options={[['_active', 'Active (non-closed)'], 'Open', 'InProgress', 'Resolved', 'Closed', 'Duplicated', 'True positive', 'False positive', 'Need confirm', 'Incidents']} onChange={onChange} />
-          <SelectFilter label="Severity" name="severity" tooltip="The potential impact level of the case" value={filters.severity ?? ''} options={[['1', 'Medium'], ['2', 'High'], ['3', 'Critical']]} onChange={onChange} />
-          <SelectFilter label="TLP" name="tlp" tooltip="Traffic Light Protocol sharing boundaries" value={filters.tlp ?? ''} options={[['0', 'White'], ['1', 'Green'], ['2', 'Amber'], ['3', 'Red']]} onChange={onChange} />
-          <SelectFilter label="PAP" name="pap" tooltip="Permissible Actions Protocol constraints" value={filters.pap ?? ''} options={[['0', 'White'], ['1', 'Green'], ['2', 'Amber'], ['3', 'Red']]} onChange={onChange} />
+          <SelectFilter label="Status" name="status" tooltip="Filter by SOC workflow status" value={filters.status ?? ''} options={[['_active', 'Active (not closed)'], ['Open', 'Open'], ['InProgress', 'In Progress'], ['Resolved', 'Resolved'], ['Closed', 'Closed'], ['Duplicated', 'Duplicated'], ['True positive', 'True Positive'], ['False positive', 'False Positive'], ['Need confirm', 'Need Confirm'], ['Incidents', 'Incident']]} onChange={onChange} />
+          <SelectFilter label="Severity" name="severity" tooltip="Potential impact level of the case" value={filters.severity ?? ''} options={[['0', 'Low'], ['1', 'Medium'], ['2', 'High'], ['3', 'Critical']]} onChange={onChange} />
+          <SelectFilter label="TLP" name="tlp" tooltip="Traffic Light Protocol (TLP) sharing constraint" value={filters.tlp ?? ''} options={[['0', 'White'], ['1', 'Green'], ['2', 'Amber'], ['3', 'Red']]} onChange={onChange} />
+          <SelectFilter label="PAP" name="pap" tooltip="Permissible Action Protocol (PAP) action constraint" value={filters.pap ?? ''} options={[['0', 'White'], ['1', 'Green'], ['2', 'Amber'], ['3', 'Red']]} onChange={onChange} />
           <TextFilter label="Assignee" name="assignee" value={filters.assignee ?? ''} onChange={onChange} />
           <TextFilter label="Owner" name="owner" value={filters.owner ?? ''} onChange={onChange} />
-          <SelectFilter label="Flag" name="flag" value={filters.flag ?? ''} options={[['true', 'Flagged'], ['false', 'Not flagged']]} onChange={onChange} />
+          <SelectFilter label="Flagged" name="flag" value={filters.flag ?? ''} options={[['true', 'Flagged'], ['false', 'Not flagged']]} onChange={onChange} />
         </>}
         {activeTab === 'alerts' && <>
-          <SelectFilter label="Status" name="status" value={filters.status ?? ''} options={['New', 'Updated', 'Imported', 'Ignored']} onChange={onChange} />
-          <SelectFilter label="Severity" name="severity" value={filters.severity ?? ''} options={[['1', 'Medium'], ['2', 'High'], ['3', 'Critical']]} onChange={onChange} />
+          <SelectFilter label="Status" name="status" value={filters.status ?? ''} options={[['New', 'New'], ['Updated', 'Updated'], ['Imported', 'Imported to Case'], ['Ignored', 'Ignored']]} onChange={onChange} />
+          <SelectFilter label="Severity" name="severity" value={filters.severity ?? ''} options={[['0', 'Low'], ['1', 'Medium'], ['2', 'High'], ['3', 'Critical']]} onChange={onChange} />
           <SelectFilter label="TLP" name="tlp" value={filters.tlp ?? ''} options={[['0', 'White'], ['1', 'Green'], ['2', 'Amber'], ['3', 'Red']]} onChange={onChange} />
           <TextFilter label="Source" name="source" value={filters.source ?? ''} onChange={onChange} />
           <TextFilter label="Type" name="type" value={filters.type ?? ''} onChange={onChange} />
           <SelectFilter label="Read" name="read" value={filters.read ?? ''} options={[['true', 'Read'], ['false', 'Unread']]} onChange={onChange} />
-          <SelectFilter label="Follow" name="follow" value={filters.follow ?? ''} options={[['true', 'Followed'], ['false', 'Not followed']]} onChange={onChange} />
+          <SelectFilter label="Follow" name="follow" value={filters.follow ?? ''} options={[['true', 'Following'], ['false', 'Not following']]} onChange={onChange} />
         </>}
         {activeTab === 'observables' && <>
           <TextFilter label="Data type" name="dataType" value={filters.dataType ?? ''} onChange={onChange} />
           <SelectFilter label="TLP" name="tlp" value={filters.tlp ?? ''} options={[['0', 'White'], ['1', 'Green'], ['2', 'Amber'], ['3', 'Red']]} onChange={onChange} />
-          <SelectFilter label="IOC" name="ioc" value={filters.ioc ?? ''} options={[['true', 'IOC only'], ['false', 'Non IOC']]} onChange={onChange} />
+          <SelectFilter label="IOC Indicator" name="ioc" value={filters.ioc ?? ''} options={[['true', 'IOC only'], ['false', 'Non-IOC']]} onChange={onChange} />
           <SelectFilter label="Sighted" name="sighted" value={filters.sighted ?? ''} options={[['true', 'Sighted'], ['false', 'Not sighted']]} onChange={onChange} />
-          <SelectFilter label="Similarity" name="ignoreSimilarity" value={filters.ignoreSimilarity ?? ''} options={[['false', 'Similarity on'], ['true', 'Ignore similarity']]} onChange={onChange} />
+          <SelectFilter label="Similarity match" name="ignoreSimilarity" value={filters.ignoreSimilarity ?? ''} options={[['false', 'Enable match'], ['true', 'Ignore similarity']]} onChange={onChange} />
           <TextFilter label="Created by" name="createdBy" value={filters.createdBy ?? ''} onChange={onChange} />
         </>}
         <TextFilter label="Tags" name="tags" value={filters.tags ?? ''} onChange={onChange} />
@@ -928,7 +927,7 @@ function DateFilter({ label, name, value, tooltip, onChange }: { label: string; 
   return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><input type="datetime-local" className="glass-input bg-slate-900/50 border-slate-900/60 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={toLocalDateInput(value)} onChange={(e) => onChange(name, e.target.value ? new Date(e.target.value).toISOString() : '')} /></label>;
 }
 function SelectFilter({ label, name, value, options, tooltip, onChange }: { label: string; name: string; value: string; tooltip?: string; options: Array<string | [string, string]>; onChange: (key: string, value: string) => void }) {
-  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><select className="glass-select bg-slate-900/50 border-slate-900/60 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={value} onChange={(e) => onChange(name, e.target.value)}><option value="">Any</option>{options.map((o) => { const pair = Array.isArray(o) ? o : [o, o]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select></label>;
+  return <label className="flex flex-col gap-2"><span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider">{label} {tooltip && <InfoTooltip content={tooltip}><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>}</span><select className="glass-select bg-slate-900/50 border-slate-900/60 text-sm py-2 px-3 focus:bg-slate-800 focus:border-blue-500/50 transition-all rounded-md w-full" value={value} onChange={(e) => onChange(name, e.target.value)}><option value="">All</option>{options.map((o) => { const pair = Array.isArray(o) ? o : [o, o]; return <option key={pair[0]} value={pair[0]}>{pair[1]}</option>; })}</select></label>;
 }
 
 /* ─── Case table — mirrors case.list.html ───────────────────────────────────── */
@@ -983,9 +982,9 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
             {showTitle && (
               <th className="px-4 py-4 relative">
                 <div className="flex items-center gap-1.5">
-                  <SortBtn field="number" label="# Case ID" tooltip="Unique case ID" spec={sortSpec} onSort={onSort} />
+                  <SortBtn field="number" label="# Case ID" tooltip="Unique case identifier" spec={sortSpec} onSort={onSort} />
                   <span className="text-slate-600">/</span>
-                  <SortBtn field="title" label="Case Title" tooltip="Short description of the case" spec={sortSpec} onSort={onSort} />
+                  <SortBtn field="title" label="Case Title" tooltip="Brief description of the case" spec={sortSpec} onSort={onSort} />
                 </div>
                 <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('title', e)} onClick={(e) => e.stopPropagation()} />
               </th>
@@ -1000,7 +999,7 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
               <th className="px-4 py-4 relative">
                 <div className="flex items-center">
                   <span>Case Details</span>
-                  <InfoTooltip content="Number of tasks, observables, and alerts"><span className="cursor-help inline-flex ml-1"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>
+                  <InfoTooltip content="Count of tasks, observables, and alerts"><span className="cursor-help inline-flex ml-1"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip>
                 </div>
                 <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('details', e)} onClick={(e) => e.stopPropagation()} />
               </th>
@@ -1013,7 +1012,7 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
             )}
             {showUpdated && (
               <th className="px-4 py-4 text-right relative">
-                <SortBtn field="updated_at" label="Updated" tooltip="Last modification timestamp" spec={sortSpec} onSort={onSort} />
+                <SortBtn field="updated_at" label="Updated" tooltip="Last updated timestamp" spec={sortSpec} onSort={onSort} />
                 <div className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-500/40 transition-colors z-10" onMouseDown={(e) => onStartResize('updated', e)} onClick={(e) => e.stopPropagation()} />
               </th>
             )}
@@ -1049,8 +1048,8 @@ function CaseTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSpe
               {showDetails && (
                 <td className="px-4 py-4 text-slate-400">
                   <div className="flex flex-col gap-1.5">
-                    <span className="text-slate-300 font-medium">{item.task_count} tasks · {item.observable_count} obs · {item.alert_count} alerts</span>
-                    <span className="text-xs text-slate-500">{item.impact_status ?? 'NoImpact'} / {item.resolution_status ?? 'Undefined'}</span>
+                    <span className="text-slate-300 font-medium">{item.task_count} tasks · {item.observable_count} observables · {item.alert_count} alerts</span>
+                    <span className="text-xs text-slate-500">{item.impact_status ?? 'No impact status'} / {item.resolution_status ?? 'Unresolved'}</span>
                   </div>
                 </td>
               )}
@@ -1089,9 +1088,9 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
             <th className="w-32 px-4 py-4"><SortBtn field="type" label="Type" spec={sortSpec} onSort={onSort} /></th>
             <th className="w-36 px-4 py-4"><SortBtn field="source" label="Source" spec={sortSpec} onSort={onSort} /></th>
             <th className="w-48 px-4 py-4"><SortBtn field="sourceRef" label="Reference" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-28 px-4 py-4 text-center">Obs</th>
+            <th className="w-28 px-4 py-4 text-center">Observables</th>
             <th className="w-32 px-4 py-4 text-right">
-              <SortBtn field="created_at" label="Created At" spec={sortSpec} onSort={onSort} />
+              <SortBtn field="created_at" label="Created at" spec={sortSpec} onSort={onSort} />
             </th>
             <th className="w-28 px-4 py-4"></th>
           </tr>
@@ -1115,7 +1114,7 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
               <td className="px-4 py-4 text-center">
                 {item.case_number
                   ? <a href="#" className="text-blue-400 hover:text-blue-300 font-medium">#{String(item.case_number).padStart(7, '0')}</a>
-                  : <span className="glass-badge px-2 py-0.5 text-slate-500">Empty</span>
+                  : <span className="glass-badge px-2 py-0.5 text-slate-500">Unlinked</span>
                 }
               </td>
               <td className="px-4 py-4 text-slate-300"><a href="#" className="hover:text-blue-400">{item.type}</a></td>
@@ -1147,7 +1146,7 @@ function AlertTable({ values, selectedIds, onToggle, onToggleAll, onSort, sortSp
                       }
                     </>
                   )}
-                  <a className="text-slate-400 hover:text-blue-400 transition-colors" href={`/alerts/${item.id}`} title={item.case_number ? 'Preview' : 'Preview & Import Case'}>
+                  <a className="text-slate-400 hover:text-blue-400 transition-colors" href={`/alerts/${item.id}`} title={item.case_number ? 'Preview' : 'Preview & Import to Case'}>
                     <FileText size={16} />
                   </a>
                 </div>
@@ -1173,13 +1172,13 @@ function ObservableTable({ values, selectedIds, onToggle, onToggleAll, onSort, s
         <thead>
           <tr className="bg-slate-950/60 text-slate-300 text-sm font-bold uppercase tracking-wider">
             <th className="w-12 px-4 py-4"><input type="checkbox" className="bg-slate-800/50 border border-white/10 rounded text-blue-500 focus:ring-0" checked={allSelected} onChange={onToggleAll} /></th>
-            <th className="w-20 px-4 py-4 text-center"><SortBtn field="tlp" label="TLP" tooltip="Traffic Light Protocol" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-20 px-4 py-4 text-center"><SortBtn field="tlp" label="TLP" tooltip="Traffic Light Protocol (TLP)" spec={sortSpec} onSort={onSort} /></th>
             <th className="w-32 px-4 py-4 flex items-center gap-1.5">Attributes <InfoTooltip content="Detection indicator attributes"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
-            <th className="w-36 px-4 py-4"><SortBtn field="data_type" label="Data Type" tooltip="Data type category" spec={sortSpec} onSort={onSort} /></th>
-            <th className="px-4 py-4 min-w-[250px]"><SortBtn field="data" label="Value" tooltip="Actual observable data" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-48 px-4 py-4 flex items-center gap-1.5">Linked Case <InfoTooltip content="Linked investigation case"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
-            <th className="w-32 px-4 py-4"><SortBtn field="created_by" label="Created By" tooltip="SOC analyst who created" spec={sortSpec} onSort={onSort} /></th>
-            <th className="w-40 px-4 py-4 text-right"><SortBtn field="created_at" label="Created At" tooltip="Record creation timestamp" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-36 px-4 py-4"><SortBtn field="data_type" label="Data Type" tooltip="Data category type" spec={sortSpec} onSort={onSort} /></th>
+            <th className="px-4 py-4 min-w-[250px]"><SortBtn field="data" label="Value" tooltip="Observed data value" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-48 px-4 py-4 flex items-center gap-1.5">Linked Case <InfoTooltip content="Associated investigation case"><span className="cursor-help"><Info size={12} className="text-slate-500 hover:text-blue-400" /></span></InfoTooltip></th>
+            <th className="w-32 px-4 py-4"><SortBtn field="created_by" label="Created by" tooltip="SOC analyst who created" spec={sortSpec} onSort={onSort} /></th>
+            <th className="w-40 px-4 py-4 text-right"><SortBtn field="created_at" label="Created at" tooltip="Time data was recorded" spec={sortSpec} onSort={onSort} /></th>
           </tr>
         </thead>
         <tbody className="text-sm bg-slate-900/10">
@@ -1190,8 +1189,8 @@ function ObservableTable({ values, selectedIds, onToggle, onToggleAll, onSort, s
               <td className="px-4 py-4 text-xs text-slate-400">
                 <div className="flex flex-col gap-1.5">
                   <span className="flex items-center gap-1.5 font-medium">{item.ioc ? <CheckCircle2 size={14} className="text-yellow-500 drop-shadow-[0_0_3px_rgba(234,179,8,0.5)]" /> : null}{item.ioc ? 'IOC Indicator' : 'Standard Info'}</span>
-                  <span>{item.sighted ? 'Sighted' : 'Never Sighted'}</span>
-                  <span>{item.ignore_similarity ? 'Ignore Similarity' : 'Match Similarity'}</span>
+                  <span>{item.sighted ? 'Sighted' : 'Not Sighted'}</span>
+                  <span>{item.ignore_similarity ? 'Ignore Similarity' : 'Similarity Match'}</span>
                 </div>
               </td>
               <td className="px-4 py-4">
@@ -1220,9 +1219,9 @@ function ObservableTable({ values, selectedIds, onToggle, onToggleAll, onSort, s
 /* ─── Shared helpers ────────────────────────────────────────────────────────── */
 function LoadError({ entity, error }: { entity: string; error: unknown }) {
   const detail = error instanceof ApiError && error.status === 401
-    ? 'Session expired. Sign out and log in again.'
-    : error instanceof Error ? error.message : `Unable to load ${entity}`;
-  return <div className="empty-message m-4"><strong>Unable to load {entity}</strong><br /><span>{detail}</span></div>;
+    ? 'Session expired. Please log out and log in again.'
+    : error instanceof Error ? error.message : `Failed to load ${entity}`;
+  return <div className="empty-message m-4"><strong>Failed to load {entity}</strong><br /><span>{detail}</span></div>;
 }
 
 
@@ -1419,8 +1418,10 @@ function FieldsViewPanel({ values, selectedFields }: {
                       </tr>
                       {expanded && (
                         <tr>
-                          <td colSpan={selectedFields.length + 1} className="bg-slate-950/70 p-5">
-                            <RowDetailPanel item={item} />
+                          <td colSpan={selectedFields.length + 1} className="bg-slate-950/70 p-0">
+                            <div className="py-4 px-0 w-full">
+                              <RowDetailPanel item={item} />
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -1436,7 +1437,46 @@ function FieldsViewPanel({ values, selectedFields }: {
   );
 }
 
+function RowFieldItem({ field, label, value, rawValue }: { field: string; label: string; value: React.ReactNode; rawValue: string }) {
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = () => {
+    navigator.clipboard.writeText(rawValue);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="grid grid-cols-4 gap-4 px-6 py-4 hover:bg-slate-900/30 group transition-all duration-200 items-start border-none" style={{ border: 'none' }}>
+      <div className="col-span-1 font-mono text-sm text-slate-400 font-semibold select-all truncate pr-2" title={label}>
+        {field}
+      </div>
+      <div className="col-span-3 text-slate-200 text-sm relative pr-12 break-all whitespace-normal">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">{value}</div>
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute right-0 top-0">
+            <button
+              onClick={handleCopy}
+              className={`p-1.5 rounded hover:bg-slate-800 transition-all border ${
+                copied 
+                  ? 'bg-green-500/10 border-green-500/30 text-green-400 shadow-[0_0_8px_rgba(34,197,94,0.3)]' 
+                  : 'bg-slate-900/40 border-white/5 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Copy value"
+            >
+              {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function RowDetailPanel({ item }: { item: CaseSummary }) {
+  const [viewMode, setViewMode] = useState<'fields' | 'json'>('fields');
+  const [filterQuery, setFilterQuery] = useState('');
   const [copiedJson, setCopiedJson] = useState(false);
   const [copiedRaw, setCopiedRaw] = useState(false);
 
@@ -1453,77 +1493,247 @@ function RowDetailPanel({ item }: { item: CaseSummary }) {
     setTimeout(() => setCopiedRaw(false), 2000);
   };
 
-  const mainDetails = [
-    { label: 'Case ID', value: `#${String(item.number).padStart(7, '0')}` },
-    { label: 'Title', value: item.title },
-    { label: 'Status', value: <span className={caseStatusClass(item.status)}>{item.status}</span> },
-    { label: 'Severity', value: <Severity value={item.severity} /> },
-    { label: 'TLP', value: <span className={`px-2 py-0.5 rounded text-xs font-bold text-white bg-tlp-${item.tlp}`}>TLP:{item.tlp}</span> },
-    { label: 'PAP', value: <span className={`px-2 py-0.5 rounded text-xs font-bold text-white bg-tlp-${item.pap}`}>PAP:{item.pap}</span> },
-    { label: 'Owner', value: item.owner || '-' },
-    { label: 'Assignee', value: item.assignee || '-' },
-    { label: 'Tags', value: <TagList tags={item.tags} /> },
-    { label: 'Created At', value: formatDate(item.created_at) },
-    { label: 'Updated At', value: formatDate(item.updated_at) }
+  const allFields = [
+    { 
+      field: '_id', 
+      label: 'ID', 
+      value: <span className="font-mono text-slate-400 select-all">{item.id}</span>, 
+      rawValue: item.id 
+    },
+    { 
+      field: 'number', 
+      label: 'Case Number', 
+      value: <span className="font-mono text-blue-400 font-semibold">#{String(item.number).padStart(7, '0')}</span>, 
+      rawValue: `#${String(item.number).padStart(7, '0')}` 
+    },
+    { 
+      field: 'title', 
+      label: 'Title', 
+      value: <span className="text-slate-100 font-medium whitespace-pre-wrap leading-relaxed">{item.title}</span>, 
+      rawValue: item.title 
+    },
+    { 
+      field: 'status', 
+      label: 'Status', 
+      value: <span className={caseStatusClass(item.status)}>{item.status}</span>, 
+      rawValue: item.status 
+    },
+    { 
+      field: 'severity', 
+      label: 'Severity', 
+      value: <Severity value={item.severity} />, 
+      rawValue: severityLabels[item.severity] || String(item.severity) 
+    },
+    { 
+      field: 'tlp', 
+      label: 'TLP', 
+      value: <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold text-white bg-tlp-${item.tlp} shadow-sm shadow-black/20`}>TLP:{item.tlp}</span>, 
+      rawValue: `TLP:${item.tlp}` 
+    },
+    { 
+      field: 'pap', 
+      label: 'PAP', 
+      value: <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold text-white bg-tlp-${item.pap} shadow-sm shadow-black/20`}>PAP:{item.pap}</span>, 
+      rawValue: `PAP:${item.pap}` 
+    },
+    { 
+      field: 'owner', 
+      label: 'Owner', 
+      value: item.owner ? <span className="text-slate-200">{item.owner}</span> : <span className="text-slate-500 italic">Unknown</span>, 
+      rawValue: item.owner || '' 
+    },
+    { 
+      field: 'assignee', 
+      label: 'Assignee', 
+      value: item.assignee ? <span className="text-slate-200">{item.assignee}</span> : <span className="text-slate-500 italic">Unassigned</span>, 
+      rawValue: item.assignee || '' 
+    },
+    { 
+      field: 'tags', 
+      label: 'Tags', 
+      value: <TagList tags={item.tags} />, 
+      rawValue: item.tags.join(', ') 
+    },
+    { 
+      field: 'case_template', 
+      label: 'Case Template', 
+      value: item.case_template ? <span className="text-slate-200">{item.case_template}</span> : <span className="text-slate-500 italic">-</span>, 
+      rawValue: item.case_template || '' 
+    },
+    { 
+      field: 'summary', 
+      label: 'Summary', 
+      value: item.summary ? <div className="text-slate-300 whitespace-pre-wrap leading-relaxed max-h-[150px] overflow-y-auto glass-scroll pr-2">{item.summary}</div> : <span className="text-slate-500 italic">No description</span>, 
+      rawValue: item.summary || '' 
+    },
+    { 
+      field: 'impact_status', 
+      label: 'Impact', 
+      value: item.impact_status ? <span className="text-slate-200">{item.impact_status}</span> : <span className="text-slate-500 italic">-</span>, 
+      rawValue: item.impact_status || '' 
+    },
+    { 
+      field: 'resolution_status', 
+      label: 'Resolution', 
+      value: item.resolution_status ? <span className="text-slate-200">{item.resolution_status}</span> : <span className="text-slate-500 italic">-</span>, 
+      rawValue: item.resolution_status || '' 
+    },
+    { 
+      field: 'created_at', 
+      label: 'Created at', 
+      value: <span className="font-mono text-slate-400">{formatDate(item.created_at)}</span>, 
+      rawValue: formatDate(item.created_at) 
+    },
+    { 
+      field: 'updated_at', 
+      label: 'Updated at', 
+      value: <span className="font-mono text-slate-400">{formatDate(item.updated_at)}</span>, 
+      rawValue: formatDate(item.updated_at) 
+    }
   ];
 
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full items-stretch">
-      {/* Khung Trái: Thông tin chi tiết */}
-      <div className="flex flex-col gap-4 p-6 bg-slate-950/60 rounded-2xl shadow-[inset_0_2px_12px_rgba(0,0,0,0.85)] h-full">
-        <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
-          <List size={14} /> Thông tin chi tiết
-        </h4>
-        <div className="overflow-hidden rounded-xl bg-slate-950/20 shadow-md">
-          <table className="w-full text-left border-collapse">
-            <tbody>
-              {mainDetails.map((detail) => (
-                <tr key={detail.label} className="hover:bg-slate-900/30 transition-colors odd:bg-slate-950/15 even:bg-slate-900/5">
-                  <td className="px-4 py-3 text-xs font-semibold text-slate-400 w-32 select-none">{detail.label}</td>
-                  <td className="px-4 py-3 text-xs text-slate-200 break-words">{detail.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  const filteredFields = allFields.filter(f => 
+    f.field.toLowerCase().includes(filterQuery.toLowerCase()) || 
+    f.label.toLowerCase().includes(filterQuery.toLowerCase()) ||
+    f.rawValue.toLowerCase().includes(filterQuery.toLowerCase())
+  );
 
-      {/* Khung Phải: Raw JSON Data */}
-      <div className="flex flex-col gap-4 p-6 bg-slate-950/60 rounded-2xl shadow-[inset_0_2px_12px_rgba(0,0,0,0.85)] h-full">
-        <div className="flex justify-between items-center shrink-0">
-          <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
+  return (
+    <div className="flex flex-col bg-slate-950/65 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] border border-white/5 backdrop-blur-md w-full overflow-hidden transition-all duration-300 hover:border-white/10">
+      {/* Thanh Điều Hướng Chế Độ Xem */}
+      <div className="flex justify-between items-center gap-3 border-b border-slate-900 px-6 py-4 bg-slate-950/20">
+        <div className="flex gap-2 bg-slate-900/60 p-1 rounded-xl border border-white/5">
+          <button
+            onClick={() => setViewMode('fields')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+              viewMode === 'fields'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <List size={14} /> Details
+          </button>
+          <button
+            onClick={() => setViewMode('json')}
+            className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-2 ${
+              viewMode === 'json'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
             <FileText size={14} /> Raw JSON Data
-          </h4>
+          </button>
+        </div>
+
+        {/* Nút Sao Chép Nhanh (chỉ hiển thị khi ở tab JSON) */}
+        {viewMode === 'json' && (
           <div className="flex gap-2">
             <button 
               onClick={handleCopyRawLog}
-              className="px-3 py-1.5 rounded-md text-[10px] font-semibold bg-blue-600/85 hover:bg-blue-500/85 active:bg-blue-700/85 text-white transition-all flex items-center gap-1.5 shadow-md"
+              className={`px-3 py-1.5 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1.5 shadow-md ${
+                copiedRaw 
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400 shadow-[0_0_12px_rgba(34,197,94,0.2)] font-bold'
+                  : 'bg-slate-850 hover:bg-slate-800 active:bg-slate-900 text-slate-300 border border-white/5'
+              }`}
             >
               {copiedRaw ? (
-                <span className="text-white">✓ Đã sao chép Raw Log</span>
+                <span>✓ Copied Raw Log</span>
               ) : (
                 <>
-                  <Copy size={10} /> Sao chép Raw Log
+                  <Copy size={10} /> Copy Raw Log
                 </>
               )}
             </button>
             <button 
               onClick={handleCopyJson}
-              className="px-3 py-1.5 rounded-md text-[10px] font-semibold bg-slate-800/80 hover:bg-slate-700/80 active:bg-slate-900/80 text-slate-300 transition-all flex items-center gap-1.5 shadow-md"
+              className={`px-3 py-1.5 rounded-md text-[10px] font-semibold transition-all flex items-center gap-1.5 shadow-md ${
+                copiedJson 
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400 shadow-[0_0_12px_rgba(34,197,94,0.2)] font-bold'
+                  : 'bg-slate-850 hover:bg-slate-800 active:bg-slate-900 text-slate-300 border border-white/5'
+              }`}
             >
               {copiedJson ? (
-                <span className="text-green-400">✓ Đã sao chép JSON</span>
+                <span>✓ Copied JSON</span>
               ) : (
                 <>
-                  <Copy size={10} /> Sao chép JSON
+                  <Copy size={10} /> Copy JSON
                 </>
               )}
             </button>
           </div>
-        </div>
-        <div className="bg-slate-950/90 p-5 rounded-xl font-mono text-[13px] leading-relaxed text-slate-100 flex-1 min-h-[440px] overflow-y-auto glass-scroll select-all shadow-inner border border-slate-900">
-          <pre className="whitespace-pre-wrap break-all">{JSON.stringify(item, null, 2)}</pre>
-        </div>
+        )}
+      </div>
+
+      {/* Nội Dung Tương Ứng Chế Độ Xem */}
+      <div className="w-full">
+        {viewMode === 'fields' && (
+          <div className="flex flex-col gap-4 p-6 border-t border-slate-900/80 bg-slate-950/45 rounded-b-2xl">
+            {/* Thanh tìm kiếm và bộ lọc trường */}
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between bg-slate-900/30 p-3 rounded-xl !border-none" style={{ border: 'none' }}>
+              <div className="relative flex-1 max-w-md">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500">
+                  <Search size={14} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Filter fields (name, label, or value)..."
+                  value={filterQuery}
+                  onChange={(e) => setFilterQuery(e.target.value)}
+                  className="w-full bg-slate-950/60 border border-slate-900/50 focus:border-blue-500/50 rounded-lg pl-10 pr-9 py-2.5 text-sm text-slate-200 placeholder-slate-500 transition-all focus:outline-none focus:ring-0"
+                />
+                {filterQuery && (
+                  <button
+                    onClick={() => setFilterQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors p-1"
+                    title="Clear search"
+                  >
+                    <Times size={12} />
+                  </button>
+                )}
+              </div>
+              
+              <div className="text-xs text-slate-400 font-medium px-1 flex items-center gap-1.5 select-none">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                Showing <strong className="text-blue-400 font-semibold font-mono">{filteredFields.length}</strong> / <span className="font-mono">{allFields.length}</span> fields
+              </div>
+            </div>
+
+            {/* Bảng danh sách các trường dạng Div Grid phẳng và sạch sẽ */}
+            <div className="overflow-hidden bg-slate-950/40 rounded-xl shadow-inner border-none" style={{ border: 'none' }}>
+              <div className="max-h-[480px] overflow-y-auto glass-scroll">
+                <div className="grid grid-cols-4 gap-4 px-6 py-3 bg-slate-900/40 text-xs font-bold uppercase tracking-wider text-slate-400 select-none border-none" style={{ border: 'none' }}>
+                  <div className="col-span-1">Field Name</div>
+                  <div className="col-span-3">Property Value</div>
+                </div>
+                <div className="flex flex-col border-none" style={{ border: 'none' }}>
+                  {filteredFields.length > 0 ? (
+                    filteredFields.map((f) => (
+                      <RowFieldItem 
+                        key={f.field} 
+                        field={f.field} 
+                        label={f.label} 
+                        value={f.value} 
+                        rawValue={f.rawValue} 
+                      />
+                    ))
+                  ) : (
+                    <div className="text-center py-10 text-slate-500 font-medium">
+                      No fields match the keyword
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'json' && (
+          <div className="w-full">
+            <div className="bg-slate-950/80 p-6 font-mono text-sm leading-relaxed text-slate-100 h-[520px] max-h-[550px] overflow-auto glass-scroll select-all shadow-inner w-full border-t border-slate-900 rounded-b-2xl">
+              <pre className="whitespace-pre text-left">{JSON.stringify(item, null, 2)}</pre>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

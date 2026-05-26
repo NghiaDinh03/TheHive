@@ -42,9 +42,10 @@ type Case struct {
 	EndDate            *time.Time     `db:"end_date" json:"end_date,omitempty"`
 	CreatedAt          time.Time      `db:"created_at" json:"created_at"`
 	UpdatedAt          time.Time      `db:"updated_at" json:"updated_at"`
+	AIAssessment       *string        `db:"ai_assessment" json:"ai_assessment,omitempty"`
 }
 
-const caseSelectColumns = `id::text AS id, number, title, description, severity, tlp, pap, status, owner, assignee, tags, flag, summary, impact_status, resolution_status, case_template, owning_organisation, organisation_ids, start_date, end_date, created_at, updated_at`
+const caseSelectColumns = `id::text AS id, number, title, description, severity, tlp, pap, status, owner, assignee, tags, flag, summary, impact_status, resolution_status, case_template, owning_organisation, organisation_ids, start_date, end_date, created_at, updated_at, ai_assessment::text AS ai_assessment`
 
 type CreateCase struct {
 	Title              string
@@ -81,6 +82,7 @@ type PatchCase struct {
 	OwningOrganisation *string
 	OrganisationIDs    []string
 	OrganisationIDsSet bool
+	AIAssessment       *string
 }
 
 type CloseCase struct {
@@ -151,26 +153,41 @@ func (r *Repository) Patch(ctx context.Context, tx *sqlx.Tx, id string, input Pa
 	if input.OrganisationIDsSet {
 		current.OrganisationIDs = input.OrganisationIDs
 	}
+	if input.AIAssessment != nil {
+		current.AIAssessment = input.AIAssessment
+	}
 	row := Case{}
 	err = tx.GetContext(ctx, &row, `
 		UPDATE cases
 		SET title = $1, description = $2, severity = $3, tlp = $4, pap = $5, assignee = $6, tags = $7,
 			flag = $8, summary = $9, impact_status = $10, resolution_status = $11, case_template = $12,
-			owning_organisation = $13, organisation_ids = $14, updated_at = now()
-		WHERE id = $15::uuid
+			owning_organisation = $13, organisation_ids = $14, ai_assessment = NULLIF($15, '')::jsonb, updated_at = now()
+		WHERE id = $16::uuid
 		RETURNING `+caseSelectColumns,
 		current.Title, current.Description, current.Severity, current.TLP, current.PAP, current.Assignee, pq.Array([]string(current.Tags)),
 		current.Flag, current.Summary, current.ImpactStatus, current.ResolutionStatus, current.CaseTemplate,
-		current.OwningOrganisation, pq.Array([]string(current.OrganisationIDs)), id)
+		current.OwningOrganisation, pq.Array([]string(current.OrganisationIDs)), current.AIAssessment, id)
 	return row, err
 }
 
 // Close resolves the case using TheHive 4 lifecycle: status becomes "Resolved",
-// in-progress tasks become "Completed", waiting tasks become "Cancel", and end_date is set.
-// impact/resolution/summary are persisted on the case row.
+// and end_date is set. Analysts must manually close or cancel all tasks first;
+// this method returns an error if any unfinished tasks remain.
 func (r *Repository) Close(ctx context.Context, tx *sqlx.Tx, id string, input CloseCase) (Case, error) {
+	// 1. Check for any unfinished tasks ('Waiting' or 'InProgress')
+	var unfinishedCount int
+	err := tx.GetContext(ctx, &unfinishedCount, `
+		SELECT COUNT(1) FROM task_items 
+		WHERE case_id = $1::uuid AND status IN ('Waiting', 'InProgress')`, id)
+	if err != nil {
+		return Case{}, fmt.Errorf("failed to check case tasks status: %w", err)
+	}
+	if unfinishedCount > 0 {
+		return Case{}, fmt.Errorf("cannot close case: there are %d unfinished tasks", unfinishedCount)
+	}
+
 	row := Case{}
-	err := tx.GetContext(ctx, &row, `
+	err = tx.GetContext(ctx, &row, `
 		UPDATE cases
 		SET status = 'Resolved',
 			impact_status = COALESCE(NULLIF($1, ''), impact_status),
@@ -182,12 +199,6 @@ func (r *Repository) Close(ctx context.Context, tx *sqlx.Tx, id string, input Cl
 		RETURNING `+caseSelectColumns,
 		strings.TrimSpace(input.ImpactStatus), strings.TrimSpace(input.ResolutionStatus), strings.TrimSpace(input.Summary), id)
 	if err != nil {
-		return Case{}, err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE task_items SET status = 'Completed', end_date = now(), updated_at = now() WHERE case_id = $1::uuid AND status = 'InProgress'`, id); err != nil {
-		return Case{}, err
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE task_items SET status = 'Cancel', end_date = now(), updated_at = now() WHERE case_id = $1::uuid AND status = 'Waiting'`, id); err != nil {
 		return Case{}, err
 	}
 	return row, nil

@@ -48,6 +48,8 @@ type createTaskRequest struct {
 	GroupName       string     `json:"group_name"`
 	OrderIndex      int        `json:"order_index"`
 	Flag            bool       `json:"flag"`
+	PlaybookName    string     `json:"playbook_name"`
+	PlaybookWebhook string     `json:"playbook_webhook"`
 	StartDate       *time.Time `json:"start_date"`
 	DueDate         *time.Time `json:"due_date"`
 	OrganisationIDs []string   `json:"organisation_ids"`
@@ -61,6 +63,8 @@ type patchTaskRequest struct {
 	GroupName       *string    `json:"group_name"`
 	OrderIndex      *int       `json:"order_index"`
 	Flag            *bool      `json:"flag"`
+	PlaybookName    *string    `json:"playbook_name"`
+	PlaybookWebhook *string    `json:"playbook_webhook"`
 	StartDate       *time.Time `json:"start_date"`
 	EndDate         *time.Time `json:"end_date"`
 	DueDate         *time.Time `json:"due_date"`
@@ -100,17 +104,18 @@ type appendLogRequest struct {
 }
 
 type createObservableRequest struct {
-	CaseID       string   `json:"case_id"`
-	AlertID      string   `json:"alert_id"`
-	DataType     string   `json:"data_type" validate:"required"`
-	Data         string   `json:"data" validate:"required"`
-	Message      string   `json:"message"`
-	TLP          int      `json:"tlp"`
-	IOC          bool     `json:"ioc"`
-	Sighted      bool     `json:"sighted"`
-	AttachmentID string   `json:"attachment_id"`
-	Tags         []string `json:"tags"`
-	CreatedBy    string   `json:"created_by"`
+	CaseID         string   `json:"case_id"`
+	AlertID        string   `json:"alert_id"`
+	DataType       string   `json:"data_type" validate:"required"`
+	Data           string   `json:"data" validate:"required"`
+	Message        string   `json:"message"`
+	TLP            int      `json:"tlp"`
+	IOC            bool     `json:"ioc"`
+	Sighted        bool     `json:"sighted"`
+	AttachmentID   string   `json:"attachment_id"`
+	Tags           []string `json:"tags"`
+	CreatedBy      string   `json:"created_by"`
+	MaliciousScore int      `json:"malicious_score"`
 }
 
 type patchObservableRequest struct {
@@ -122,6 +127,7 @@ type patchObservableRequest struct {
 	Sighted          *bool    `json:"sighted"`
 	IgnoreSimilarity *bool    `json:"ignore_similarity"`
 	Tags             []string `json:"tags"`
+	MaliciousScore   *int     `json:"malicious_score"`
 }
 
 func (h *WorkWriteHandler) CreateTask(c echo.Context) error {
@@ -136,6 +142,7 @@ func (h *WorkWriteHandler) CreateTask(c echo.Context) error {
 		created, err := h.repo.CreateTask(c.Request().Context(), tx, workwrite.CreateTask{
 			CaseID: req.CaseID, Title: req.Title, Description: req.Description, Assignee: req.Assignee,
 			GroupName: req.GroupName, OrderIndex: req.OrderIndex, Flag: req.Flag,
+			PlaybookName: req.PlaybookName, PlaybookWebhook: req.PlaybookWebhook,
 			StartDate: req.StartDate, DueDate: req.DueDate, OrganisationIDs: req.OrganisationIDs,
 		})
 		return created.ID, nil, created, err
@@ -164,6 +171,7 @@ func (h *WorkWriteHandler) PatchTask(c echo.Context) error {
 		patch := workwrite.PatchTask{
 			Title: req.Title, Description: req.Description, Status: req.Status, Assignee: req.Assignee,
 			GroupName: req.GroupName, OrderIndex: req.OrderIndex, Flag: req.Flag,
+			PlaybookName: req.PlaybookName, PlaybookWebhook: req.PlaybookWebhook,
 			StartDate: req.StartDate, EndDate: req.EndDate, DueDate: req.DueDate,
 			OrganisationIDs: req.OrganisationIDs, OrganisationIDsSet: req.OrganisationIDs != nil,
 			StartDateSet: req.StartDate != nil, EndDateSet: req.EndDate != nil, DueDateSet: req.DueDate != nil,
@@ -332,7 +340,12 @@ func (h *WorkWriteHandler) CreateObservable(c echo.Context) error {
 		createdBy = actorLogin(c)
 	}
 	return h.withTx(c, "observable.create", "observable", func(tx *sqlx.Tx) (string, any, any, error) {
-		created, err := h.repo.CreateObservable(c.Request().Context(), tx, workwrite.CreateObservable{CaseID: req.CaseID, AlertID: req.AlertID, DataType: req.DataType, Data: req.Data, Message: req.Message, TLP: req.TLP, IOC: req.IOC, Sighted: req.Sighted, AttachmentID: req.AttachmentID, Tags: req.Tags, CreatedBy: createdBy})
+		created, err := h.repo.CreateObservable(c.Request().Context(), tx, workwrite.CreateObservable{
+			CaseID: req.CaseID, AlertID: req.AlertID, DataType: req.DataType, Data: req.Data,
+			Message: req.Message, TLP: req.TLP, IOC: req.IOC, Sighted: req.Sighted,
+			AttachmentID: req.AttachmentID, Tags: req.Tags, CreatedBy: createdBy,
+			MaliciousScore: req.MaliciousScore,
+		})
 		return created.ID, nil, created, err
 	}, http.StatusCreated)
 }
@@ -348,7 +361,11 @@ func (h *WorkWriteHandler) PatchObservable(c echo.Context) error {
 		if err != nil {
 			return id, nil, nil, err
 		}
-		updated, err := h.repo.PatchObservable(c.Request().Context(), tx, id, workwrite.PatchObservable{DataType: req.DataType, Data: req.Data, Message: req.Message, TLP: req.TLP, IOC: req.IOC, Sighted: req.Sighted, IgnoreSimilarity: req.IgnoreSimilarity, Tags: req.Tags, TagsSet: req.Tags != nil})
+		updated, err := h.repo.PatchObservable(c.Request().Context(), tx, id, workwrite.PatchObservable{
+			DataType: req.DataType, Data: req.Data, Message: req.Message, TLP: req.TLP,
+			IOC: req.IOC, Sighted: req.Sighted, IgnoreSimilarity: req.IgnoreSimilarity,
+			Tags: req.Tags, TagsSet: req.Tags != nil, MaliciousScore: req.MaliciousScore,
+		})
 		return updated.ID, before.Response(), updated, err
 	}, http.StatusOK)
 }
@@ -406,10 +423,14 @@ func (h *WorkWriteHandler) withTx(c echo.Context, action string, entityType stri
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, action+" failed")
 	}
-	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu có tạo/cập nhật Observable là IOC
+	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu có tạo/cập nhật Observable là IOC,
+	// và trigger Autonomous Response nếu Threat Score vượt ngưỡng.
 	if action == "observable.create" || action == "observable.update" {
-		if obs, ok := after.(workwrite.ObservableResponse); ok && obs.IOC && obs.CaseID != "" {
-			go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), obs.CaseID)
+		if obs, ok := after.(workwrite.ObservableResponse); ok {
+			if obs.IOC && obs.CaseID != "" {
+				go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), obs.CaseID)
+			}
+			go TriggerResponse(context.Background(), h.db, obs)
 		}
 	}
 

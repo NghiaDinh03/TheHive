@@ -120,6 +120,8 @@ type detailTask struct {
 	EndDate         *time.Time     `db:"end_date" json:"end_date,omitempty"`
 	DueDate         *time.Time     `db:"due_date" json:"due_date,omitempty"`
 	OrganisationIDs pq.StringArray `db:"organisation_ids" json:"organisation_ids"`
+	PlaybookName    string         `db:"playbook_name" json:"playbook_name"`
+	PlaybookWebhook string         `db:"playbook_webhook" json:"playbook_webhook"`
 	CreatedAt       time.Time      `db:"created_at" json:"created_at"`
 	UpdatedAt       time.Time      `db:"updated_at" json:"updated_at"`
 }
@@ -149,6 +151,8 @@ type detailObservable struct {
 	DataHash         string         `db:"data_hash" json:"data_hash,omitempty"`
 	OrganisationIDs  pq.StringArray `db:"organisation_ids" json:"organisation_ids"`
 	Tags             pq.StringArray `db:"tags" json:"tags"`
+	MaliciousScore   int            `db:"malicious_score" json:"malicious_score"`
+	MISPTags         string         `db:"misp_tags" json:"misp_tags"`
 	CreatedBy        string         `db:"created_by" json:"created_by"`
 	CreatedAt        time.Time      `db:"created_at" json:"created_at"`
 	UpdatedAt        time.Time      `db:"updated_at" json:"updated_at"`
@@ -389,7 +393,7 @@ func (h *DetailHandler) ListCaseObservables(c echo.Context) error {
 func (h *DetailHandler) GetTask(c echo.Context) error {
 	id := strings.TrimSpace(c.Param("id"))
 	row := detailTask{}
-	if err := h.db.GetContext(c.Request().Context(), &row, `SELECT t.id::text AS id, t.case_id::text AS case_id, COALESCE(c.number, 0) AS case_number, COALESCE(c.title, '') AS case_title, t.title, t.description, t.status, t.assignee, t.group_name, t.order_index, t.flag, t.start_date, t.end_date, t.due_date, t.organisation_ids, t.created_at, t.updated_at FROM task_items t LEFT JOIN cases c ON c.id = t.case_id WHERE t.id = $1::uuid`, id); err == sql.ErrNoRows {
+	if err := h.db.GetContext(c.Request().Context(), &row, `SELECT t.id::text AS id, t.case_id::text AS case_id, COALESCE(c.number, 0) AS case_number, COALESCE(c.title, '') AS case_title, t.title, t.description, t.status, t.assignee, t.group_name, t.order_index, t.flag, t.start_date, t.end_date, t.due_date, t.organisation_ids, t.playbook_name, t.playbook_webhook, t.created_at, t.updated_at FROM task_items t LEFT JOIN cases c ON c.id = t.case_id WHERE t.id = $1::uuid`, id); err == sql.ErrNoRows {
 		return apierr.New(http.StatusNotFound, "task not found")
 	} else if err != nil {
 		return apierr.New(http.StatusInternalServerError, "task detail failed")
@@ -427,7 +431,7 @@ func (h *DetailHandler) ListAllTasks(c echo.Context) error {
 		where = "WHERE " + strings.Join(parts, " AND ")
 	}
 	rows := []detailTask{}
-	if err := h.db.SelectContext(c.Request().Context(), &rows, `SELECT t.id::text AS id, t.case_id::text AS case_id, COALESCE(c.number, 0) AS case_number, COALESCE(c.title, '') AS case_title, t.title, t.description, t.status, t.assignee, t.group_name, t.order_index, t.flag, t.start_date, t.end_date, t.due_date, t.organisation_ids, t.created_at, t.updated_at FROM task_items t LEFT JOIN cases c ON c.id = t.case_id `+where+` ORDER BY t.flag DESC, t.due_date ASC NULLS LAST, t.created_at DESC LIMIT 500`, args...); err != nil {
+	if err := h.db.SelectContext(c.Request().Context(), &rows, `SELECT t.id::text AS id, t.case_id::text AS case_id, COALESCE(c.number, 0) AS case_number, COALESCE(c.title, '') AS case_title, t.title, t.description, t.status, t.assignee, t.group_name, t.order_index, t.flag, t.start_date, t.end_date, t.due_date, t.organisation_ids, t.playbook_name, t.playbook_webhook, t.created_at, t.updated_at FROM task_items t LEFT JOIN cases c ON c.id = t.case_id `+where+` ORDER BY t.flag DESC, t.due_date ASC NULLS LAST, t.created_at DESC LIMIT 500`, args...); err != nil {
 		return apierr.New(http.StatusInternalServerError, "tasks list failed")
 	}
 	return c.JSON(http.StatusOK, map[string]any{"values": rows, "total": len(rows)})
@@ -464,7 +468,7 @@ func (h *DetailHandler) ListAttachments(c echo.Context) error {
 
 func (h *DetailHandler) caseTasks(c echo.Context, caseID string) ([]detailTask, error) {
 	rows := []detailTask{}
-	err := h.db.SelectContext(c.Request().Context(), &rows, `SELECT t.id::text AS id, t.case_id::text AS case_id, COALESCE(c.number, 0) AS case_number, COALESCE(c.title, '') AS case_title, t.title, t.description, t.status, t.assignee, t.group_name, t.order_index, t.flag, t.start_date, t.end_date, t.due_date, t.organisation_ids, t.created_at, t.updated_at FROM task_items t LEFT JOIN cases c ON c.id = t.case_id WHERE t.case_id = $1::uuid ORDER BY t.group_name ASC, t.order_index ASC, t.created_at ASC`, caseID)
+	err := h.db.SelectContext(c.Request().Context(), &rows, `SELECT t.id::text AS id, t.case_id::text AS case_id, COALESCE(c.number, 0) AS case_number, COALESCE(c.title, '') AS case_title, t.title, t.description, t.status, t.assignee, t.group_name, t.order_index, t.flag, t.start_date, t.end_date, t.due_date, t.organisation_ids, t.playbook_name, t.playbook_webhook, t.created_at, t.updated_at FROM task_items t LEFT JOIN cases c ON c.id = t.case_id WHERE t.case_id = $1::uuid ORDER BY t.group_name ASC, t.order_index ASC, t.created_at ASC`, caseID)
 	return rows, err
 }
 
@@ -500,7 +504,7 @@ func (h *DetailHandler) alertObservables(c echo.Context, alertID string) ([]deta
 	return rows, err
 }
 
-const observableSelectSQL = `SELECT id::text AS id, COALESCE(case_id::text, '') AS case_id, COALESCE(alert_id::text, '') AS alert_id, data_type, data, message, tlp, ioc, sighted, ignore_similarity, COALESCE(attachment_id::text, '') AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, organisation_ids, tags, created_by, created_at, updated_at FROM observables`
+const observableSelectSQL = `SELECT id::text AS id, COALESCE(case_id::text, '') AS case_id, COALESCE(alert_id::text, '') AS alert_id, data_type, data, message, tlp, ioc, sighted, ignore_similarity, COALESCE(attachment_id::text, '') AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, organisation_ids, tags, malicious_score, COALESCE(misp_tags::text, '[]') AS misp_tags, created_by, created_at, updated_at FROM observables`
 
 func (h *DetailHandler) taskLogs(c echo.Context, taskID string) ([]detailLog, error) {
 	rows := []detailLog{}
@@ -563,7 +567,7 @@ func (h *DetailHandler) similarAlerts(c echo.Context, alert detailAlert) ([]deta
 func (h *DetailHandler) entityHistory(c echo.Context, entityType string, entityID string) ([]detailHistory, error) {
 	rows := []detailHistory{}
 	query := `SELECT a.action, COALESCE(u.login, a.actor_id::text, '') AS actor_id, a.entity_type, a.created_at, a.before_json::text, a.after_json::text 
-	          FROM audit_logs a LEFT JOIN users u ON a.actor_id = u.id::text 
+	          FROM audit_logs a LEFT JOIN users u ON a.actor_id = u.id 
 	          WHERE a.entity_type = $1 AND a.entity_id = $2 
 	          ORDER BY a.created_at DESC LIMIT 100`
 
@@ -571,14 +575,16 @@ func (h *DetailHandler) entityHistory(c echo.Context, entityType string, entityI
 		query = `
 			SELECT a.action, COALESCE(u.login, a.actor_id::text, '') AS actor_id, a.entity_type, a.created_at, a.before_json::text, a.after_json::text
 			FROM audit_logs a
-			LEFT JOIN users u ON a.actor_id = u.id::text
+			LEFT JOIN users u ON a.actor_id = u.id
 			WHERE 
-				(a.entity_type = 'case' AND a.entity_id = $2)
-				OR (a.entity_type = 'task' AND a.entity_id IN (SELECT id::text FROM task_items WHERE case_id = $2::uuid))
-				OR (a.entity_type = 'observable' AND a.entity_id IN (SELECT id::text FROM observables WHERE case_id = $2::uuid))
-				OR (a.entity_type = 'attachment' AND a.entity_id IN (SELECT id::text FROM attachments WHERE case_id = $2::uuid))
+				(a.entity_type = 'case' AND a.entity_id = $1)
+				OR (a.entity_type = 'task' AND a.entity_id IN (SELECT id::text FROM task_items WHERE case_id = $1::uuid))
+				OR (a.entity_type = 'observable' AND a.entity_id IN (SELECT id::text FROM observables WHERE case_id = $1::uuid))
+				OR (a.entity_type = 'attachment' AND a.entity_id IN (SELECT id::text FROM attachments WHERE case_id = $1::uuid))
 			ORDER BY a.created_at DESC LIMIT 200
 		`
+		err := h.db.SelectContext(c.Request().Context(), &rows, query, entityID)
+		return rows, err
 	}
 	err := h.db.SelectContext(c.Request().Context(), &rows, query, entityType, entityID)
 	return rows, err

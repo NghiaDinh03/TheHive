@@ -32,12 +32,23 @@ type ConfigCheck struct {
 func (h *ConfigValidateHandler) Validate(c echo.Context) error {
 	checks := []ConfigCheck{}
 
-	// Check JWT secret
+	// Check JWT secret / keys
 	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" || jwtSecret == "please-change-me-please-change-me-32+" {
+	privateKeyPath := os.Getenv("JWT_PRIVATE_KEY_PATH")
+	publicKeyPath := os.Getenv("JWT_PUBLIC_KEY_PATH")
+
+	if privateKeyPath != "" && publicKeyPath != "" {
+		if _, err := os.Stat(privateKeyPath); err != nil {
+			checks = append(checks, ConfigCheck{"JWT_RSA_KEYS", "fail", "JWT RSA Private Key file not found"})
+		} else if _, err := os.Stat(publicKeyPath); err != nil {
+			checks = append(checks, ConfigCheck{"JWT_RSA_KEYS", "fail", "JWT RSA Public Key file not found"})
+		} else {
+			checks = append(checks, ConfigCheck{"JWT_RSA_KEYS", "pass", "JWT RS256 Asymmetric Keys configured OK"})
+		}
+	} else if jwtSecret == "" || jwtSecret == "please-change-me-please-change-me-32+" {
 		checks = append(checks, ConfigCheck{"JWT_SECRET", "fail", "JWT secret is default or empty"})
 	} else {
-		checks = append(checks, ConfigCheck{"JWT_SECRET", "pass", "JWT secret is configured"})
+		checks = append(checks, ConfigCheck{"JWT_SECRET", "pass", "JWT secret is configured (HS256 fallback)"})
 	}
 
 	// Check PostgreSQL

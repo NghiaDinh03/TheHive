@@ -55,7 +55,7 @@ func TestGetTaskReturnsLogsAndAttachments(t *testing.T) {
 			int64(4096), "clean", "thehive-evidence", "case/10/headers.eml", "analyst1", now,
 		))
 	// Audit history
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("task", taskID).
+	mock.ExpectQuery("FROM audit_logs a LEFT JOIN users u").WithArgs("task", taskID).
 		WillReturnRows(historyRows().AddRow("task.start", "analyst1", now))
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))
@@ -121,7 +121,7 @@ func TestTaskGroupAndOrderFields(t *testing.T) {
 		WillReturnRows(taskLogRows())
 	mock.ExpectQuery("WHERE log_id IN \\(SELECT id FROM case_logs WHERE task_id").WithArgs(taskID).
 		WillReturnRows(taskAttachmentRows())
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("task", taskID).
+	mock.ExpectQuery("FROM audit_logs a LEFT JOIN users u").WithArgs("task", taskID).
 		WillReturnRows(historyRows())
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))
@@ -168,7 +168,7 @@ func TestTaskDueDateAndSLA(t *testing.T) {
 		WillReturnRows(taskLogRows())
 	mock.ExpectQuery("WHERE log_id IN \\(SELECT id FROM case_logs WHERE task_id").WithArgs(taskID).
 		WillReturnRows(taskAttachmentRows())
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("task", taskID).
+	mock.ExpectQuery("FROM audit_logs a LEFT JOIN users u").WithArgs("task", taskID).
 		WillReturnRows(historyRows())
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))

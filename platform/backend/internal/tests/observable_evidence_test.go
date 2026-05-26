@@ -73,7 +73,7 @@ func TestObservableFieldsParity(t *testing.T) {
 		WillReturnRows(caseProcedureRows())
 	mock.ExpectQuery("FROM case_shares WHERE case_id").WithArgs(caseID).
 		WillReturnRows(caseShareRows())
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("case", caseID).
+	mock.ExpectQuery("FROM audit_logs a").WithArgs(caseID).
 		WillReturnRows(historyRows())
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))

@@ -146,7 +146,7 @@ func TestGetCaseReturnsFullDetail(t *testing.T) {
 			true, false, "admin", now,
 		))
 	// Audit history
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("case", caseID).
+	mock.ExpectQuery("FROM audit_logs a").WithArgs(caseID).
 		WillReturnRows(historyRows().AddRow("case.create", "admin", now))
 	// Related cases (new: mirrors case.links.html)
 	mock.ExpectQuery("FROM observables o1").WithArgs(caseID).
@@ -267,6 +267,10 @@ func TestCaseCloseLifecycle(t *testing.T) {
 			"admin", "analyst1", "{phishing}", false, "", "", "",
 			"", "org1", "{org1}", &now, nil, now, now,
 		))
+	// 2.5. Check unfinished tasks in transactions (returns 0 tasks left)
+	mock.ExpectQuery(`SELECT COUNT\(1\) FROM task_items WHERE case_id = \$1::uuid AND status IN \('Waiting', 'InProgress'\)`).
+		WithArgs(caseID).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
 	// 3. Update case status to Resolved with impact/resolution/summary
 	mock.ExpectQuery("UPDATE cases SET status = 'Resolved'").
 		WithArgs("WithImpact", "TruePositive", "Confirmed phishing campaign", caseID).
@@ -275,14 +279,6 @@ func TestCaseCloseLifecycle(t *testing.T) {
 			"admin", "analyst1", "{phishing}", false, "Confirmed phishing campaign", "WithImpact", "TruePositive",
 			"", "org1", "{org1}", &now, &now, now, now,
 		))
-	// 4. Complete InProgress tasks
-	mock.ExpectExec("UPDATE task_items SET status = 'Completed'").
-		WithArgs(caseID).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	// 5. Cancel Waiting tasks
-	mock.ExpectExec("UPDATE task_items SET status = 'Cancel'").
-		WithArgs(caseID).
-		WillReturnResult(sqlmock.NewResult(0, 1))
 	// 6. No audit recorder passed (nil) — skip audit INSERT
 	mock.ExpectCommit()
 

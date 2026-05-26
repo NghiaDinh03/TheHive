@@ -5,11 +5,8 @@ import '@/styles/glass-system.css';
 
 import { QueryProvider } from '@/lib/query-provider';
 import { Force2FAOverlay } from '@/components/Force2FAOverlay';
-import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
   title: 'NCS Fusion Center',
@@ -25,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cn("dark font-sans", inter.variable)}>
+    <html lang="en" className="dark font-sans">
       <body className="min-h-screen bg-thehive-body text-thehive-text">
         <QueryProvider>
           <TooltipProvider delayDuration={200}>

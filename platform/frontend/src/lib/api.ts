@@ -64,7 +64,7 @@ export async function apiFetch<T = unknown>(
     if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const res = await fetch(path, { ...opts, headers, body });
+  const res = await fetch(path, { credentials: 'same-origin', ...opts, headers, body });
   const text = await res.text();
   const data = text ? JSON.parse(text) : undefined;
 

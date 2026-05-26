@@ -44,17 +44,9 @@ export default function TaskTimelinePage() {
   const [logMessage, setLogMessage] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [userSuggestions, setUserSuggestions] = useState<{login: string; name: string}[]>([]);
-
-  const searchUsers = async (q: string) => {
-    const data = await apiFetch<{login: string; name: string}[]>(`/api/v1/users/search?query=${encodeURIComponent(q)}`);
-    return data;
-  };
-
-  useEffect(() => {
-    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
-    if (!login) router.replace('/login');
-    else setAuthedLogin(login);
-  }, [router]);
+  const [selectedPlaybook, setSelectedPlaybook] = useState('');
+  const [selectedObservable, setSelectedObservable] = useState('');
+  const [triggerStatus, setTriggerStatus] = useState<{ success: boolean; message: string } | null>(null);
 
   const me = useQuery({ queryKey: ['me'], queryFn: () => apiFetch<User>('/api/v1/auth/me'), enabled: !!authedLogin });
   const detail = useQuery({
@@ -62,6 +54,44 @@ export default function TaskTimelinePage() {
     queryFn: () => apiFetch<TaskDetail>(`/api/v1/tasks/${params.id}`),
     enabled: !!authedLogin && !!params.id,
   });
+
+  const activeRules = useQuery({
+    queryKey: ['autonomous-active-rules'],
+    queryFn: () => apiFetch<{ id: string; name: string; observable_type: string }[]>('/api/v1/autonomous/active-rules'),
+    enabled: !!authedLogin,
+  });
+
+  const caseId = detail.data?.task.case_id;
+  const observables = useQuery({
+    queryKey: ['case-observables', caseId],
+    queryFn: () => apiFetch<{ values: { id: string; data_type: string; data: string; malicious_score: number }[] }>(`/api/v1/cases/${caseId}/observables`),
+    enabled: !!authedLogin && !!caseId,
+  });
+
+  const triggerManual = useMutation({
+    mutationFn: () => apiFetch(`/api/v1/autonomous/trigger-manual`, {
+      method: 'POST',
+      json: {
+        rule_id: selectedPlaybook,
+        observable_id: selectedObservable,
+        task_id: params.id,
+      },
+    }),
+    onSuccess: () => {
+      setTriggerStatus({ success: true, message: 'Kích hoạt SOAR Playbook thành công!' });
+      setSelectedPlaybook('');
+      setSelectedObservable('');
+      setTimeout(() => setTriggerStatus(null), 5000);
+    },
+    onError: (err: any) => {
+      setTriggerStatus({ success: false, message: `Kích hoạt thất bại: ${err.message}` });
+    },
+  });
+
+  const currentPlaybook = activeRules.data?.find(r => r.id === selectedPlaybook);
+  const filteredObservables = observables.data?.values.filter(o => 
+    !currentPlaybook || o.data_type.toLowerCase() === currentPlaybook.observable_type.toLowerCase()
+  ) ?? [];
 
   const canTask = canUse(me.data, 'taskUpdate') || canUse(me.data, 'taskClose');
 
@@ -81,6 +111,17 @@ export default function TaskTimelinePage() {
     mutationFn: () => apiFetch(`/api/v1/tasks/${params.id}/logs`, { method: 'POST', json: { message: logMessage.trim() } }),
     onSuccess: () => { setLogMessage(''); void detail.refetch(); },
   });
+
+  const searchUsers = async (q: string) => {
+    const data = await apiFetch<{login: string; name: string}[]>(`/api/v1/users/search?query=${encodeURIComponent(q)}`);
+    return data;
+  };
+
+  useEffect(() => {
+    const login = sessionStorage.getItem('thehive.login') || localStorage.getItem('thehive.login');
+    if (!login) router.replace('/login');
+    else setAuthedLogin(login);
+  }, [router]);
 
   const current = close.data ?? assign.data ?? patch.data ?? start.data ?? reopen.data ?? cancel.data ?? detail.data?.task;
   const error = [patch, assign, close, start, reopen, cancel, addLog].map((m) => (m.error as Error | undefined)?.message).find(Boolean) ?? (detail.error as Error | undefined)?.message;
@@ -403,6 +444,65 @@ export default function TaskTimelinePage() {
                           </li>
                         ))}
                       </ul>
+                    )}
+                  </div>
+
+                  {/* Kích hoạt SOAR Playbook thủ công */}
+                  <div className="h-px bg-slate-700 w-full" />
+                  <div className="flex flex-col gap-3">
+                    <label className="text-slate-200 text-sm font-semibold flex items-center gap-2">
+                      🛡️ Kích hoạt SOAR Playbook
+                    </label>
+                    
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Chọn Playbook</span>
+                      <select
+                        className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full cursor-pointer hover:border-slate-600 transition-all"
+                        value={selectedPlaybook}
+                        onChange={(e) => {
+                          setSelectedPlaybook(e.target.value);
+                          setSelectedObservable('');
+                        }}
+                      >
+                        <option value="">-- Chọn Playbook --</option>
+                        {(activeRules.data ?? []).map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name} ({r.observable_type.toUpperCase()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Chọn Observable</span>
+                      <select
+                        className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 w-full cursor-pointer hover:border-slate-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        value={selectedObservable}
+                        onChange={(e) => setSelectedObservable(e.target.value)}
+                        disabled={!selectedPlaybook}
+                      >
+                        <option value="">-- Chọn Observable --</option>
+                        {filteredObservables.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.data} (Threat Score: {o.malicious_score || 0})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="px-4 py-2.5 bg-red-700 hover:bg-red-650 text-white rounded-md text-xs font-bold transition-all duration-150 shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 w-full mt-2"
+                      disabled={!selectedPlaybook || !selectedObservable || triggerManual.isPending}
+                      onClick={() => triggerManual.mutate()}
+                    >
+                      🚀 Kích hoạt SOAR
+                    </button>
+
+                    {triggerStatus && (
+                      <div className={`text-[11px] p-3 rounded border mt-2 leading-relaxed ${triggerStatus.success ? 'bg-green-950/40 border-green-850/40 text-green-400' : 'bg-red-950/40 border-red-850/40 text-red-400'}`}>
+                        {triggerStatus.message}
+                      </div>
                     )}
                   </div>
                 </div>

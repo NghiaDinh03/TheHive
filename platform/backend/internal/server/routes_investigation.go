@@ -30,6 +30,11 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	detail := handler.NewDetailHandler(s.db)
 	caseSub := handler.NewCaseSubHandler(s.db, auditRecorder)
 	tplHandler := handler.NewTemplateHandler(s.db, auditRecorder)
+	correlation := handler.NewCorrelationHandler(s.db)
+	soar := handler.NewSOARHandler(s.db)
+	report := handler.NewReportHandler(s.db)
+	cyberai := handler.NewCyberAIHandler(s.db)
+	regex := handler.NewRegexHandler(s.db, auditRecorder)
 
 	// --- Cases ---
 	api.GET("/cases", readonly.ListCases, authRequired, RequirePermission("manageCase"))
@@ -50,6 +55,14 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	api.GET("/cases/:id/procedures", detail.ListCaseProcedures, authRequired, RequirePermission("manageCase"))
 	api.GET("/cases/:id/shares", detail.ListCaseShares, authRequired, RequirePermission("manageCase"))
 	api.GET("/cases/:id/timeline", detail.CaseTimeline, authRequired, RequirePermission("manageCase"))
+
+	// --- Clustering ---
+	clusteringHandler := handler.NewClusteringHandler(s.db)
+	api.GET("/cases/:id/clusters", clusteringHandler.GetClusteredAlerts, authRequired, RequirePermission("manageCase"))
+
+	// --- WebSocket Room ---
+	wsHandler := handler.NewWebSocketHandler(s.db)
+	api.GET("/cases/:id/room", wsHandler.HandleCaseRoom)
 
 	// --- Case sub-resources: custom fields, procedures, shares ---
 	api.POST("/cases/:id/custom-fields", caseSub.CreateCustomField, authRequired, RequirePermission("manageCustomField"))
@@ -157,4 +170,31 @@ func (s *Server) registerInvestigationRoutes(api *echo.Group, authRequired echo.
 	api.GET("/archive/:type/:id", archiveHandler.Get, authRequired, RequirePermission("manageCase"))
 	api.POST("/archive", archiveHandler.Create, authRequired, RequirePermission("manageCase"))
 	api.DELETE("/archive/:type/:id", archiveHandler.Delete, authRequired, RequirePermission("manageCase"))
+
+	// --- Threat Correlation Graph ---
+	api.GET("/cases/:id/correlation", correlation.GetCaseCorrelation, authRequired, RequirePermission("manageCase"))
+
+	// --- SOAR Playbooks (n8n Webhook & Progress) ---
+	api.POST("/cases/:id/playbook/status", soar.UpdatePlaybookStatus, authRequired, RequirePermission("manageCase"))
+	api.GET("/cases/:id/playbooks", soar.GetCasePlaybooks, authRequired, RequirePermission("manageCase"))
+
+	// --- Incident PDF/HTML Reporter ---
+	api.GET("/cases/:id/report", report.GenerateCaseReport, authRequired, RequirePermission("manageCase"))
+
+	// --- CyberAI Analyst & Admin Settings ---
+	api.POST("/cases/:id/ai-analyze", cyberai.Analyze, authRequired, RequirePermission("manageCase"))
+	api.POST("/cases/:id/ai-chat", cyberai.Chat, authRequired, RequirePermission("manageCase"))
+	api.GET("/admin/settings", cyberai.GetSettings, authRequired, RequirePermission("manageCase"))
+	api.POST("/admin/settings", cyberai.SaveSettings, authRequired, RequirePermission("manageCase"))
+	api.GET("/admin/settings/ai-status", cyberai.CheckStatus, authRequired, RequirePermission("manageCase"))
+
+	// --- Dynamic Custom Property Regex Rules ---
+	api.GET("/admin/custom-properties-regex", regex.ListRules, authRequired, RequirePermission("manageCase"))
+	api.POST("/admin/custom-properties-regex", regex.CreateRule, authRequired, RequirePermission("manageCase"))
+	api.DELETE("/admin/custom-properties-regex/:id", regex.DeleteRule, authRequired, RequirePermission("manageCase"))
+
+	// --- Autonomous Active Rules (for Analyst Dropdown) ---
+	autonomousHandler := handler.NewAutonomousHandler(s.db)
+	api.GET("/autonomous/active-rules", autonomousHandler.ListActiveRules, authRequired, RequirePermission("manageCase"))
+	api.POST("/autonomous/trigger-manual", autonomousHandler.TriggerManual, authRequired, RequirePermission("manageCase"))
 }

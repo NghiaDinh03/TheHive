@@ -77,7 +77,7 @@ func TestGetAlertReturnsObservablesSimilarAndHistory(t *testing.T) {
 	mock.ExpectQuery("FROM alerts a").
 		WillReturnRows(sqlmock.NewRows([]string{"id", "title", "source", "source_ref", "score", "reason", "observable_overlap", "ioc_overlap", "tag_overlap", "status"}))
 	// Audit history
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("alert", alertID).
+	mock.ExpectQuery("FROM audit_logs a LEFT JOIN users u").WithArgs("alert", alertID).
 		WillReturnRows(historyRows().AddRow("alert.merge", "admin", now))
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))
@@ -157,7 +157,7 @@ func TestGetTaskReturnsLogsAttachmentsAndHistory(t *testing.T) {
 			"00000000-0000-0000-0000-0000000000aa", caseID, "", logID, "evidence.txt", "text/plain",
 			int64(12), "clean", "thehive-evidence", "case/1/file.txt", "analyst", now,
 		))
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("task", taskID).
+	mock.ExpectQuery("FROM audit_logs a LEFT JOIN users u").WithArgs("task", taskID).
 		WillReturnRows(historyRows().AddRow("task.assign", "admin", now))
 
 	h := handler.NewDetailHandler(sqlx.NewDb(db, "sqlmock"))

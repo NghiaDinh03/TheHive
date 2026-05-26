@@ -14,6 +14,16 @@ const nextConfig = {
   },
   // Avoid leaking framework version
   generateBuildId: async () => process.env.GIT_SHA || 'dev',
+  // Đảm bảo Hot Reload hoạt động mượt mà trong Docker trên Windows
+  webpack: (config, { dev, isServer }) => {
+    if (dev && !isServer) {
+      config.watchOptions = {
+        poll: 1000,
+        aggregateTimeout: 300,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

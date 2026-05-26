@@ -4,6 +4,7 @@ package handler
 // missing from the new platform. Each handler mirrors a specific legacy route.
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/thehive-platform/backend/internal/apierr"
 	"github.com/thehive-platform/backend/internal/audit"
 	"github.com/thehive-platform/backend/internal/authjwt"
+	"github.com/thehive-platform/backend/internal/repository/clustering"
 )
 
 // ---------------------------------------------------------------------------
@@ -216,6 +218,31 @@ func (h *AlertWriteHandler) CreateAlert(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, "alert create failed")
 	}
+
+	// Chạy Clustering Engine bất đồng bộ để tự động gom cụm hoặc gộp (Merge)
+	go func(alertID string) {
+		ctx := context.Background()
+		clusterRepo := clustering.NewRepository(h.db)
+		bestCaseID, score, err := clusterRepo.EvaluateClustering(ctx, nil, alertID)
+		if err == nil && bestCaseID != "" {
+			if score >= 0.85 {
+				// Tự động gộp Alert mới vào Case đang Active nếu độ tương đồng > 85%
+				txMerge, errMergeTx := h.db.BeginTxx(ctx, nil)
+				if errMergeTx == nil {
+					defer txMerge.Rollback()
+					_, errMerge := h.repo.MergeIntoCase(ctx, txMerge, alertID, bestCaseID)
+					if errMerge == nil {
+						_ = clusterRepo.SaveCluster(ctx, txMerge, bestCaseID, alertID, score)
+						_ = txMerge.Commit()
+					}
+				}
+			} else {
+				// Nếu điểm thấp hơn, vẫn lưu quan hệ gom cụm để Analyst đối chiếu trên UI
+				_ = clusterRepo.SaveCluster(ctx, nil, bestCaseID, alertID, score)
+			}
+		}
+	}(id)
+
 	return c.JSON(http.StatusCreated, map[string]any{"id": id, "title": req.Title, "status": "New"})
 }
 

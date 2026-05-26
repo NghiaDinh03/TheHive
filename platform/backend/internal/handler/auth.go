@@ -59,6 +59,7 @@ type registerRequest struct {
 
 type loginResponse struct {
 	Token              string    `json:"token"`
+	CSRFToken          string    `json:"csrf_token"`
 	Login              string    `json:"login"`
 	ExpiresAt          time.Time `json:"expires_at"`
 	MustChangePassword bool      `json:"must_change_password"`
@@ -141,7 +142,8 @@ func (h *AuthHandler) Login(c echo.Context) error {
 		return apierr.New(http.StatusForbidden, "account_locked")
 	}
 	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
-		return apierr.New(http.StatusForbidden, "account_locked")
+		timeLeft := time.Until(*user.LockedUntil).Round(time.Second)
+		return apierr.New(http.StatusForbidden, "Account is temporarily locked. Please try again in "+timeLeft.String())
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
@@ -174,7 +176,8 @@ func (h *AuthHandler) LoginTOTP(c echo.Context) error {
 		return apierr.New(http.StatusForbidden, "account_locked")
 	}
 	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
-		return apierr.New(http.StatusForbidden, "account_locked")
+		timeLeft := time.Until(*user.LockedUntil).Round(time.Second)
+		return apierr.New(http.StatusForbidden, "Account is temporarily locked. Please try again in "+timeLeft.String())
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
@@ -201,33 +204,66 @@ func (h *AuthHandler) completeLogin(c echo.Context, user dbUser) error {
 	if err != nil {
 		return apierr.New(http.StatusInternalServerError, "token signing failed")
 	}
-	_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET last_login_at = now(), updated_at = now(), failed_attempts = 0, locked_until = NULL WHERE login = $1", user.Login)
-	_, _ = h.db.ExecContext(c.Request().Context(), "INSERT INTO auth_sessions (token_id, login, expires_at) VALUES ($1, $2, $3)", tokenID, user.Login, expiresAt)
-	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login", "user", user.Login, nil, echo.Map{"login": user.Login}))
+
+	// Session Fixation prevention: clear any existing session cookie first
+	expiredCookie := &http.Cookie{
+		Name:     "thehive_token",
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		Path:     "/",
+		MaxAge:   -1,
 	}
-	return c.JSON(http.StatusOK, loginResponse{Token: token, Login: user.Login, ExpiresAt: expiresAt, MustChangePassword: user.MustChangePassword, Force2FA: user.Force2FA})
+	c.SetCookie(expiredCookie)
+
+	// Set secure HttpOnly session cookie
+	cookie := &http.Cookie{
+		Name:     "thehive_token",
+		Value:    token,
+		Expires:  expiresAt,
+		HttpOnly: true,
+		Path:     "/",
+		Secure:   c.Scheme() == "https",
+		SameSite: http.SameSiteLaxMode,
+	}
+	c.SetCookie(cookie)
+
+	_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET last_login_at = now(), updated_at = now(), failed_attempts = 0, locked_until = NULL WHERE login = $1", user.Login)
+	_, _ = h.db.ExecContext(c.Request().Context(), "INSERT INTO auth_sessions (token_id, login, expires_at, ip_address, user_agent) VALUES ($1, $2, $3, NULLIF($4, '')::inet, $5)", tokenID, user.Login, expiresAt, c.RealIP(), c.Request().UserAgent())
+	
+	if h.audit != nil {
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login", "user", user.Login, nil, echo.Map{
+			"login":      user.Login,
+			"status":     "success",
+			"ip":         c.RealIP(),
+			"user_agent": c.Request().UserAgent(),
+		}))
+	}
+	return c.JSON(http.StatusOK, loginResponse{Token: token, CSRFToken: tokenID, Login: user.Login, ExpiresAt: expiresAt, MustChangePassword: user.MustChangePassword, Force2FA: user.Force2FA})
 }
 
 func (h *AuthHandler) handleFailedAttempt(c echo.Context, login string, currentAttempts int) {
 	// Log the failed attempt to audit_logs
 	if h.audit != nil {
-		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login.failed", "user", login, nil, echo.Map{"login": login}))
+		_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.login.failed", "user", login, nil, echo.Map{
+			"login":      login,
+			"status":     "failed",
+			"ip":         c.RealIP(),
+			"user_agent": c.Request().UserAgent(),
+		}))
 	}
 
-	// Note: We removed the special handling for ncs.fushion_admin since it was a typo/garbage user.
-	// Other users: 5 fails in 1 minute -> lock indefinitely
-		var count int
-		err := h.db.GetContext(c.Request().Context(), &count, `
-			SELECT COUNT(*) FROM audit_logs 
-			WHERE action = 'auth.login.failed' AND lower(entity_id) = lower($1) AND created_at >= NOW() - INTERVAL '1 minute'
-		`, login)
-		
-		if err == nil && count >= 5 {
-			_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET locked = true, updated_at = now() WHERE lower(login) = lower($1)", login)
-		} else {
-			_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET failed_attempts = failed_attempts + 1, updated_at = now() WHERE lower(login) = lower($1)", login)
-		}
+	// Increment failed_attempts
+	_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET failed_attempts = failed_attempts + 1, updated_at = now() WHERE lower(login) = lower($1)", login)
+
+	// Fetch the updated failed_attempts count
+	var updatedAttempts int
+	err := h.db.GetContext(c.Request().Context(), &updatedAttempts, "SELECT failed_attempts FROM users WHERE lower(login) = lower($1)", login)
+	if err == nil && updatedAttempts >= 5 {
+		// Lock temporarily for 15 minutes
+		lockedUntil := time.Now().Add(15 * time.Minute)
+		_, _ = h.db.ExecContext(c.Request().Context(), "UPDATE users SET locked_until = $1, failed_attempts = 0, updated_at = now() WHERE lower(login) = lower($2)", lockedUntil, login)
+	}
 }
 
 func (h *AuthHandler) UnlockWith2FA(c echo.Context) error {
@@ -446,6 +482,18 @@ func (h *AuthHandler) Logout(c echo.Context) error {
 			_ = h.audit.Record(c.Request().Context(), audit.FromContext(c, "auth.logout", "user", claims.Login, nil, echo.Map{"token_id": claims.Id}))
 		}
 	}
+
+	// Clear secure session cookie
+	cookie := &http.Cookie{
+		Name:     "thehive_token",
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		HttpOnly: true,
+		Path:     "/",
+		MaxAge:   -1,
+	}
+	c.SetCookie(cookie)
+
 	return c.JSON(http.StatusOK, echo.Map{"status": "ok"})
 }
 

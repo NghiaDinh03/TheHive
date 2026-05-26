@@ -1,12 +1,17 @@
 package fixturemigrate
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestReadLegacyFixtureJSON(t *testing.T) {
 	fixtureDir := filepath.Clean("../../../../thehive/test/resources/data")
+	if _, err := os.Stat(fixtureDir); os.IsNotExist(err) {
+		t.Skipf("Legacy fixture directory not found: %s", fixtureDir)
+		return
+	}
 	cases, caseChecksum, err := readJSON[legacyCase](filepath.Join(fixtureDir, "Case.json"))
 	if err != nil {
 		t.Fatalf("read cases: %v", err)

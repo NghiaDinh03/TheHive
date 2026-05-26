@@ -103,12 +103,21 @@ func Recovery(log *zap.Logger) echo.MiddlewareFunc {
 }
 
 func CORS(allowed []string) echo.MiddlewareFunc {
+	// Rà soát Origins: nếu chứa "*" (wildcard) thì không cho phép credentials vì lý do an toàn bảo mật.
+	allowCredentials := true
+	for _, origin := range allowed {
+		if origin == "*" {
+			allowCredentials = false
+			break
+		}
+	}
+
 	return middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     allowed,
 		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:     []string{echo.HeaderAuthorization, echo.HeaderContentType, requestIDHeader},
+		AllowHeaders:     []string{echo.HeaderAuthorization, echo.HeaderContentType, requestIDHeader, "X-CSRF-Token"},
 		ExposeHeaders:    []string{requestIDHeader},
-		AllowCredentials: true,
+		AllowCredentials: allowCredentials,
 		MaxAge:           3600,
 	})
 }
@@ -116,25 +125,61 @@ func CORS(allowed []string) echo.MiddlewareFunc {
 func Authenticate(secret string, db *sqlx.DB) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			tokenValue := strings.TrimSpace(strings.TrimPrefix(c.Request().Header.Get(echo.HeaderAuthorization), "Bearer "))
+			// Hybrid Authentication: 1. Cookie "thehive_token"
+			var tokenValue string
+			if cookie, err := c.Cookie("thehive_token"); err == nil && cookie.Value != "" {
+				tokenValue = cookie.Value
+			}
+			// 2. Header "Authorization" Bearer
 			if tokenValue == "" {
-				return apierr.New(http.StatusUnauthorized, "missing bearer token")
+				tokenValue = strings.TrimSpace(strings.TrimPrefix(c.Request().Header.Get(echo.HeaderAuthorization), "Bearer "))
+			}
+
+			if tokenValue == "" {
+				return apierr.New(http.StatusUnauthorized, "missing bearer token or session cookie")
 			}
 			claims, err := authjwt.Parse(secret, tokenValue)
 			if err != nil {
-				return apierr.New(http.StatusUnauthorized, "invalid bearer token")
+				return apierr.New(http.StatusUnauthorized, "invalid token")
 			}
+
 			if db != nil {
-				var active bool
-				err = db.GetContext(c.Request().Context(), &active, `
+				// Query active session along with fingerprint fields
+				var sess struct {
+					Active    bool    `db:"active"`
+					UserAgent *string `db:"user_agent"`
+				}
+				err = db.GetContext(c.Request().Context(), &sess, `
 					SELECT EXISTS(
 						SELECT 1 FROM auth_sessions
 						WHERE token_id = $1 AND login = $2 AND revoked = false AND expires_at > now()
-					)`, claims.Id, claims.Login)
-				if err != nil || !active {
+					) AS active,
+					(SELECT user_agent FROM auth_sessions WHERE token_id = $1 LIMIT 1) AS user_agent
+				`, claims.Id, claims.Login)
+				
+				if err != nil || !sess.Active {
 					return apierr.New(http.StatusUnauthorized, "session expired or revoked")
 				}
+
+				// Session Hijacking Protection: Verify fingerprint (User-Agent)
+				if sess.UserAgent != nil && *sess.UserAgent != "" && *sess.UserAgent != c.Request().UserAgent() {
+					return apierr.New(http.StatusUnauthorized, "session hijacked: client fingerprint mismatch")
+				}
 			}
+
+			// --- SOC-grade CSRF Protection ---
+			// Chống giả mạo request bằng cách đối chiếu custom header X-CSRF-Token với Token ID của JWT
+			method := c.Request().Method
+			if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch || method == http.MethodDelete {
+				csrfToken := c.Request().Header.Get("X-CSRF-Token")
+				if csrfToken == "" {
+					return apierr.New(http.StatusForbidden, "missing X-CSRF-Token header")
+				}
+				if csrfToken != claims.Id {
+					return apierr.New(http.StatusForbidden, "invalid X-CSRF-Token")
+				}
+			}
+
 			ctx := context.WithValue(c.Request().Context(), authClaimsContextKey{}, claims)
 			c.Set("auth_claims", claims)
 			c.SetRequest(c.Request().WithContext(ctx))
@@ -147,6 +192,14 @@ func RequirePermission(permission string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			claims, _ := c.Get("auth_claims").(*authjwt.Claims)
+			if claims != nil {
+				method := c.Request().Method
+				profile := strings.ToLower(claims.Profile)
+				if (method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE") &&
+					(strings.Contains(profile, "read-only") || strings.Contains(profile, "client")) {
+					return apierr.New(http.StatusForbidden, "write operations are forbidden for read-only or client profiles")
+				}
+			}
 			if !authjwt.HasPermission(claims, permission) {
 				return apierr.New(http.StatusForbidden, "missing permission "+permission)
 			}
@@ -159,6 +212,14 @@ func RequireAnyPermission(permissions ...string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			claims, _ := c.Get("auth_claims").(*authjwt.Claims)
+			if claims != nil {
+				method := c.Request().Method
+				profile := strings.ToLower(claims.Profile)
+				if (method == "POST" || method == "PUT" || method == "PATCH" || method == "DELETE") &&
+					(strings.Contains(profile, "read-only") || strings.Contains(profile, "client")) {
+					return apierr.New(http.StatusForbidden, "write operations are forbidden for read-only or client profiles")
+				}
+			}
 			hasAny := false
 			for _, p := range permissions {
 				if authjwt.HasPermission(claims, p) {
@@ -182,6 +243,31 @@ func RequireStepUp2FA(db *sqlx.DB) echo.MiddlewareFunc {
 				return apierr.New(http.StatusUnauthorized, "missing authentication")
 			}
 
+			// Check if TOTP is enabled or forced for this user
+			var userTOTP struct {
+				TotpEnabled bool   `db:"totp_enabled"`
+				TotpSecret  string `db:"totp_secret"`
+				Force2FA    bool   `db:"force_2fa"`
+			}
+			err := db.GetContext(c.Request().Context(), &userTOTP, 
+				"SELECT totp_enabled, COALESCE(totp_secret, '') AS totp_secret, COALESCE(force_2fa, false) AS force_2fa FROM users WHERE lower(login) = lower($1)", claims.Login)
+			if err != nil {
+				return apierr.New(http.StatusForbidden, "user not found or db error")
+			}
+
+			// Check global force_2fa setting
+			globalForce := false
+			var rawF2FA string
+			_ = db.QueryRowxContext(c.Request().Context(), `SELECT value::text FROM ui_settings WHERE key = 'force_2fa'`).Scan(&rawF2FA)
+			if strings.Contains(rawF2FA, "true") {
+				globalForce = true
+			}
+
+			// If 2FA is not enabled and not forced globally or individually, we bypass 2FA check!
+			if !userTOTP.TotpEnabled && !userTOTP.Force2FA && !globalForce {
+				return next(c)
+			}
+
 			// Extract X-TOTP-Code from header
 			code := strings.TrimSpace(c.Request().Header.Get("X-TOTP-Code"))
 			if code == "" {
@@ -191,15 +277,12 @@ func RequireStepUp2FA(db *sqlx.DB) echo.MiddlewareFunc {
 				return apierr.New(http.StatusBadRequest, "invalid TOTP code length")
 			}
 
-			// Fetch user's totp_secret
-			var secret string
-			err := db.GetContext(c.Request().Context(), &secret, "SELECT totp_secret FROM users WHERE lower(login) = lower($1) AND totp_enabled = true", claims.Login)
-			if err != nil || secret == "" {
+			if userTOTP.TotpSecret == "" {
 				return apierr.New(http.StatusForbidden, "2FA must be enabled to perform this action")
 			}
 
 			// Verify code using the handler package's exported VerifyTOTPCode function
-			if !handler.VerifyTOTPCode(secret, code) {
+			if !handler.VerifyTOTPCode(userTOTP.TotpSecret, code) {
 				return apierr.New(http.StatusUnauthorized, "invalid TOTP code")
 			}
 

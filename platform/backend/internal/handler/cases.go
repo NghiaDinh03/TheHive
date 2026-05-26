@@ -117,6 +117,8 @@ func (h *CaseWriteHandler) Create(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, "case create failed")
 	}
+	// Kích hoạt tự động phân tích log thô trích xuất custom properties
+	go ParseTextAndExtractCustomProperties(context.Background(), h.db, created.ID, created.Description)
 	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu là Incident
 	go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), created.ID)
 
@@ -167,6 +169,8 @@ func (h *CaseWriteHandler) Patch(c echo.Context) error {
 	if err := tx.Commit(); err != nil {
 		return apierr.New(http.StatusInternalServerError, "case update failed")
 	}
+	// Kích hoạt tự động phân tích log thô trích xuất custom properties
+	go ParseTextAndExtractCustomProperties(context.Background(), h.db, updated.ID, updated.Description)
 	// Kích hoạt tự động đồng bộ IOC sang MISP trong nền nếu có thay đổi hoặc là Incident
 	go misp.AutoSyncCaseIOCsToMISP(context.Background(), h.db, zap.L(), updated.ID)
 
@@ -230,7 +234,7 @@ func (h *CaseWriteHandler) Close(c echo.Context) error {
 		ImpactStatus: req.ImpactStatus, ResolutionStatus: req.ResolutionStatus, Summary: req.Summary,
 	})
 	if err != nil {
-		return apierr.New(http.StatusInternalServerError, "case close failed")
+		return apierr.New(http.StatusBadRequest, err.Error())
 	}
 	if h.audit != nil {
 		if err := audit.RecordTx(c.Request().Context(), tx, audit.FromContext(c, "case.close", "case", updated.ID, before, updated)); err != nil {

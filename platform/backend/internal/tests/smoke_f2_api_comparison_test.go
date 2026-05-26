@@ -21,12 +21,12 @@ func TestF2_CaseResponseFields(t *testing.T) {
 
 	// Create test case
 	caseReq := map[string]interface{}{
-		"title":       "F2 API Comparison Case",
-		"description": "Testing API response field structure",
+		"title":       "NCS SOC: Phân tích so sánh tệp đính kèm chứa mã độc phishing",
+		"description": "Rà soát tính nhất quán và cấu trúc phản hồi API trường dữ liệu của tệp đính kèm nguy hiểm",
 		"severity":    2,
 		"tlp":         2,
 		"pap":         2,
-		"tags":        []string{"f2-test", "api-comparison"},
+		"tags":        []string{"phishing", "api-comparison"},
 	}
 	body, _ := json.Marshal(caseReq)
 

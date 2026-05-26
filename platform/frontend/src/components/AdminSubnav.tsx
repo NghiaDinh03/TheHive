@@ -21,6 +21,7 @@ import {
   Settings,
   Activity,
   Link2,
+  Cpu,
 } from '@/components/FaIcon';
 
 const TABS = [
@@ -35,6 +36,8 @@ const TABS = [
   { href: '/admin/ui-settings', label: 'UI settings', icon: Settings, match: /^\/admin\/ui-settings/ },
   { href: '/admin/platform-status', label: 'Platform status', icon: Activity, match: /^\/admin\/platform-status/ },
   { href: '/admin/misp', label: 'MISP', icon: Link2, match: /^\/admin\/misp/ },
+  { href: '/admin/integrations', label: 'AI Integrations', icon: Cpu, match: /^\/admin\/integrations/ },
+  { href: '/admin/autonomous', label: 'Phản ứng Tự động', icon: Crosshair, match: /^\/admin\/autonomous/ },
 ];
 
 export function AdminSubnav() {

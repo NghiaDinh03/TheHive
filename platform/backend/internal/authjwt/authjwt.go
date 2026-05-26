@@ -1,7 +1,13 @@
 package authjwt
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -16,7 +22,56 @@ type Claims struct {
 	jwt.StandardClaims
 }
 
+var (
+	rsaPrivateKey *rsa.PrivateKey
+	rsaPublicKey  *rsa.PublicKey
+	rsaOnce       sync.Once
+)
+
+func initKeys(secret string) {
+	rsaOnce.Do(func() {
+		// Thử tìm file key chỉ định trong docker secrets hoặc môi trường
+		privPath := os.Getenv("JWT_PRIVATE_KEY_PATH")
+		pubPath := os.Getenv("JWT_PUBLIC_KEY_PATH")
+
+		if privPath == "" {
+			privPath = "jwt_private.pem"
+		}
+		if pubPath == "" {
+			pubPath = "jwt_public.pem"
+		}
+
+		privBytes, errPriv := os.ReadFile(privPath)
+		pubBytes, errPub := os.ReadFile(pubPath)
+
+		if errPriv == nil && errPub == nil {
+			blockPriv, _ := pem.Decode(privBytes)
+			blockPub, _ := pem.Decode(pubBytes)
+
+			if blockPriv != nil && blockPub != nil {
+				privKey, err1 := x509.ParsePKCS1PrivateKey(blockPriv.Bytes)
+				pubKeyInterface, err2 := x509.ParsePKIXPublicKey(blockPub.Bytes)
+				if err1 == nil && err2 == nil {
+					if pubKey, ok := pubKeyInterface.(*rsa.PublicKey); ok {
+						rsaPrivateKey = privKey
+						rsaPublicKey = pubKey
+						return
+					}
+				}
+			}
+		}
+
+		// Fallback: Tự sinh ngẫu nhiên cặp khóa RSA 2048-bit trực tiếp trong bộ nhớ RAM
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err == nil {
+			rsaPrivateKey = key
+			rsaPublicKey = &key.PublicKey
+		}
+	})
+}
+
 func Sign(secret string, expiry time.Duration, login, organisation, profile string, permissions []string) (string, string, time.Time, error) {
+	initKeys(secret)
 	if expiry <= 0 {
 		expiry = time.Hour
 	}
@@ -36,7 +91,9 @@ func Sign(secret string, expiry time.Duration, login, organisation, profile stri
 			Issuer:    "thehive-platform",
 		},
 	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	
+	// Sử dụng SigningMethodRS256 ký bằng RSA Private Key nhúng
+	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(rsaPrivateKey)
 	if err != nil {
 		return "", "", time.Time{}, err
 	}
@@ -44,12 +101,13 @@ func Sign(secret string, expiry time.Duration, login, organisation, profile stri
 }
 
 func Parse(secret, tokenValue string) (*Claims, error) {
+	initKeys(secret)
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenValue, claims, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method %v", token.Header["alg"])
 		}
-		return []byte(secret), nil
+		return rsaPublicKey, nil
 	})
 	if err != nil {
 		return nil, err

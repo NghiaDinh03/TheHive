@@ -61,7 +61,7 @@ func TestAlertDetailReturnsObservablesAndSimilar(t *testing.T) {
 			AddRow("00000000-0000-0000-0000-000000001020", "SIEM Alert: Brute Force (prev)", "siem-connector", "SIEM-2026-000", 0.85, "observable_overlap", 2, 1, 1, "Imported"),
 		)
 	// Audit history
-	mock.ExpectQuery("FROM audit_logs WHERE entity_type =").WithArgs("alert", alertID).
+	mock.ExpectQuery("FROM audit_logs a LEFT JOIN users u").WithArgs("alert", alertID).
 		WillReturnRows(historyRows().AddRow("alert.create", "siem-connector", now))
 	// Alert custom fields (new: mirrors alert/custom.fields.html)
 	mock.ExpectQuery("FROM alert_custom_fields acf").WithArgs(alertID).

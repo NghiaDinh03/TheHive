@@ -23,9 +23,11 @@ type Config struct {
 	RabbitConnectTimeout   time.Duration `env:"RABBITMQ_CONNECT_TIMEOUT" envDefault:"30s"`
 	RabbitReconnectBackoff time.Duration `env:"RABBITMQ_RECONNECT_BACKOFF" envDefault:"5s"`
 
-	JWTSecret      string        `env:"JWT_SECRET,required"`
-	JWTExpiry      time.Duration `env:"JWT_EXPIRY" envDefault:"1h"`
-	CORSAllowed    []string      `env:"CORS_ALLOWED_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000"`
+	JWTSecret         string        `env:"JWT_SECRET,required"`
+	JWTPrivateKeyPath string        `env:"JWT_PRIVATE_KEY_PATH"`
+	JWTPublicKeyPath  string        `env:"JWT_PUBLIC_KEY_PATH"`
+	JWTExpiry         time.Duration `env:"JWT_EXPIRY" envDefault:"1h"`
+	CORSAllowed       []string      `env:"CORS_ALLOWED_ORIGINS" envSeparator:"," envDefault:"http://localhost:3000"`
 	RequestTimeout time.Duration `env:"REQUEST_TIMEOUT" envDefault:"30s"`
 
 	InvestigationDataSource string        `env:"INVESTIGATION_DATA_SOURCE" envDefault:"postgres"`

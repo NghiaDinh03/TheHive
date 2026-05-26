@@ -31,6 +31,8 @@ type Task struct {
 	GroupName       string         `db:"group_name" json:"group_name"`
 	OrderIndex      int            `db:"order_index" json:"order_index"`
 	Flag            bool           `db:"flag" json:"flag"`
+	PlaybookName    string         `db:"playbook_name" json:"playbook_name"`
+	PlaybookWebhook string         `db:"playbook_webhook" json:"playbook_webhook"`
 	StartDate       *time.Time     `db:"start_date" json:"start_date,omitempty"`
 	EndDate         *time.Time     `db:"end_date" json:"end_date,omitempty"`
 	DueDate         *time.Time     `db:"due_date" json:"due_date,omitempty"`
@@ -39,7 +41,7 @@ type Task struct {
 	UpdatedAt       time.Time      `db:"updated_at" json:"updated_at"`
 }
 
-const taskSelectColumns = `id::text AS id, case_id::text AS case_id, title, description, status, assignee, group_name, order_index, flag, start_date, end_date, due_date, organisation_ids, created_at, updated_at`
+const taskSelectColumns = `id::text AS id, case_id::text AS case_id, title, description, status, assignee, group_name, order_index, flag, playbook_name, playbook_webhook, start_date, end_date, due_date, organisation_ids, created_at, updated_at`
 
 type CreateTask struct {
 	CaseID          string
@@ -49,6 +51,8 @@ type CreateTask struct {
 	GroupName       string
 	OrderIndex      int
 	Flag            bool
+	PlaybookName    string
+	PlaybookWebhook string
 	DueDate         *time.Time
 	StartDate       *time.Time
 	OrganisationIDs []string
@@ -62,6 +66,8 @@ type PatchTask struct {
 	GroupName          *string
 	OrderIndex         *int
 	Flag               *bool
+	PlaybookName       *string
+	PlaybookWebhook    *string
 	StartDate          *time.Time
 	EndDate            *time.Time
 	DueDate            *time.Time
@@ -153,6 +159,8 @@ type Observable struct {
 	FullData            sql.NullString `db:"full_data" json:"-"`
 	DataHash            string         `db:"data_hash" json:"data_hash"`
 	Tags                pq.StringArray `db:"tags" json:"tags"`
+	MaliciousScore      int            `db:"malicious_score" json:"malicious_score"`
+	MISPTags            string         `db:"misp_tags" json:"misp_tags"`
 	CreatedBy           string         `db:"created_by" json:"created_by"`
 	CreatedAt           time.Time      `db:"created_at" json:"created_at"`
 	UpdatedAt           time.Time      `db:"updated_at" json:"updated_at"`
@@ -175,23 +183,26 @@ type ObservableResponse struct {
 	FullData            string         `json:"full_data,omitempty"`
 	DataHash            string         `json:"data_hash,omitempty"`
 	Tags                pq.StringArray `json:"tags"`
+	MaliciousScore      int            `json:"malicious_score"`
+	MISPTags            string         `json:"misp_tags"`
 	CreatedBy           string         `json:"created_by"`
 	CreatedAt           time.Time      `json:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at"`
 }
 
 type CreateObservable struct {
-	CaseID       string
-	AlertID      string
-	DataType     string
-	Data         string
-	Message      string
-	TLP          int
-	IOC          bool
-	Sighted      bool
-	AttachmentID string
-	Tags         []string
-	CreatedBy    string
+	CaseID         string
+	AlertID        string
+	DataType       string
+	Data           string
+	Message        string
+	TLP            int
+	IOC            bool
+	Sighted        bool
+	AttachmentID   string
+	Tags           []string
+	CreatedBy      string
+	MaliciousScore int
 }
 
 type PatchObservable struct {
@@ -204,6 +215,7 @@ type PatchObservable struct {
 	IgnoreSimilarity *bool
 	Tags             []string
 	TagsSet          bool
+	MaliciousScore   *int
 }
 
 type AnalyzeResult struct {
@@ -216,7 +228,7 @@ type AnalyzeResult struct {
 }
 
 func (o Observable) Response() ObservableResponse {
-	out := ObservableResponse{ID: o.ID, DataType: o.DataType, Data: o.Data, Message: o.Message, TLP: o.TLP, IOC: o.IOC, Sighted: o.Sighted, IgnoreSimilarity: o.IgnoreSimilarity, Tags: o.Tags, CreatedBy: o.CreatedBy, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
+	out := ObservableResponse{ID: o.ID, DataType: o.DataType, Data: o.Data, Message: o.Message, TLP: o.TLP, IOC: o.IOC, Sighted: o.Sighted, IgnoreSimilarity: o.IgnoreSimilarity, Tags: o.Tags, MaliciousScore: o.MaliciousScore, MISPTags: o.MISPTags, CreatedBy: o.CreatedBy, CreatedAt: o.CreatedAt, UpdatedAt: o.UpdatedAt}
 	if o.CaseID.Valid {
 		out.CaseID = o.CaseID.String
 	}
@@ -267,12 +279,13 @@ func (r *Repository) CreateTask(ctx context.Context, tx *sqlx.Tx, input CreateTa
 	}
 	row := Task{}
 	err := tx.GetContext(ctx, &row, `
-		INSERT INTO task_items (case_id, title, description, status, assignee, group_name, order_index, flag, start_date, due_date, organisation_ids)
-		VALUES ($1::uuid, $2, $3, 'Waiting', $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO task_items (case_id, title, description, status, assignee, group_name, order_index, flag, start_date, due_date, organisation_ids, playbook_name, playbook_webhook)
+		VALUES ($1::uuid, $2, $3, 'Waiting', $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING `+taskSelectColumns,
 		strings.TrimSpace(input.CaseID), strings.TrimSpace(input.Title), input.Description,
 		strings.TrimSpace(input.Assignee), strings.TrimSpace(input.GroupName), input.OrderIndex,
-		input.Flag, input.StartDate, input.DueDate, pq.Array(orgIDs))
+		input.Flag, input.StartDate, input.DueDate, pq.Array(orgIDs),
+		strings.TrimSpace(input.PlaybookName), strings.TrimSpace(input.PlaybookWebhook))
 	return row, err
 }
 
@@ -328,6 +341,12 @@ func (r *Repository) PatchTask(ctx context.Context, tx *sqlx.Tx, id string, inpu
 	if input.Flag != nil {
 		current.Flag = *input.Flag
 	}
+	if input.PlaybookName != nil {
+		current.PlaybookName = strings.TrimSpace(*input.PlaybookName)
+	}
+	if input.PlaybookWebhook != nil {
+		current.PlaybookWebhook = strings.TrimSpace(*input.PlaybookWebhook)
+	}
 	if input.StartDateSet {
 		current.StartDate = input.StartDate
 	}
@@ -344,11 +363,13 @@ func (r *Repository) PatchTask(ctx context.Context, tx *sqlx.Tx, id string, inpu
 	err = tx.GetContext(ctx, &row, `
 		UPDATE task_items
 		SET title = $1, description = $2, status = $3, assignee = $4, group_name = $5, order_index = $6,
-			flag = $7, start_date = $8, end_date = $9, due_date = $10, organisation_ids = $11, updated_at = now()
-		WHERE id = $12::uuid
+			flag = $7, start_date = $8, end_date = $9, due_date = $10, organisation_ids = $11, 
+			playbook_name = $12, playbook_webhook = $13, updated_at = now()
+		WHERE id = $14::uuid
 		RETURNING `+taskSelectColumns,
 		current.Title, current.Description, current.Status, current.Assignee, current.GroupName, current.OrderIndex,
-		current.Flag, current.StartDate, current.EndDate, current.DueDate, pq.Array([]string(current.OrganisationIDs)), strings.TrimSpace(id))
+		current.Flag, current.StartDate, current.EndDate, current.DueDate, pq.Array([]string(current.OrganisationIDs)), 
+		current.PlaybookName, current.PlaybookWebhook, strings.TrimSpace(id))
 	return row, err
 }
 
@@ -492,8 +513,8 @@ func (r *Repository) CreateObservable(ctx context.Context, tx *sqlx.Tx, input Cr
 	row := Observable{}
 	if strings.TrimSpace(input.CaseID) != "" {
 		err := tx.GetContext(ctx, &row, `
-			INSERT INTO observables (case_id, data_type, data, full_data, data_hash, message, tlp, ioc, sighted, attachment_id, tags, created_by)
-			VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, NULLIF($10, '')::uuid, $11, $12)
+			INSERT INTO observables (case_id, data_type, data, full_data, data_hash, message, tlp, ioc, sighted, attachment_id, tags, created_by, malicious_score)
+			VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, NULLIF($10, '')::uuid, $11, $12, $13)
 			ON CONFLICT (case_id, lower(data_type), lower(data)) WHERE case_id IS NOT NULL DO UPDATE SET
 				full_data = EXCLUDED.full_data,
 				data_hash = EXCLUDED.data_hash,
@@ -503,20 +524,21 @@ func (r *Repository) CreateObservable(ctx context.Context, tx *sqlx.Tx, input Cr
 				sighted = EXCLUDED.sighted,
 				attachment_id = COALESCE(EXCLUDED.attachment_id, observables.attachment_id),
 				tags = EXCLUDED.tags,
+				malicious_score = EXCLUDED.malicious_score,
 				updated_at = now()
-			RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, strings.TrimSpace(input.CaseID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(tags), strings.TrimSpace(input.CreatedBy))
+			RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, malicious_score, misp_tags::text AS misp_tags, created_by, created_at, updated_at`, strings.TrimSpace(input.CaseID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(tags), strings.TrimSpace(input.CreatedBy), input.MaliciousScore)
 		return row.Response(), err
 	}
 	err := tx.GetContext(ctx, &row, `
-		INSERT INTO observables (alert_id, data_type, data, full_data, data_hash, message, tlp, ioc, sighted, attachment_id, tags, created_by, lineage)
-		VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, NULLIF($10, '')::uuid, $11, $12, jsonb_build_object('source', 'alert_observable', 'alert_id', $1::text))
-		RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, strings.TrimSpace(input.AlertID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(tags), strings.TrimSpace(input.CreatedBy))
+		INSERT INTO observables (alert_id, data_type, data, full_data, data_hash, message, tlp, ioc, sighted, attachment_id, tags, created_by, lineage, malicious_score)
+		VALUES ($1::uuid, $2, $3, NULLIF($4, ''), $5, $6, $7, $8, $9, NULLIF($10, '')::uuid, $11, $12, jsonb_build_object('source', 'alert_observable', 'alert_id', $1::text), $13)
+		RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, malicious_score, misp_tags::text AS misp_tags, created_by, created_at, updated_at`, strings.TrimSpace(input.AlertID), strings.TrimSpace(input.DataType), indexedData, fullData, dataHash, input.Message, input.TLP, input.IOC, input.Sighted, strings.TrimSpace(input.AttachmentID), pq.Array(tags), strings.TrimSpace(input.CreatedBy), input.MaliciousScore)
 	return row.Response(), err
 }
 
 func (r *Repository) GetObservable(ctx context.Context, tx *sqlx.Tx, id string) (Observable, error) {
 	row := Observable{}
-	err := tx.GetContext(ctx, &row, `SELECT id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at FROM observables WHERE id = $1::uuid`, strings.TrimSpace(id))
+	err := tx.GetContext(ctx, &row, `SELECT id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, malicious_score, misp_tags::text AS misp_tags, created_by, created_at, updated_at FROM observables WHERE id = $1::uuid`, strings.TrimSpace(id))
 	return row, err
 }
 
@@ -550,11 +572,14 @@ func (r *Repository) PatchObservable(ctx context.Context, tx *sqlx.Tx, id string
 	if input.TagsSet {
 		current.Tags = input.Tags
 	}
+	if input.MaliciousScore != nil {
+		current.MaliciousScore = *input.MaliciousScore
+	}
 	row := Observable{}
 	err = tx.GetContext(ctx, &row, `
-		UPDATE observables SET data_type = $1, data = $2, full_data = NULLIF($3, ''), data_hash = $4, message = $5, tlp = $6, ioc = $7, sighted = $8, ignore_similarity = $9, tags = $10, updated_at = now()
-		WHERE id = $11::uuid
-		RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, created_by, created_at, updated_at`, current.DataType, current.Data, current.FullData.String, current.DataHash, current.Message, current.TLP, current.IOC, current.Sighted, current.IgnoreSimilarity, pq.Array([]string(current.Tags)), strings.TrimSpace(id))
+		UPDATE observables SET data_type = $1, data = $2, full_data = NULLIF($3, ''), data_hash = $4, message = $5, tlp = $6, ioc = $7, sighted = $8, ignore_similarity = $9, tags = $10, malicious_score = $11, updated_at = now()
+		WHERE id = $12::uuid
+		RETURNING id::text AS id, case_id::text AS case_id, alert_id::text AS alert_id, source_observable_id::text AS source_observable_id, imported_from_alert_id::text AS imported_from_alert_id, attachment_id::text AS attachment_id, COALESCE(full_data, '') AS full_data, data_hash, data_type, data, message, tlp, ioc, sighted, ignore_similarity, tags, malicious_score, misp_tags::text AS misp_tags, created_by, created_at, updated_at`, current.DataType, current.Data, current.FullData.String, current.DataHash, current.Message, current.TLP, current.IOC, current.Sighted, current.IgnoreSimilarity, pq.Array([]string(current.Tags)), current.MaliciousScore, strings.TrimSpace(id))
 	return row.Response(), err
 }
 
