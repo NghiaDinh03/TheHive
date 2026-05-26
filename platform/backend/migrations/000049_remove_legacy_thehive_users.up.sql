@@ -4,7 +4,7 @@ BEGIN;
 UPDATE cases SET owner = 'ncs_admin@ncsgroup.vn' WHERE owner IN ('admin@thehive.local', 'ncs.fushion_admin@ncsgroup.vn');
 
 -- Update tasks assignees from legacy users to ncs_admin@ncsgroup.vn
-UPDATE tasks SET assignee = 'ncs_admin@ncsgroup.vn' WHERE assignee IN ('admin@thehive.local', 'ncs.fushion_admin@ncsgroup.vn');
+UPDATE task_items SET assignee = 'ncs_admin@ncsgroup.vn' WHERE assignee IN ('admin@thehive.local', 'ncs.fushion_admin@ncsgroup.vn');
 
 -- Update audit logs actors from legacy users to ncs_admin@ncsgroup.vn
 UPDATE audit_logs 

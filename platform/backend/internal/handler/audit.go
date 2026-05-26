@@ -44,7 +44,7 @@ func (h *AuditHandler) List(c echo.Context) error {
 	rows := []auditSummary{}
 	query := `
 		SELECT id::text AS id, actor_id, action, entity_type, entity_id, before_json, after_json,
-			COALESCE(ip_address, '') AS ip_address, COALESCE(user_agent, '') AS user_agent, COALESCE(request_id, '') AS request_id, created_at
+			COALESCE(ip_address::text, '') AS ip_address, COALESCE(user_agent, '') AS user_agent, COALESCE(request_id, '') AS request_id, created_at
 		FROM audit_logs`
 	args := []any{}
 	if actor := c.QueryParam("actor"); actor != "" {

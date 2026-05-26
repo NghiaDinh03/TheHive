@@ -117,7 +117,7 @@ export function Sidebar() {
     )}>
       {/* Logo */}
       <div className="flex items-center justify-center px-4 py-2 pt-3 mb-2">
-        <Image src="/logo.png" alt="NCS Fusion Center" width={110} height={33} priority />
+        <Image src="/logo-sidebar.png" alt="NCS Fusion Center" width={110} height={33} priority />
       </div>
 
       {/* Nav */}

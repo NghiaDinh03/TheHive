@@ -57,7 +57,7 @@ export default function ChangePasswordPage() {
       <div className="ncs-login-card">
         <div className="ncs-login-header">
           <div className="ncs-login-logo">
-            <Image src="/logo.png" alt="NCS Fusion Center" width={160} height={48} priority className="ncs-login-logo-img" />
+            <Image src="/logo-sidebar.png" alt="NCS Fusion Center" width={160} height={48} priority className="ncs-login-logo-img" />
           </div>
           <h1 className="ncs-login-title">First login password change</h1>
           <p className="ncs-login-subtitle">Required before entering the Fusion Center workspace</p>

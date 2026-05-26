@@ -157,7 +157,7 @@ export default function LoginPage() {
       <div className="ncs-login-card">
         <div className="ncs-login-header">
           <div className="ncs-login-logo">
-            <Image src="/logo.png" alt="NCS" width={150} height={45} priority className="ncs-login-logo-img" style={{ objectFit: 'contain' }} />
+            <Image src="/logo-sidebar.png" alt="NCS" width={150} height={45} priority className="ncs-login-logo-img" style={{ objectFit: 'contain' }} />
           </div>
           <h1 className="ncs-login-title">NCS Fusion Center</h1>
           <p className="ncs-login-subtitle">Security Incident Response Platform</p>
